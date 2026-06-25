@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default function CompareTab({ ip, timeout, onResult }: Props) {
-    const [storedPath, setStoredPath] = useState('')
+    const [storedPath, setStoredPath] = useState('topology.jsonc')
     const [busy, setBusy] = useState(false)
     const [cmpData, setCmpData] = useState<CompareResult | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -47,7 +47,7 @@ export default function CompareTab({ ip, timeout, onResult }: Props) {
 
     return (
         <Stack spacing={2} sx={{ p: 2 }}>
-            <Stack direction="row" spacing={2} alignItems="flex-end" sx={{ maxWidth: 860 }}>
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-end', maxWidth: 860 }}>
                 <TextField
                     label="Stored topology file"
                     value={storedPath}

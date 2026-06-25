@@ -3,6 +3,8 @@ import { Box, AppBar, Toolbar, Typography, TextField, Tabs, Tab, Stack, Chip } f
 import type { SxProps, Theme } from '@mui/material'
 import GenerateTab from './components/GenerateTab'
 import CompareTab from './components/CompareTab'
+import TestRunTab from './components/TestRunTab'
+import HistoryTab from './components/HistoryTab'
 import TopologyFlow from './components/TopologyFlow'
 import ConnectionsFlow from './components/ConnectionsFlow'
 import type { Topology, DiffStatus } from './types'
@@ -169,10 +171,13 @@ export default function App() {
             {/* ── Tab bar ── */}
             {!fullscreen && (
                 <Box sx={{ background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
-                    <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 38 }}>
+                    <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 38 }}
+                         variant="scrollable" scrollButtons="auto">
                         <Tab label="Generate" sx={{ minHeight: 38 }} />
                         <Tab label="Compare" sx={{ minHeight: 38 }} />
                         <Tab label="Connections" sx={{ minHeight: 38 }} />
+                        <Tab label="Test Run" sx={{ minHeight: 38 }} />
+                        <Tab label="History" sx={{ minHeight: 38 }} />
                     </Tabs>
                 </Box>
             )}
@@ -191,6 +196,8 @@ export default function App() {
                             />
                         </Box>
                     )}
+                    {tab === 3 && <TestRunTab ip={ip} />}
+                    {tab === 4 && <HistoryTab />}
                 </Box>
             )}
         </Box>

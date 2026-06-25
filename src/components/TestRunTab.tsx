@@ -1,0 +1,305 @@
+/**
+ * TestRunTab – start, monitor, and view results of automated CPX-AP tests.
+ *
+ * Polls /test-run/status every second during an active run so progress
+ * updates appear live, regardless of whether the run was started from the
+ * web UI or CI.
+ */
+import { useState, useEffect, useRef, useCallback } from 'react'
+import {
+    Box, Button, Stack, Typography, Checkbox, FormControlLabel,
+    LinearProgress, Chip, Alert, Paper, CircularProgress,
+    Tooltip, IconButton,
+} from '@mui/material'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import RefreshIcon from '@mui/icons-material/Refresh'
+
+const POLL_MS = 800
+
+const TOPO_PATH = 'topology.jsonc'
+const CONN_PATH = 'connections.jsonc'
+
+interface Checkpoint {
+    test: string
+    status: 'running' | 'passed' | 'failed'
+    timestamp: number
+    error?: string
+}
+
+interface LogEntry {
+    level: string
+    message: string
+    timestamp: string
+}
+
+interface TestRunState {
+    run_id?: string
+    status: 'idle' | 'starting' | 'running' | 'completed' | 'error'
+    source?: string
+    ip_address?: string
+    tests?: string[]
+    progress?: { completed: number; total: number; current_test: string | null }
+    results?: Array<{ test_id?: string; passed?: boolean; error?: string; [k: string]: unknown }>
+    checkpoints?: Checkpoint[]
+    logs?: LogEntry[]
+    error?: string
+}
+
+const AVAILABLE_TESTS = [
+    { id: 'validate-connections', label: 'Connection Validation' },
+    { id: 'compare-topology', label: 'Topology Comparison' },
+    { id: 'condition-counter', label: 'Condition Counter' },
+    { id: 'valve-condition-counter', label: 'Valve CC (VABX)' },
+    { id: 'remanent-params', label: 'Remanent Parameters' },
+]
+
+interface Props {
+    ip: string
+}
+
+export default function TestRunTab({ ip }: Props) {
+    const [selected, setSelected] = useState<string[]>(['validate-connections', 'compare-topology'])
+    const [runState, setRunState] = useState<TestRunState>({ status: 'idle' })
+    const [busy, setBusy] = useState(false)
+    const logsEndRef = useRef<HTMLDivElement>(null)
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+    const isRunning = runState.status === 'running'
+    const isStarting = runState.status === 'starting'
+    const progress = runState.progress
+        ? (runState.progress.completed / Math.max(runState.progress.total, 1)) * 100
+        : 0
+
+    const fetchStatus = useCallback(async () => {
+        try {
+            const r = await fetch('/test-run/status')
+            if (!r.ok) return
+            const d: TestRunState = await r.json()
+            setRunState(d)
+            if (d.status !== 'running' && d.status !== 'starting') setBusy(false)
+        } catch { /* backend may be restarting */ }
+    }, [])
+
+    useEffect(() => {
+        if (isRunning || isStarting || busy) {
+            timerRef.current = setInterval(fetchStatus, POLL_MS)
+        }
+        return () => {
+            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+        }
+    }, [isRunning, isStarting, busy, fetchStatus])
+
+    useEffect(() => { fetchStatus() }, [fetchStatus])
+
+    // Auto-scroll logs
+    useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [runState.logs])
+
+    async function doStart() {
+        if (selected.length === 0) return
+        // Immediately clear previous results and show spinner
+        setRunState({ status: 'starting', tests: selected, checkpoints: [], logs: [] })
+        setBusy(true)
+        try {
+            const r = await fetch('/test-run/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ip_address: ip,
+                    connections_path: CONN_PATH,
+                    topology_path: TOPO_PATH,
+                    tests: selected,
+                    source: 'web',
+                }),
+            })
+            if (!r.ok) {
+                const err = await r.json()
+                setRunState(prev => ({ ...prev, status: 'error', error: err.detail ?? 'Failed to start' }))
+                setBusy(false)
+                return
+            }
+            await fetchStatus()
+        } catch (e) {
+            setRunState(prev => ({ ...prev, status: 'error', error: (e as Error).message }))
+            setBusy(false)
+        }
+    }
+
+    function toggleTest(id: string) {
+        setSelected(prev =>
+            prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id],
+        )
+    }
+
+    const cpMap = new Map((runState.checkpoints ?? []).map(c => [c.test, c]))
+
+    return (
+        <Stack spacing={2} sx={{ p: 2, maxWidth: 900 }}>
+            {/* ── Test selection ── */}
+            <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                    Select Tests
+                </Typography>
+                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+                    {AVAILABLE_TESTS.map(t => (
+                        <FormControlLabel
+                            key={t.id}
+                            control={
+                                <Checkbox
+                                    size="small"
+                                    checked={selected.includes(t.id)}
+                                    onChange={() => toggleTest(t.id)}
+                                    disabled={isRunning || isStarting}
+                                />
+                            }
+                            label={<Typography variant="caption">{t.label}</Typography>}
+                            sx={{ mr: 1 }}
+                        />
+                    ))}
+                </Stack>
+                <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={isStarting || busy ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
+                        onClick={doStart}
+                        disabled={isRunning || isStarting || busy || selected.length === 0}
+                        size="small"
+                    >
+                        {isStarting ? 'Starting…' : isRunning ? 'Running…' : busy ? 'Waiting…' : 'Start Test Run'}
+                    </Button>
+                    {runState.source && runState.source !== 'web' && (
+                        <Chip label={`By: ${runState.source}`} size="small" color="info" />
+                    )}
+                    {isStarting && (
+                        <Typography variant="caption" color="text.secondary">
+                            Connecting to device…
+                        </Typography>
+                    )}
+                </Stack>
+            </Paper>
+
+            {/* ── Error ── */}
+            {runState.status === 'error' && runState.error && (
+                <Alert severity="error" onClose={() => setRunState({ status: 'idle' })}>
+                    {runState.error}
+                </Alert>
+            )}
+
+            {/* ── Starting spinner ── */}
+            {isStarting && (
+                <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                    <CircularProgress size={24} sx={{ mb: 1 }} />
+                    <Typography variant="body2" color="text.secondary">
+                        Initialising test run…
+                    </Typography>
+                </Paper>
+            )}
+
+            {/* ── Progress ── */}
+            {(isRunning || runState.status === 'completed') && (
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }} spacing={1}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            {isRunning ? 'Running…' : 'Completed'}
+                        </Typography>
+                        <Box sx={{ flex: 1 }} />
+                        <Tooltip title="Refresh">
+                            <IconButton size="small" onClick={fetchStatus}>
+                                <RefreshIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+
+                    <LinearProgress
+                        variant={isRunning ? 'indeterminate' : 'determinate'}
+                        value={progress}
+                        sx={{ mb: 2, height: 6, borderRadius: 3 }}
+                        color={runState.status === 'completed' ? 'success' : 'primary'}
+                    />
+
+                    {runState.progress && (
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                            {runState.progress.completed} / {runState.progress.total} tests
+                            {runState.progress.current_test && (
+                                <> · Current: <strong>{runState.progress.current_test}</strong></>
+                            )}
+                        </Typography>
+                    )}
+
+                    {/* Per-test status */}
+                    <Stack spacing={0.5}>
+                        {(runState.tests ?? selected).map(testId => {
+                            const cp = cpMap.get(testId)
+                            const status = cp?.status ?? 'pending'
+                            const color =
+                                status === 'passed' ? 'success' :
+                                status === 'failed' ? 'error' :
+                                status === 'running' ? 'info' : 'default'
+                            return (
+                                <Stack key={testId} direction="row" sx={{ alignItems: 'center' }} spacing={1}>
+                                    <Chip label={testId} size="small" color={color}
+                                        variant={status === 'pending' ? 'outlined' : 'filled'}
+                                        sx={{ minWidth: 180, justifyContent: 'flex-start' }}
+                                    />
+                                    <Typography variant="caption" color="text.secondary">
+                                        {status === 'passed' ? '✓' : status === 'failed' ? '✗' :
+                                         status === 'running' ? '⏳' : '○'}{' '}
+                                        {status}
+                                    </Typography>
+                                    {cp?.error && (
+                                        <Typography variant="caption" color="error" sx={{ flex: 1 }}>
+                                            {cp.error}
+                                        </Typography>
+                                    )}
+                                </Stack>
+                            )
+                        })}
+                    </Stack>
+                </Paper>
+            )}
+
+            {/* ── Live logs ── */}
+            {runState.logs && runState.logs.length > 0 && (
+                <Paper variant="outlined" sx={{ p: 1.5 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        Live Log
+                    </Typography>
+                    <Box sx={{
+                        maxHeight: 200, overflow: 'auto',
+                        background: '#1e1e1e', color: '#d4d4d4',
+                        borderRadius: 1, p: 1, fontFamily: 'monospace',
+                        fontSize: '0.7rem', lineHeight: 1.5,
+                    }}>
+                        {runState.logs.map((entry, i) => (
+                            <div key={i} style={{
+                                color: entry.level === 'error' ? '#f44747' :
+                                       entry.level === 'warning' ? '#cca700' : '#d4d4d4',
+                            }}>
+                                [{entry.timestamp?.slice(11, 19) ?? '--:--:--'}] {entry.message}
+                            </div>
+                        ))}
+                        <div ref={logsEndRef} />
+                    </Box>
+                </Paper>
+            )}
+
+            {/* ── Results ── */}
+            {runState.status === 'completed' && runState.results && runState.results.length > 0 && (
+                <Paper variant="outlined" sx={{ p: 1.5, overflow: 'auto', maxHeight: 400 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                        Detailed Results
+                    </Typography>
+                    <pre style={{ margin: 0, fontSize: '0.72rem', whiteSpace: 'pre-wrap' }}>
+                        {JSON.stringify(runState.results, null, 2)}
+                    </pre>
+                </Paper>
+            )}
+
+            {runState.status === 'idle' && !busy && (
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                    Select tests and click <strong>Start Test Run</strong>.
+                </Typography>
+            )}
+        </Stack>
+    )
+}

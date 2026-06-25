@@ -98,12 +98,26 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
         const { nodes: newNodes, edges: chainEdges } = buildLayout(
             topology.Topology, diffStatus, true /* editMode */,
         )
+
+        // ── Preserve existing node data (hiddenValves, etc.) across rebuilds ──
+        const prevNodeMap = new Map(nodes.map(n => [n.id, n]))
+
         // Inject valve-change callback into valve body nodes
         const enriched = (newNodes as Node[]).map(n => {
             if (n.type !== 'mod') return n
             const d = n.data as ModuleNodeData
-            if (!d.showValveEditor) return n
-            return { ...n, data: { ...d, onValveChange: onModuleValveChange } }
+            // Preserve hiddenValves from previous render so valve checkboxes persist
+            const prev = prevNodeMap.get(n.id)
+            const prevHidden = prev ? (prev.data as ModuleNodeData).hiddenValves : undefined
+            if (!d.showValveEditor && prevHidden === undefined) return n
+            return {
+                ...n,
+                data: {
+                    ...d,
+                    hiddenValves: prevHidden ?? d.hiddenValves ?? [],
+                    onValveChange: d.showValveEditor ? onModuleValveChange : d.onValveChange,
+                },
+            }
         })
         setNodes(enriched)
         // Preserve existing IO edges if nodes are still valid
@@ -220,6 +234,7 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
                 source_handle: String(e.sourceHandle ?? ''),
                 target_handle: String(e.targetHandle ?? ''),
                 label: typeof e.label === 'string' ? e.label : '',
+                waypoints: (d.waypoints as Array<{ x: number; y: number }>) ?? undefined,
             }
         })
         try {
@@ -252,7 +267,6 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
             const newIo: Edge[] = loaded.map(c => ({
                 id: c.id,
                 source: String(c.source_module_addr),
-                // Prefer stored full handle; fall back to inout for old files
                 sourceHandle: c.source_handle ?? `src-inout-${c.source_channel}`,
                 target: String(c.target_module_addr),
                 targetHandle: c.target_handle ?? `tgt-inout-${c.target_channel}`,
@@ -261,7 +275,12 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
                 zIndex: 1000,
                 style: { stroke: IO_COLOR, strokeWidth: 2.5 },
                 label: c.label ?? `#${c.source_module_addr}:${c.source_channel} → #${c.target_module_addr}:${c.target_channel}`,
-                data: { kind: 'io', portSrc: c.source_channel, portTgt: c.target_channel },
+                data: {
+                    kind: 'io',
+                    portSrc: c.source_channel,
+                    portTgt: c.target_channel,
+                    waypoints: c.waypoints ?? undefined,
+                },
             }))
 
             setEdges(prev => [
@@ -382,7 +401,7 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
                             onChange={e => setSavePath(e.target.value)}
                             placeholder="connections.json"
                             sx={{ flex: 1 }}
-                            inputProps={{ style: { fontSize: '0.65rem', padding: '4px 8px' } }}
+                            slotProps={{ htmlInput: { style: { fontSize: '0.65rem', padding: '4px 8px' } } }}
                         />
                         <Button size="small" variant="contained" color="success"
                             onClick={doSave}
@@ -399,7 +418,7 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
                             onChange={e => setLoadPath(e.target.value)}
                             placeholder="connections.json"
                             sx={{ flex: 1 }}
-                            inputProps={{ style: { fontSize: '0.65rem', padding: '4px 8px' } }}
+                            slotProps={{ htmlInput: { style: { fontSize: '0.65rem', padding: '4px 8px' } } }}
                         />
                         <Button size="small" variant="outlined"
                             onClick={doLoad}

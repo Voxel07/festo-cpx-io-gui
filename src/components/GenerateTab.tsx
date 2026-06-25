@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function GenerateTab({ ip, timeout, onResult }: Props) {
-    const [savePath, setSavePath] = useState('')
+    const [savePath, setSavePath] = useState('topology.jsonc')
     const [busy, setBusy] = useState(false)
     const [result, setResult] = useState<GenerateResult | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -35,7 +35,7 @@ export default function GenerateTab({ ip, timeout, onResult }: Props) {
 
     return (
         <Stack spacing={2} sx={{ p: 2, maxWidth: 860 }}>
-            <Stack direction="row" spacing={2} alignItems="flex-end">
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-end' }}>
                 <TextField
                     label="Save to file (optional)"
                     value={savePath}

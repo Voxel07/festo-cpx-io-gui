@@ -17,6 +17,8 @@ export default defineConfig({
             '/svg':         { target: 'http://localhost:8000', changeOrigin: true },
             '/svg-map':     { target: 'http://localhost:8000', changeOrigin: true },
             '/connections': { target: 'http://localhost:8000', changeOrigin: true },
+            '/test-run':    { target: 'http://localhost:8000', changeOrigin: true },
+            '/validate-connections': { target: 'http://localhost:8000', changeOrigin: true },
         },
     },
     build: {

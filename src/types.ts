@@ -54,6 +54,8 @@ export interface IOConnection {
     /** Full xyflow handle ID including kind, e.g. 'tgt-in-X0' (v2 format) */
     target_handle?: string
     label?: string
+    /** 90°-corner waypoints for the routed cable (canvas coordinates) */
+    waypoints?: Array<{ x: number; y: number }>
 }
 
 export interface ConnectionEntry {
