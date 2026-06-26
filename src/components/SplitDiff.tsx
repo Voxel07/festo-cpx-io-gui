@@ -29,8 +29,8 @@ function DiffPane({ rows, side, myRef, peerRef }: DiffPaneProps) {
     }
 
     const header = side === 'left'
-        ? { label: '--- stored', color: '#f48771' }
-        : { label: '+++ live (device)', color: '#b5d397' }
+        ? { label: '--- stored', bg: '#ffeef0', color: '#9a1b1b' }
+        : { label: '+++ live (device)', bg: '#eaffed', color: '#057a35' }
 
     return (
         <Box
@@ -44,8 +44,9 @@ function DiffPane({ rows, side, myRef, peerRef }: DiffPaneProps) {
             {/* Sticky header */}
             <Box sx={{
                 fontFamily: 'monospace', fontWeight: 700, fontSize: '0.75rem',
-                background: '#1e1e2e', color: header.color,
+                background: header.bg, color: header.color,
                 px: 1.5, py: 0.8, position: 'sticky', top: 0, zIndex: 2,
+                borderBottom: '1px solid #ddd',
             }}>
                 {header.label}
             </Box>
@@ -100,16 +101,12 @@ export default function SplitDiff({ cmpData }: Props) {
 
     return (
         <Box>
-            <Box sx={{ mb: 1, fontFamily: 'monospace', fontSize: '0.82rem', px: 0.5, display: 'flex', gap: 2 }}>
-                {cmpData.has_diff ? (
-                    <>
-                        <span style={{ color: '#057a35' }}>+{adds} addition{adds !== 1 && 's'}</span>
-                        <span style={{ color: '#9a1b1b' }}>−{dels} deletion{dels !== 1 && 's'}</span>
-                    </>
-                ) : (
-                    <span style={{ color: '#2e7d32' }}>✓ No differences</span>
-                )}
-            </Box>
+            {cmpData.has_diff && (
+                <Box sx={{ mb: 1, fontFamily: 'monospace', fontSize: '0.82rem', px: 0.5, display: 'flex', gap: 2 }}>
+                    <span style={{ color: '#057a35' }}>+{adds} addition{adds !== 1 && 's'}</span>
+                    <span style={{ color: '#9a1b1b' }}>−{dels} deletion{dels !== 1 && 's'}</span>
+                </Box>
+            )}
 
             <Box sx={{ display: 'flex', border: '1px solid #ccc', borderRadius: 1, overflow: 'hidden' }}>
                 <DiffPane rows={rows} side="left" myRef={leftRef} peerRef={rightRef} />

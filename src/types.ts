@@ -69,4 +69,6 @@ export interface ConnectionFile {
     version: string
     topology_name?: string
     connections: IOConnection[]
+    /** MountedValves per valve-body module, keyed by address string */
+    mounted_valves?: Record<string, number[]>
 }

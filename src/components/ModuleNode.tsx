@@ -1,4 +1,4 @@
-import { memo, Fragment, useState } from 'react'
+import { memo, Fragment, useState, useEffect } from 'react'
 import { Handle, Position, useReactFlow } from '@xyflow/react'
 import type { NodeProps, Node } from '@xyflow/react'
 import { Box, Typography, Chip, Tooltip, IconButton } from '@mui/material'
@@ -38,6 +38,10 @@ export type ModuleNodeData = {
     isBackplane: boolean
     showLeftHandle: boolean
     showRightHandle: boolean
+    /** EPLI module: show AP-in handle on top */
+    showApIn?: boolean
+    /** EPLI module: show AP-out handle on bottom */
+    showApOut?: boolean
     /** Show valve editor button (VABX body modules in ConnectionsFlow) */
     showValveEditor?: boolean
     /** Valve slot group IDs that are hidden (empty, not mounted) */
@@ -70,6 +74,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const {
         mod, status, editMode, isBackplane,
         showLeftHandle, showRightHandle,
+        showApIn = false, showApOut = false,
         showValveEditor = false,
         suppressIoHandles = false,
         hiddenValves = [],
@@ -80,8 +85,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const svgMaps = useSvgMap()
     const svgUrl = resolveIcon(mod.Name, svgMaps, mod.Modulecode)
     const ports = useSvgPorts(svgUrl, {
-        numIn:    mod.NumOfInputs,
-        numOut:   mod.NumOfOutputs,
+        numIn: mod.NumOfInputs,
+        numOut: mod.NumOfOutputs,
         numInOut: mod.NumOfInOuts,
     })
     const valveGroups = useValveGroups(showValveEditor ? svgUrl : '')
@@ -89,6 +94,19 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
     const [valveEditorOpen, setValveEditorOpen] = useState(false)
     const { setNodes } = useReactFlow()
+
+    // When valveGroups are loaded and mod.MountedValves is known, derive hiddenValves
+    useEffect(() => {
+        if (!showValveEditor || valveGroups.length === 0 || mod.MountedValves === undefined) return
+        const mountedSet = new Set(mod.MountedValves)
+        const expected = valveGroups.filter((_, i) => !mountedSet.has(i))
+        setNodes(prev => prev.map(n => {
+            if (n.id !== nodeId) return n
+            const cur = (n.data as ModuleNodeData).hiddenValves ?? []
+            const same = expected.length === cur.length && expected.every(id => cur.includes(id))
+            return same ? n : { ...n, data: { ...n.data, hiddenValves: expected } }
+        }))
+    }, [valveGroups, mod.MountedValves, showValveEditor, nodeId, setNodes])
 
     const st = STATUS_STYLE[status] ?? STATUS_STYLE.unchanged
     const hasPorts = ports.length > 0
@@ -127,7 +145,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
             position: 'relative',
         }}>
 
-            {/* ── Left / Right cable handles ── */}
+            {/* ── Left / Right cable handles (standard AP-I) ── */}
             {showLeftHandle && (
                 <Handle id="left" type="target" position={Position.Left}
                     style={{ background: '#546e7a', width: 10, height: 10, border: '2px solid #fff' }} />
@@ -153,6 +171,14 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     }} />
             ))}
 
+            {/* ── Address badge (above image) ── */}
+            <Typography sx={{
+                fontSize: '0.48rem', fontWeight: 700, color: '#1565c0',
+                mb: 0.15, lineHeight: 1, letterSpacing: '0.02em',
+            }}>
+                #{mod.Adress}
+            </Typography>
+
             {/* ── SVG image container ── */}
             <Box sx={{ position: 'relative', width: DISP_W, height: DISP_H, margin: '0 auto' }}>
                 <Tooltip title={mod.Name} placement="top" arrow>
@@ -170,6 +196,40 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                         position: 'absolute', bottom: 0, left: 0, right: 0, height: 3,
                         background: st.border, borderRadius: '0 0 2px 2px',
                     }} />
+                )}
+
+                {/* ── EPLI AP-bus handles at physical XF10/XF20 port positions ──
+                     SVG viewBox 31×107: XF10 at cy=40.5 (37.85%), XF20 at cy=56.5 (52.8%) */}
+                {showApIn && (
+                    <Handle id="ap-in" type="target" position={Position.Left}
+                        style={{
+                            position: 'absolute',
+                            left: '50%', top: '37.85%',
+                            transform: 'translate(-50%,-50%)',
+                            width: 10, height: 10,
+                            background: '#1565c0',
+                            border: '2.5px solid #fff',
+                            borderRadius: '50%',
+                            boxShadow: '0 0 0 2px #1565c0',
+                            zIndex: 10,
+                        }}
+                    />
+                )}
+                {showApOut && (
+                    <Handle id="ap-out" type="source" position={Position.Right}
+                        style={{
+                            position: 'absolute',
+                            left: '50%', top: '52.8%',
+                            transform: 'translate(-50%,-50%)',
+                            width: 10, height: 10,
+                            background: '#2e7d32',
+                            border: '2.5px solid #fff',
+                            borderRadius: '50%',
+                            boxShadow: '0 0 0 2px #2e7d32',
+                            zIndex: 10,
+                            cursor: 'crosshair',
+                        }}
+                    />
                 )}
 
                 {/* ── SVG-port handles (edit mode, not suppressed) ── */}
@@ -218,13 +278,22 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 })}
             </Box>
 
-            {/* ── Module name ── */}
-            <Typography sx={{
-                fontSize: '0.5rem', fontWeight: 700, wordBreak: 'break-all',
-                mt: 0.25, lineHeight: 1.15, color: isBackplane ? '#444' : 'inherit',
-            }}>
-                {mod.Name}
-            </Typography>
+            {/* ── Module name + I/O counts on same line ── */}
+            <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>
+                <Typography sx={{
+                    fontSize: '0.5rem', fontWeight: 700, wordBreak: 'break-all',
+                    lineHeight: 1.15, color: isBackplane ? '#444' : 'inherit',
+                }}>
+                    {mod.Name}
+                </Typography>
+                {(numIn > 0 || numOut > 0 || numInOut > 0) && (
+                    <Typography sx={{ fontSize: '0.44rem', color: '#666', lineHeight: 1, whiteSpace: 'nowrap' }}>
+                        {numIn > 0 && <span style={{ color: PORT_COLOR.in }}>↓{numIn}</span>}
+                        {numOut > 0 && <span style={{ color: PORT_COLOR.out }}>↑{numOut}</span>}
+                        {numInOut > 0 && <span style={{ color: PORT_COLOR.inout }}>⇅{numInOut}</span>}
+                    </Typography>
+                )}
+            </Box>
 
             {/* ── Type chip (non-backplane only) ── */}
             {!isBackplane && (
@@ -232,13 +301,6 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     sx={{ fontSize: '0.46rem', height: 13, mt: 0.25, '& .MuiChip-label': { px: '3px' } }}
                 />
             )}
-
-            {/* ── Channel counts ── */}
-            <Typography sx={{ fontSize: '0.44rem', color: '#666', mt: 0.15, lineHeight: 1 }}>
-                {numIn > 0 && <span style={{ color: PORT_COLOR.in }}>↓{numIn} </span>}
-                {numOut > 0 && <span style={{ color: PORT_COLOR.out }}>↑{numOut} </span>}
-                {numInOut > 0 && <span style={{ color: PORT_COLOR.inout }}>⇅{numInOut}</span>}
-            </Typography>
 
             {/* ── Connection list (edit mode, whenever wires are drawn) ── */}
             {connections.length > 0 && (

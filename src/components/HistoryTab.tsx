@@ -1,17 +1,24 @@
 /**
- * HistoryTab – browse past test runs stored in PocketBase.
+ * HistoryTab – browse past test runs.
  *
- * Shows a list of runs with pass/fail summary, and clicking a row opens
- * a detail drawer with per-test results and checkpoint logs.
+ * Shows runs from PocketBase when available, falls back to the server's
+ * in-memory history when PocketBase is not running.  Clicking a row opens
+ * a detail drawer with per-test checkpoints, log output, and raw results.
  */
 import { useState, useEffect, useCallback } from 'react'
 import {
     Box, Stack, Typography, Paper, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Chip, IconButton,
-    Drawer, Divider, LinearProgress, CircularProgress,
+    Drawer, Divider, CircularProgress,
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import CloseIcon from '@mui/icons-material/Close'
+
+interface LogEntry {
+    level: string
+    message: string
+    timestamp: string
+}
 
 interface RunRecord {
     id: string
@@ -19,17 +26,18 @@ interface RunRecord {
     source: string
     ip_address: string
     status: string
-    tests: string   // JSON string
-    results: string // JSON string
+    tests: string | string[]   // JSON string from PB, or array from in-memory
+    results: string | unknown[] // JSON string from PB, or array from in-memory
     started_at: string
     completed_at: string
     created: string
     checkpoints?: Array<{
         test: string
         status: string
-        error: string
+        error?: string
         timestamp: string
     }>
+    logs?: LogEntry[]
 }
 
 export default function HistoryTab() {
@@ -64,12 +72,14 @@ export default function HistoryTab() {
         }
     }
 
-    function parseTests(raw: string): string[] {
+    function parseTests(raw: string | string[]): string[] {
+        if (Array.isArray(raw)) return raw
         try { return JSON.parse(raw) } catch { return [] }
     }
 
-    function parseResults(raw: string): Array<{ test_id?: string; passed?: boolean; error?: string }> {
-        try { return JSON.parse(raw) } catch { return [] }
+    function parseResults(raw: string | unknown[]): Array<{ test_id?: string; passed?: boolean; error?: string }> {
+        if (Array.isArray(raw)) return raw as Array<{ test_id?: string; passed?: boolean; error?: string }>
+        try { return JSON.parse(raw as string) } catch { return [] }
     }
 
     function formatTime(iso: string): string {
@@ -98,7 +108,7 @@ export default function HistoryTab() {
 
             {runs.length === 0 && !loading && (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                    No test runs found. Make sure PocketBase is running at localhost:8090.
+                    No test runs found. Runs appear here after you start one, or when PocketBase is running at localhost:8090.
                 </Typography>
             )}
 
@@ -128,7 +138,7 @@ export default function HistoryTab() {
                                         onClick={() => openDetail(run)}
                                     >
                                         <TableCell>
-                                            <Typography variant="caption" fontFamily="monospace">
+                                            <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
                                                 {run.run_id}
                                             </Typography>
                                         </TableCell>
@@ -174,7 +184,7 @@ export default function HistoryTab() {
                 anchor="right"
                 open={!!selectedRun}
                 onClose={() => setSelectedRun(null)}
-                PaperProps={{ sx: { width: 480, p: 2 } }}
+                slotProps={{ paper: { sx: { width: 480, p: 2 } } }}
             >
                 {selectedRun && (
                     <Stack spacing={2}>
@@ -211,8 +221,8 @@ export default function HistoryTab() {
                             const cp = (selectedRun.checkpoints ?? []).find(c => c.test === testId)
                             const color =
                                 cp?.status === 'passed' ? 'success' :
-                                cp?.status === 'failed' ? 'error' :
-                                cp?.status === 'running' ? 'info' : 'default'
+                                    cp?.status === 'failed' ? 'error' :
+                                        cp?.status === 'running' ? 'info' : 'default'
                             return (
                                 <Stack key={testId} direction="row" sx={{ alignItems: 'center' }} spacing={1}>
                                     <Chip label={testId} size="small" color={color} />
@@ -227,6 +237,35 @@ export default function HistoryTab() {
 
                         <Divider />
 
+                        {/* ── Log output (in-memory runs have full logs) ── */}
+                        {selectedRun.logs && selectedRun.logs.length > 0 && (
+                            <>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                    Log ({selectedRun.logs.length} entries)
+                                </Typography>
+                                <Box sx={{
+                                    background: '#1e1e1e', color: '#d4d4d4',
+                                    borderRadius: 1, p: 1,
+                                    maxHeight: 300, overflow: 'auto',
+                                    fontFamily: 'monospace', fontSize: '0.72rem', lineHeight: 1.6,
+                                }}>
+                                    {selectedRun.logs.map((entry, i) => (
+                                        <div key={i} style={{
+                                            color: entry.level === 'error' ? '#f44747'
+                                                : entry.level === 'warning' ? '#cca700'
+                                                    : '#d4d4d4',
+                                        }}>
+                                            <span style={{ color: '#608b4e', userSelect: 'none' }}>
+                                                [{entry.timestamp?.slice(11, 19) ?? '--:--:--'}]
+                                            </span>{' '}
+                                            {entry.message}
+                                        </div>
+                                    ))}
+                                </Box>
+                                <Divider />
+                            </>
+                        )}
+
                         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                             Raw Results
                         </Typography>
@@ -236,8 +275,12 @@ export default function HistoryTab() {
                             fontFamily: 'monospace', whiteSpace: 'pre-wrap',
                         }}>
                             {(() => {
-                                try { return JSON.stringify(JSON.parse(selectedRun.results), null, 2) }
-                                catch { return selectedRun.results }
+                                try {
+                                    const raw = selectedRun.results
+                                    if (Array.isArray(raw)) return JSON.stringify(raw, null, 2)
+                                    return JSON.stringify(JSON.parse(raw as string), null, 2)
+                                }
+                                catch { return String(selectedRun.results) }
                             })()}
                         </Box>
                     </Stack>

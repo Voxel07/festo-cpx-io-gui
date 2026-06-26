@@ -1,18 +1,14 @@
 /**
  * ConnectionsFlow – full-page I/O wiring editor.
  *
- * Shows the topology with orange port handles visible on each module.
- * The user can drag from any port (output) to another port (input) to
- * create a wired connection.  Connections can be saved / loaded as JSON
- * via the FastAPI /connections endpoints.
- *
- * IO edges are rendered with zIndex: 1000 so they appear in front of
- * module images.
+ * Shows the topology with port handles visible on each module.
+ * Drag from a port to another to create a wired I/O connection.
+ * Save/load connections (including valve-mount info) via /connections.
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
     Box, Button, TextField, Typography, Divider, Alert, Tooltip,
-    Stack,
+    Stack, Chip, CircularProgress,
 } from '@mui/material'
 import {
     ReactFlow,
@@ -20,10 +16,8 @@ import {
     BackgroundVariant,
     Controls,
     MiniMap,
-    Panel,
     useNodesState,
     useEdgesState,
-    addEdge,
     reconnectEdge,
 } from '@xyflow/react'
 import type { Node, Edge, EdgeChange, Connection, NodeTypes, EdgeTypes } from '@xyflow/react'
@@ -68,19 +62,31 @@ function portId(handleId: string): string {
 interface Props {
     topology: Topology | null
     diffStatus: DiffStatus | null
+    /** IP address of the CPX-AP gateway (from App toolbar) */
+    ip?: string
     /** Called when a valve body's mounted valves change (indices 0-based) */
     onModuleValveChange?: (addr: number, mountedValves: number[]) => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function ConnectionsFlow({ topology, diffStatus, onModuleValveChange }: Props) {
+export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValveChange }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])  // ModuleNode | BackplaneNode
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
-    const [showCables, setShowCables] = useState(true)
-    const [savePath, setSavePath] = useState('connections.json')
-    const [loadPath, setLoadPath] = useState('connections.json')
+    const [showCables, setShowCables] = useState(false)  // hidden by default for cleaner IO editing
+    const [savePath, setSavePath] = useState('connections.jsonc')
+    const [loadPath, setLoadPath] = useState('connections.jsonc')
     const [statusMsg, setStatusMsg] = useState<{ text: string; severity: 'success' | 'error' } | null>(null)
+
+    // ── Wire Test state ────────────────────────────────────
+    const [showTestPanel, setShowTestPanel] = useState(false)
+    /** edgeId → true when output is currently held HIGH */
+    const [outputStates, setOutputStates] = useState<Record<string, boolean>>({})
+    /** edgeId → last input reading */
+    const [testResults, setTestResults] = useState<Record<string, { values?: boolean[]; value: boolean | null; error?: string }>>({})
+    /** edge IDs currently awaiting a device call */
+    const [testBusy, setTestBusy] = useState<Set<string>>(new Set())
+    const [testAllBusy, setTestAllBusy] = useState(false)
 
     const ioEdgesRef = useRef<Edge[]>([])
     const topologyName = useRef('')
@@ -196,10 +202,12 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
             animated: true,
             zIndex: 1000,
             style: { stroke: wireColor, strokeWidth: 2 },
-            label: `#${srcNode}:${pSrc} → #${tgtNode}:${pTgt}`,
+            label: `#${srcNode}:${pSrc} \u2192 #${tgtNode}:${pTgt}`,
             data: { kind: 'io', portSrc: pSrc, portTgt: pTgt, wireColor },
         }
-        setEdges(prev => addEdge(newEdge, prev))
+        // Only deduplicate by edge ID — allow fan-out (one output → many inputs)
+        // and fan-in (many outputs → one input). Exact duplicate = same ID.
+        setEdges(prev => prev.some(e => e.id === edgeId) ? prev : [...prev, newEdge])
     }, [setEdges])
 
     // ── Reconnect: drag an existing IO edge endpoint to a new port ──
@@ -207,7 +215,7 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
         setEdges(prev => reconnectEdge(oldEdge, newConnection, prev))
     }, [setEdges])
 
-    // ── Validate: enforce input→output compatibility ───────────
+    // ── Validate: enforce input→output compatibility + block exact duplicates ──
     const isValidConnection = useCallback((conn: Connection | Edge): boolean => {
         const c = conn as Connection
         if (c.source === c.target) return false
@@ -216,9 +224,18 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
         if (!sh.startsWith('src-') || !th.startsWith('tgt-')) return false
         const sk = handleKind(sh)
         const tk = handleKind(th)
-        // inout is compatible with everything; in↔out is allowed; in↔in and out↔out are not
-        if (sk === 'inout' || tk === 'inout') return true
-        return sk !== tk  // out→in: OK, in→out: OK (user dragged reverse)
+        // in↔in or out↔out not allowed
+        if (sk !== 'inout' && tk !== 'inout' && sk === tk) return false
+        // Compute the normalised edge ID (mirrors onConnect direction flip) to
+        // block exact duplicates while still allowing fan-out / fan-in.
+        let srcNode = c.source, tgtNode = c.target, nsh = sh, nth = th
+        if (handleKind(sh) === 'in') {
+            srcNode = c.target; tgtNode = c.source
+            nsh = th.replace(/^tgt-/, 'src-')
+            nth = sh.replace(/^src-/, 'tgt-')
+        }
+        const edgeId = `io-${srcNode}-${portId(nsh)}-${tgtNode}-${portId(nth)}`
+        return !ioEdgesRef.current.some(e => e.id === edgeId)
     }, [])
 
     // ── Save ──────────────────────────────────────────────
@@ -237,6 +254,17 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
                 waypoints: (d.waypoints as Array<{ x: number; y: number }>) ?? undefined,
             }
         })
+
+        // Collect mounted_valves from all mod nodes that have them
+        const mounted_valves: Record<string, number[]> = {}
+        nodes.forEach(n => {
+            if (n.type !== 'mod') return
+            const d = n.data as ModuleNodeData
+            if (d.mod.MountedValves && d.mod.MountedValves.length >= 0) {
+                mounted_valves[String(d.mod.Adress)] = d.mod.MountedValves
+            }
+        })
+
         try {
             const r = await fetch('/connections', {
                 method: 'POST',
@@ -244,12 +272,13 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
                 body: JSON.stringify({
                     topology_name: topologyName.current,
                     connections,
+                    mounted_valves: Object.keys(mounted_valves).length > 0 ? mounted_valves : undefined,
                     save_path: savePath,
                 }),
             })
             const d = await r.json()
             setStatusMsg(r.ok
-                ? { text: `Saved → ${d.saved_to}`, severity: 'success' }
+                ? { text: `Saved \u2192 ${d.saved_to}`, severity: 'success' }
                 : { text: `Error: ${d.detail}`, severity: 'error' })
         } catch (e) {
             setStatusMsg({ text: `Error: ${(e as Error).message}`, severity: 'error' })
@@ -287,6 +316,15 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
                 ...prev.filter(e => (e.data as Record<string, unknown>)?.kind !== 'io'),
                 ...newIo,
             ])
+
+            // Restore mounted valve config for each valve body
+            const mountedValves = d.mounted_valves as Record<string, number[]> | undefined
+            if (mountedValves) {
+                Object.entries(mountedValves).forEach(([addrStr, mv]) => {
+                    onModuleValveChange?.(parseInt(addrStr), mv)
+                })
+            }
+
             setStatusMsg({ text: `Loaded ${loaded.length} connection(s)`, severity: 'success' })
         } catch (e) {
             setStatusMsg({ text: `Error: ${(e as Error).message}`, severity: 'error' })
@@ -297,6 +335,136 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
     function doClear() {
         setEdges(prev => prev.filter(e => (e.data as Record<string, unknown>)?.kind !== 'io'))
         setStatusMsg(null)
+    }
+
+    // ── Wire Test: connections derived from current IO edges ──────
+    interface TestConn {
+        id: string; srcAddr: number; srcCh: string
+        tgtAddr: number; tgtCh: string; label: string
+        /** Channels per port: 2 for M12-5P connectors, 1 for M8 / single-channel */
+        srcCPP: number; tgtCPP: number
+    }
+
+    /** Safely parse JSON from a Response; returns null on empty / non-JSON body. */
+    async function safeJson(r: Response): Promise<Record<string, unknown> | null> {
+        const text = await r.text()
+        if (!text.trim()) return null
+        try { return JSON.parse(text) } catch { return null }
+    }
+    const isM12 = (name?: string) => !!(name ?? '').includes('M12')
+    const testConns: TestConn[] = edges
+        .filter(e => (e.data as Record<string, unknown>)?.kind === 'io')
+        .map(e => {
+            const d = e.data as Record<string, unknown>
+            const srcMod = topology?.Topology?.find(m => String(m.Adress) === String(e.source))
+            const tgtMod = topology?.Topology?.find(m => String(m.Adress) === String(e.target))
+            return {
+                id: e.id,
+                srcAddr: parseInt(e.source),
+                srcCh: String(d.portSrc ?? portId(String(e.sourceHandle ?? ''))),
+                tgtAddr: parseInt(e.target),
+                tgtCh: String(d.portTgt ?? portId(String(e.targetHandle ?? ''))),
+                label: typeof e.label === 'string' ? e.label : `#${e.source} → #${e.target}`,
+                srcCPP: isM12(srcMod?.Name) ? 2 : 1,
+                tgtCPP: isM12(tgtMod?.Name) ? 2 : 1,
+            }
+        })
+
+    async function doReadInput(conn: TestConn) {
+        if (!ip) return
+        try {
+            const r = await fetch(
+                `/io/read-input?ip_address=${encodeURIComponent(ip)}&module_addr=${conn.tgtAddr}&channel=${encodeURIComponent(conn.tgtCh)}&channels_per_port=${conn.tgtCPP}`,
+            )
+            const d = await r.json()
+            if (!r.ok) {
+                setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: d.detail } }))
+                return
+            }
+            const vals: boolean[] = Array.isArray(d.values) ? d.values.map(Boolean) : [Boolean(d.value)]
+            setTestResults(prev => ({ ...prev, [conn.id]: { values: vals, value: vals.every(Boolean) } }))
+        } catch (e) {
+            setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: (e as Error).message } }))
+        }
+    }
+
+    async function toggleOutput(conn: TestConn) {
+        const newVal = !(outputStates[conn.id] ?? false)
+        setTestBusy(prev => new Set(prev).add(conn.id))
+        try {
+            const r = await fetch('/io/set-output', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: newVal, channels_per_port: conn.srcCPP }),
+            })
+            const d = await safeJson(r)
+            if (!r.ok) {
+                setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: d?.detail as string ?? `HTTP ${r.status}` } }))
+                return
+            }
+            setOutputStates(prev => ({ ...prev, [conn.id]: newVal }))
+            if (newVal) {
+                await doReadInput(conn)
+            } else {
+                setTestResults(prev => { const n = { ...prev }; delete n[conn.id]; return n })
+            }
+        } catch (e) {
+            setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: (e as Error).message } }))
+        } finally {
+            setTestBusy(prev => { const n = new Set(prev); n.delete(conn.id); return n })
+        }
+    }
+
+    async function testAll() {
+        setTestAllBusy(true)
+        try {
+            for (const conn of testConns) {
+                setTestBusy(prev => new Set(prev).add(conn.id))
+                try {
+                    // Pulse HIGH
+                    const rOn = await fetch('/io/set-output', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: true, channels_per_port: conn.srcCPP }),
+                    })
+                    setOutputStates(prev => ({ ...prev, [conn.id]: true }))
+                    if (rOn.ok) {
+                        await new Promise(res => setTimeout(res, 300))
+                        await doReadInput(conn)
+                    } else {
+                        const errData = await safeJson(rOn)
+                        setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: errData?.detail as string ?? `HTTP ${rOn.status}` } }))
+                    }
+                    // Set LOW
+                    await fetch('/io/set-output', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: false, channels_per_port: conn.srcCPP }),
+                    })
+                    setOutputStates(prev => ({ ...prev, [conn.id]: false }))
+                } finally {
+                    setTestBusy(prev => { const n = new Set(prev); n.delete(conn.id); return n })
+                }
+            }
+        } finally {
+            setTestAllBusy(false)
+        }
+    }
+
+    async function clearAllOutputs() {
+        for (const conn of testConns) {
+            if (outputStates[conn.id]) {
+                try {
+                    await fetch('/io/set-output', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: false, channels_per_port: conn.srcCPP }),
+                    })
+                } catch { /* best-effort */ }
+            }
+        }
+        setOutputStates({})
+        setTestResults({})
     }
 
     // ── Visible edges ─────────────────────────────────────
@@ -318,145 +486,342 @@ export default function ConnectionsFlow({ topology, diffStatus, onModuleValveCha
     }
 
     return (
-        <ReactFlow
-            nodes={nodes}
-            edges={visibleEdges}
-            nodeTypes={NODE_TYPES}
-            edgeTypes={EDGE_TYPES}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onReconnect={onReconnect}
-            isValidConnection={isValidConnection}
-            edgesReconnectable
-            elementsSelectable
-            fitView
-            fitViewOptions={{ padding: 0.25 }}
-            minZoom={0.1}
-            maxZoom={4}
-        >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-            <Controls />
-            <MiniMap
-                nodeColor={n => {
-                    const d = n.data as Record<string, unknown>
-                    return STATUS_STYLE[d?.status as keyof typeof STATUS_STYLE]?.border ?? '#90caf9'
-                }}
-                zoomable pannable
-            />
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-            {/* ── Right-side control panel ── */}
-            <Panel position="top-right">
-                <Box sx={{
-                    background: 'rgba(255,255,255,0.97)',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 1.5,
-                    p: 1.25,
-                    boxShadow: 3,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 1,
-                    width: 260,
-                }}>
+            {/* ── Top Controls Bar ─────────────────────────────────── */}
+            <Box sx={{
+                background: '#fff',
+                borderBottom: '1px solid #e0e0e0',
+                px: 2, py: 0.75,
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 1.5,
+                flexWrap: 'wrap',
+                flexShrink: 0,
+            }}>
+                <Typography sx={{ fontSize: '0.85rem', fontWeight: 700, color: '#e65100', whiteSpace: 'nowrap' }}>
+                    🔧 I/O Connection Editor
+                </Typography>
 
-                    <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: '#e65100' }}>
-                        🔧 I/O Connection Editor
+                {ioCount > 0 && (
+                    <Chip
+                        label={`${ioCount} wire${ioCount !== 1 ? 's' : ''}`}
+                        size="small" color="warning"
+                        sx={{ height: 22, fontSize: '0.72rem' }}
+                    />
+                )}
+
+                <Divider orientation="vertical" flexItem />
+
+                {/* Cable visibility toggle */}
+                <Button
+                    size="small"
+                    variant={showCables ? 'contained' : 'outlined'}
+                    color="inherit"
+                    onClick={() => setShowCables(s => !s)}
+                    sx={{
+                        fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
+                        color: showCables ? '#fff' : '#546e7a',
+                        background: showCables ? '#546e7a' : 'transparent',
+                        borderColor: '#546e7a',
+                        '&:hover': { borderColor: '#455a64', background: showCables ? '#455a64' : 'rgba(84,110,122,0.08)' },
+                    }}
+                >
+                    🔌 {showCables ? 'Hide Cables' : 'Show Cables'}
+                </Button>
+
+                <Divider orientation="vertical" flexItem />
+
+                {/* Save */}
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Typography sx={{ fontSize: '0.72rem', fontWeight: 600, color: '#333', whiteSpace: 'nowrap' }}>
+                        Save:
                     </Typography>
-
-                    <Typography sx={{ fontSize: '0.6rem', color: '#555', lineHeight: 1.5 }}>
-                        Click &amp; drag from an <strong style={{ color: '#ff9800' }}>orange port</strong> to
-                        another port to create a wired connection.
-                        {ioCount > 0 && (
-                            <span style={{ color: '#e65100', fontWeight: 700 }}>
-                                {` ${ioCount} connection${ioCount !== 1 ? 's' : ''}`}
-                            </span>
-                        )}
-                    </Typography>
-
-                    <Divider />
-
-                    {/* Cable visibility toggle */}
-                    <Button
-                        size="small"
-                        variant={showCables ? 'outlined' : 'contained'}
-                        color="inherit"
-                        onClick={() => setShowCables(s => !s)}
-                        sx={{
-                            fontSize: '0.65rem', py: 0.25, color: showCables ? '#546e7a' : '#fff',
-                            background: showCables ? 'transparent' : '#546e7a',
-                            borderColor: '#546e7a',
-                            '&:hover': { borderColor: '#455a64' }
-                        }}
-                    >
-                        {showCables ? '🔌 Hide Cable Topology' : '🔌 Show Cable Topology'}
+                    <TextField
+                        size="small" value={savePath}
+                        onChange={e => setSavePath(e.target.value)}
+                        placeholder="connections.jsonc"
+                        sx={{ width: 180 }}
+                        slotProps={{ htmlInput: { style: { fontSize: '0.72rem', padding: '4px 8px' } } }}
+                    />
+                    <Button size="small" variant="contained" color="success"
+                        onClick={doSave}
+                        sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}>
+                        💾 Save
                     </Button>
+                </Stack>
 
-                    <Divider />
+                {/* Load */}
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Typography sx={{ fontSize: '0.72rem', fontWeight: 600, color: '#333', whiteSpace: 'nowrap' }}>
+                        Load:
+                    </Typography>
+                    <TextField
+                        size="small" value={loadPath}
+                        onChange={e => setLoadPath(e.target.value)}
+                        placeholder="connections.jsonc"
+                        sx={{ width: 180 }}
+                        slotProps={{ htmlInput: { style: { fontSize: '0.72rem', padding: '4px 8px' } } }}
+                    />
+                    <Button size="small" variant="outlined" color="primary"
+                        onClick={doLoad}
+                        sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}>
+                        📂 Load
+                    </Button>
+                </Stack>
 
-                    {/* Save */}
-                    <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: '#333' }}>Save connections</Typography>
-                    <Stack direction="row" spacing={0.5}>
-                        <TextField
-                            size="small" value={savePath}
-                            onChange={e => setSavePath(e.target.value)}
-                            placeholder="connections.json"
-                            sx={{ flex: 1 }}
-                            slotProps={{ htmlInput: { style: { fontSize: '0.65rem', padding: '4px 8px' } } }}
-                        />
-                        <Button size="small" variant="contained" color="success"
-                            onClick={doSave}
-                            sx={{ fontSize: '0.65rem', py: 0.3, minWidth: 50, whiteSpace: 'nowrap' }}>
-                            💾 Save
+                {/* Clear */}
+                {ioCount > 0 && (
+                    <Tooltip title="Delete all drawn I/O wires">
+                        <Button size="small" variant="outlined" color="error"
+                            onClick={doClear}
+                            sx={{ fontSize: '0.72rem', py: 0.4, whiteSpace: 'nowrap' }}>
+                            🗑️ Clear
                         </Button>
-                    </Stack>
+                    </Tooltip>
+                )}
 
-                    {/* Load */}
-                    <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: '#333' }}>Load connections</Typography>
-                    <Stack direction="row" spacing={0.5}>
-                        <TextField
-                            size="small" value={loadPath}
-                            onChange={e => setLoadPath(e.target.value)}
-                            placeholder="connections.json"
-                            sx={{ flex: 1 }}
-                            slotProps={{ htmlInput: { style: { fontSize: '0.65rem', padding: '4px 8px' } } }}
-                        />
-                        <Button size="small" variant="outlined"
-                            onClick={doLoad}
-                            sx={{ fontSize: '0.65rem', py: 0.3, minWidth: 50, whiteSpace: 'nowrap' }}>
-                            📂 Load
-                        </Button>
-                    </Stack>
-
-                    {/* Clear */}
-                    {ioCount > 0 && (
-                        <Tooltip title="Delete all drawn I/O wires">
-                            <Button size="small" variant="outlined" color="error"
-                                onClick={doClear}
-                                sx={{ fontSize: '0.65rem', py: 0.3 }}>
-                                🗑️ Clear all wires
+                {/* Test Wiring toggle */}
+                {ioCount > 0 && (
+                    <>
+                        <Divider orientation="vertical" flexItem />
+                        <Tooltip title={showTestPanel ? 'Hide wire test panel' : 'Open interactive wire test panel'}>
+                            <Button
+                                size="small"
+                                variant={showTestPanel ? 'contained' : 'outlined'}
+                                color={showTestPanel ? 'warning' : 'inherit'}
+                                onClick={() => setShowTestPanel(p => !p)}
+                                sx={{
+                                    fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
+                                    ...(showTestPanel ? {} : { color: '#546e7a', borderColor: '#546e7a' }),
+                                }}
+                            >
+                                ⚡ Test Wiring
                             </Button>
                         </Tooltip>
-                    )}
+                    </>
+                )}
 
-                    {/* Status */}
-                    {statusMsg && (
-                        <Alert severity={statusMsg.severity} onClose={() => setStatusMsg(null)}
-                            sx={{ py: 0, fontSize: '0.6rem', '& .MuiAlert-message': { wordBreak: 'break-all' } }}>
-                            {statusMsg.text}
-                        </Alert>
-                    )}
+                {/* Status message */}
+                {statusMsg && (
+                    <Alert
+                        severity={statusMsg.severity}
+                        onClose={() => setStatusMsg(null)}
+                        sx={{ py: 0, fontSize: '0.72rem', '& .MuiAlert-message': { wordBreak: 'break-all' } }}
+                    >
+                        {statusMsg.text}
+                    </Alert>
+                )}
+            </Box>
 
-                    <Divider />
-                    <Typography sx={{ fontSize: '0.52rem', color: '#999', lineHeight: 1.7 }}>
-                        <span style={{ color: '#1565c0' }}>●</span> input port &nbsp;
-                        <span style={{ color: '#2e7d32' }}>●</span> output port &nbsp;
-                        <span style={{ color: '#ff9800' }}>●</span> inout / unknown<br />
-                        ╌╌ cable &nbsp;
-                        <span style={{ color: IO_COLOR }}>──▶</span> I/O wire (animated)<br />
-                        Drag wire endpoint to reconnect.
-                    </Typography>
+            {/* ── Legend Bar ───────────────────────────────────────── */}
+            <Box sx={{
+                background: '#f8f9fa',
+                borderBottom: '1px solid #e0e0e0',
+                px: 2, py: 0.5,
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 2.5,
+                flexWrap: 'wrap',
+                flexShrink: 0,
+            }}>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: '#333', whiteSpace: 'nowrap' }}>
+                    Ports:
+                </Typography>
+                <Typography sx={{ fontSize: '0.78rem', color: '#1565c0', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    ● Input (blue)
+                </Typography>
+                <Typography sx={{ fontSize: '0.78rem', color: '#2e7d32', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    ● Output (green)
+                </Typography>
+                <Typography sx={{ fontSize: '0.78rem', color: '#ff9800', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    ● Bidirectional (orange)
+                </Typography>
+                <Divider orientation="vertical" flexItem sx={{ my: 0.25 }} />
+                <Typography sx={{ fontSize: '0.75rem', color: '#888', whiteSpace: 'nowrap' }}>
+                    Drag port to connect · Drag wire endpoint to reconnect
+                </Typography>
+            </Box>
+
+            {/* ── Content area: ReactFlow + Wire Test Panel ────────── */}
+            <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
+
+                {/* ── ReactFlow Canvas ─────────────────────────────────── */}
+                <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                    <ReactFlow
+                        nodes={nodes}
+                        edges={visibleEdges}
+                        nodeTypes={NODE_TYPES}
+                        edgeTypes={EDGE_TYPES}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onConnect={onConnect}
+                        onReconnect={onReconnect}
+                        isValidConnection={isValidConnection}
+                        edgesReconnectable
+                        elementsSelectable
+                        fitView
+                        fitViewOptions={{ padding: 0.25 }}
+                        minZoom={0.1}
+                        maxZoom={4}
+                    >
+                        <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+                        <Controls />
+                        <MiniMap
+                            nodeColor={n => {
+                                const d = n.data as Record<string, unknown>
+                                return STATUS_STYLE[d?.status as keyof typeof STATUS_STYLE]?.border ?? '#90caf9'
+                            }}
+                            zoomable pannable
+                        />
+                    </ReactFlow>
                 </Box>
-            </Panel>
-        </ReactFlow>
+                {/* End ReactFlow Canvas Box */}
+
+                {/* ── Wire Test Panel ────────────────────────────────────── */}
+                {showTestPanel && (
+                    <Box sx={{
+                        width: 360, flexShrink: 0,
+                        borderLeft: '1px solid #e0e0e0',
+                        display: 'flex', flexDirection: 'column',
+                        background: '#fafafa', overflow: 'hidden',
+                    }}>
+                        {/* Panel header */}
+                        <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid #e0e0e0', background: '#fff', flexShrink: 0 }}>
+                            <Stack direction="row" spacing={1} sx={{ mb: 0.75, alignItems: 'center' }}>
+                                <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', flex: 1 }}>
+                                    ⚡ Wire Test
+                                </Typography>
+                                {!ip && <Chip label="No IP" size="small" color="warning" sx={{ fontSize: '0.65rem' }} />}
+                                {testAllBusy && <CircularProgress size={16} />}
+                            </Stack>
+                            <Typography variant="caption" sx={{ color: '#888', display: 'block', mb: 0.75, lineHeight: 1.3 }}>
+                                Toggle output ON to light the physical indicator.<br />
+                                Input is read automatically. Output stays on until toggled off.
+                            </Typography>
+                            <Stack direction="row" spacing={0.5}>
+                                <Tooltip title="Pulse each output HIGH→read input→LOW sequentially">
+                                    <span>
+                                        <Button
+                                            size="small" variant="contained" color="warning"
+                                            onClick={testAll}
+                                            disabled={testAllBusy || !ip || testConns.length === 0}
+                                            sx={{ fontSize: '0.7rem', py: 0.3 }}
+                                        >
+                                            ▶ Test All (pulse)
+                                        </Button>
+                                    </span>
+                                </Tooltip>
+                                <Button
+                                    size="small" variant="outlined" color="error"
+                                    onClick={clearAllOutputs}
+                                    disabled={!Object.values(outputStates).some(v => v)}
+                                    sx={{ fontSize: '0.7rem', py: 0.3 }}
+                                >
+                                    ■ All OFF
+                                </Button>
+                            </Stack>
+                        </Box>
+
+                        {/* Connection list */}
+                        <Box sx={{ flex: 1, overflowY: 'auto' }}>
+                            {testConns.length === 0 && (
+                                <Typography variant="caption" color="text.secondary"
+                                    sx={{ p: 2, textAlign: 'center', display: 'block' }}>
+                                    No I/O wires drawn yet.
+                                </Typography>
+                            )}
+                            {testConns.map(conn => {
+                                const isOn = outputStates[conn.id] ?? false
+                                const isBusy = testBusy.has(conn.id)
+                                const result = testResults[conn.id]
+                                return (
+                                    <Box key={conn.id} sx={{
+                                        px: 1.5, py: 0.75,
+                                        borderBottom: '1px solid #f0f0f0',
+                                        background: isOn ? '#fff8e1' : '#fff',
+                                        transition: 'background 0.2s',
+                                    }}>
+                                        {/* Connection label */}
+                                        <Typography sx={{
+                                            fontSize: '0.7rem', fontFamily: 'monospace',
+                                            color: '#333', mb: 0.5, wordBreak: 'break-all',
+                                        }}>
+                                            {conn.label}
+                                        </Typography>
+                                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                                            {/* Output toggle */}
+                                            <Button
+                                                size="small"
+                                                variant={isOn ? 'contained' : 'outlined'}
+                                                color={isOn ? 'error' : 'inherit'}
+                                                onClick={() => toggleOutput(conn)}
+                                                disabled={isBusy || testAllBusy || !ip}
+                                                sx={{
+                                                    fontSize: '0.68rem', py: 0.2, px: 0.75,
+                                                    minWidth: 64, fontWeight: isOn ? 700 : 400,
+                                                    color: isOn ? undefined : '#546e7a',
+                                                    borderColor: isOn ? undefined : '#546e7a',
+                                                }}
+                                            >
+                                                {isBusy
+                                                    ? <CircularProgress size={12} color="inherit" />
+                                                    : isOn ? '💡 ON' : '○ OFF'}
+                                            </Button>
+
+                                            {/* Input reading result: per-channel chips for M12, single chip otherwise */}
+                                            {result && !result.error && result.values && result.values.length > 1
+                                                ? result.values.map((v, i) => (
+                                                    <Tooltip key={i} title={`#${conn.tgtAddr}:${conn.tgtCh} channel ${i}`}>
+                                                        <Chip
+                                                            size="small"
+                                                            label={v ? `✓ CH${i}` : `✗ CH${i}`}
+                                                            color={v ? 'success' : 'error'}
+                                                            sx={{ fontSize: '0.65rem', height: 20, cursor: 'default' }}
+                                                        />
+                                                    </Tooltip>
+                                                ))
+                                                : result && (
+                                                    <Tooltip title={result.error ?? `#${conn.tgtAddr}:${conn.tgtCh}`}>
+                                                        <Chip
+                                                            size="small"
+                                                            label={result.error ? '⚠ ERR' : result.value ? '✓ HIGH' : '✗ LOW'}
+                                                            color={(result.error ? 'default' : result.value ? 'success' : 'error') as 'default' | 'success' | 'error'}
+                                                            sx={{ fontSize: '0.65rem', height: 20, cursor: 'default' }}
+                                                        />
+                                                    </Tooltip>
+                                                )
+                                            }
+
+                                            {/* Re-read button when output is live */}
+                                            {isOn && !isBusy && (
+                                                <Tooltip title={`Read #${conn.tgtAddr}:${conn.tgtCh}`}>
+                                                    <Button
+                                                        size="small" variant="text"
+                                                        onClick={() => doReadInput(conn)}
+                                                        sx={{ fontSize: '0.65rem', py: 0, px: 0.5, minWidth: 0 }}
+                                                    >
+                                                        🔄
+                                                    </Button>
+                                                </Tooltip>
+                                            )}
+
+                                            <Typography variant="caption"
+                                                sx={{ color: '#bbb', fontSize: '0.6rem', ml: 'auto', whiteSpace: 'nowrap' }}>
+                                                #{conn.srcAddr}:{conn.srcCh}→#{conn.tgtAddr}:{conn.tgtCh}
+                                            </Typography>
+                                        </Stack>
+                                    </Box>
+                                )
+                            })}
+                        </Box>
+                    </Box>
+                )}
+
+            </Box>
+            {/* End content area */}
+        </Box>
     )
 }

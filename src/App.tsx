@@ -1,20 +1,12 @@
 import { useState, useRef, useCallback } from 'react'
-import { Box, AppBar, Toolbar, Typography, TextField, Tabs, Tab, Stack, Chip } from '@mui/material'
+import { Box, AppBar, Toolbar, Typography, TextField, Tabs, Tab, Stack, Button, Tooltip } from '@mui/material'
 import type { SxProps, Theme } from '@mui/material'
-import GenerateTab from './components/GenerateTab'
-import CompareTab from './components/CompareTab'
+import GenerateCompareTab from './components/GenerateCompareTab'
 import TestRunTab from './components/TestRunTab'
 import HistoryTab from './components/HistoryTab'
 import TopologyFlow from './components/TopologyFlow'
 import ConnectionsFlow from './components/ConnectionsFlow'
-import type { Topology, DiffStatus } from './types'
-
-const DIFF_COLORS: Record<string, string> = {
-    unchanged: '#1976d2',
-    changed: '#ed6c02',
-    added: '#2e7d32',
-    removed: '#d32f2f',
-}
+import type { Topology, DiffStatus, TopologyModule } from './types'
 
 const MIN_CANVAS_H = 140
 const MAX_CANVAS_H = 800
@@ -29,9 +21,25 @@ export default function App() {
     const [timeout, setTimeout_] = useState(0)
     const [topology, setTopology] = useState<Topology | null>(null)
     const [diffStatus, setDiff] = useState<DiffStatus | null>(null)
+    const [removedModules, setRemovedModules] = useState<TopologyModule[]>([])
     const [canvasH, setCanvasH] = useState(DEFAULT_CANVAS_H)
     const [canvasW, setCanvasW] = useState<number | null>(null)
     const [fullscreen, setFullscreen] = useState(false)
+    const [pbStatus, setPbStatus] = useState<'unknown' | 'ok' | 'error'>('unknown')
+    const [pbChecking, setPbChecking] = useState(false)
+
+    async function checkPocketBase() {
+        setPbChecking(true)
+        try {
+            const r = await fetch('/pocketbase/health')
+            const d = await r.json()
+            setPbStatus(d.status === 'ok' ? 'ok' : 'error')
+        } catch {
+            setPbStatus('error')
+        } finally {
+            setPbChecking(false)
+        }
+    }
 
     // Drag-to-resize height handle
     const dragRef = useRef({ active: false, startY: 0, startH: 0 })
@@ -72,9 +80,10 @@ export default function App() {
         window.addEventListener('mouseup', onUp)
     }, [canvasW])
 
-    function onResult(topo: Topology | null, status: DiffStatus | null) {
+    function onResult(topo: Topology | null, status: DiffStatus | null, removed: TopologyModule[] = []) {
         setTopology(topo)
         setDiff(status)
+        setRemovedModules(removed)
     }
 
     /** Patch MountedValves on a module entry when user configures valves in ConnectionsFlow */
@@ -108,15 +117,24 @@ export default function App() {
                         size="small" type="number" variant="outlined"
                         sx={{ ...appBarFieldSx, width: 120 }}
                     />
-                    {diffStatus && (
-                        <Stack direction="row" spacing={1} sx={{ ml: 'auto' }}>
-                            {Object.entries(DIFF_COLORS).map(([lbl, col]) => (
-                                <Chip key={lbl} label={lbl} size="small"
-                                    sx={{ background: col, color: '#fff', fontSize: '0.65rem', height: 20, textTransform: 'capitalize' }}
-                                />
-                            ))}
-                        </Stack>
-                    )}
+                    <Stack direction="row" spacing={1} sx={{ ml: 'auto', alignItems: 'center' }}>
+                        <Tooltip title={pbStatus === 'ok' ? 'PocketBase: connected' : pbStatus === 'error' ? 'PocketBase: unreachable' : 'Check PocketBase connection'}>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={checkPocketBase}
+                                disabled={pbChecking}
+                                sx={{
+                                    fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap',
+                                    borderColor: pbStatus === 'ok' ? '#4caf50' : pbStatus === 'error' ? '#f44336' : 'rgba(255,255,255,0.5)',
+                                    color: pbStatus === 'ok' ? '#4caf50' : pbStatus === 'error' ? '#f44336' : '#fff',
+                                    '&:hover': { borderColor: '#fff', color: '#fff' },
+                                }}
+                            >
+                                {pbChecking ? '…' : pbStatus === 'ok' ? '🟢 PocketBase' : pbStatus === 'error' ? '🔴 PocketBase' : '⚪ PocketBase'}
+                            </Button>
+                        </Tooltip>
+                    </Stack>
                 </Toolbar>
             </AppBar>
 
@@ -140,6 +158,7 @@ export default function App() {
                     <TopologyFlow
                         topology={topology}
                         diffStatus={diffStatus}
+                        removedModules={removedModules}
                         fullscreen={fullscreen}
                         onToggleFullscreen={() => setFullscreen(f => !f)}
                     />
@@ -172,9 +191,8 @@ export default function App() {
             {!fullscreen && (
                 <Box sx={{ background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
                     <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 38 }}
-                         variant="scrollable" scrollButtons="auto">
-                        <Tab label="Generate" sx={{ minHeight: 38 }} />
-                        <Tab label="Compare" sx={{ minHeight: 38 }} />
+                        variant="scrollable" scrollButtons="auto">
+                        <Tab label="Topology" sx={{ minHeight: 38 }} />
                         <Tab label="Connections" sx={{ minHeight: 38 }} />
                         <Tab label="Test Run" sx={{ minHeight: 38 }} />
                         <Tab label="History" sx={{ minHeight: 38 }} />
@@ -184,20 +202,20 @@ export default function App() {
 
             {/* ── Tab content ── */}
             {!fullscreen && (
-                <Box sx={{ flex: 1, overflow: 'auto', background: '#fafafa' }}>
-                    {tab === 0 && <GenerateTab ip={ip} timeout={timeout} onResult={onResult} />}
-                    {tab === 1 && <CompareTab ip={ip} timeout={timeout} onResult={onResult} />}
-                    {tab === 2 && (
+                <Box sx={{ flex: 1, overflow: tab === 1 ? 'hidden' : 'auto', background: '#fafafa' }}>
+                    {tab === 0 && <GenerateCompareTab ip={ip} timeout={timeout} onResult={onResult} />}
+                    {tab === 1 && (
                         <Box sx={{ height: '100%', overflow: 'hidden' }}>
                             <ConnectionsFlow
                                 topology={topology}
                                 diffStatus={diffStatus}
+                                ip={ip}
                                 onModuleValveChange={onModuleValveChange}
                             />
                         </Box>
                     )}
-                    {tab === 3 && <TestRunTab ip={ip} />}
-                    {tab === 4 && <HistoryTab />}
+                    {tab === 2 && <TestRunTab ip={ip} />}
+                    {tab === 3 && <HistoryTab />}
                 </Box>
             )}
         </Box>
