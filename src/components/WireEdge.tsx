@@ -10,7 +10,7 @@
  */
 import { useCallback, useMemo, useRef, Fragment } from 'react'
 import { BaseEdge, EdgeLabelRenderer, useReactFlow } from '@xyflow/react'
-import type { EdgeProps } from '@xyflow/react'
+import type { EdgeProps, Node } from '@xyflow/react'
 
 const IO_COLOR = '#e65100'
 const SEL_COLOR = '#ff6d00'
@@ -27,18 +27,167 @@ export type WireData = {
     cpOffsetY?: number
 }
 
+function getDeterministicOffset(id: string): number {
+    let hash = 0
+    for (let i = 0; i < id.length; i++) {
+        hash = id.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return (Math.abs(hash) % 7) * 6 - 18
+}
+
+function mergeIntervals(intervals: Array<{ left: number; right: number }>) {
+    if (intervals.length === 0) return []
+    const sorted = [...intervals].sort((a, b) => a.left - b.left)
+    const merged = [sorted[0]]
+    for (let i = 1; i < sorted.length; i++) {
+        const cur = sorted[i]
+        const last = merged[merged.length - 1]
+        if (cur.left <= last.right + 2) {
+            last.right = Math.max(last.right, cur.right)
+        } else {
+            merged.push(cur)
+        }
+    }
+    return merged
+}
+
+function getObstacles(nodes: Node[]) {
+    const obstacles: Array<{ left: number; right: number }> = []
+
+    for (const node of nodes) {
+        if (node.type === 'backplane') {
+            const left = node.position.x
+            const width = typeof node.style?.width === 'number'
+                ? node.style.width
+                : parseFloat(String(node.style?.width || 0)) || node.measured?.width || 0
+            if (width > 0) {
+                obstacles.push({ left, right: left + width })
+            }
+        } else if (node.type === 'mod' && !node.parentId) {
+            const left = node.position.x
+            const width = node.measured?.width || 75
+            obstacles.push({ left, right: left + width })
+        }
+    }
+
+    return mergeIntervals(obstacles)
+}
+
+function buildOrthPath(
+    sx: number, sy: number,
+    tx: number, ty: number,
+    mx: number,
+    Y_UP: number,
+    Y_DOWN: number,
+): { path: string; points: Array<{ x: number; y: number }> } {
+    const pts: Array<{ x: number; y: number }> = [{ x: sx, y: sy }]
+
+    if (sy < 150 && ty < 150) {
+        pts.push({ x: sx, y: Y_UP })
+        pts.push({ x: tx, y: Y_UP })
+    } else if (sy >= 150 && ty >= 150) {
+        pts.push({ x: sx, y: Y_DOWN })
+        pts.push({ x: tx, y: Y_DOWN })
+    } else if (sy < 150 && ty >= 150) {
+        pts.push({ x: sx, y: Y_UP })
+        pts.push({ x: mx, y: Y_UP })
+        pts.push({ x: mx, y: Y_DOWN })
+        pts.push({ x: tx, y: Y_DOWN })
+    } else {
+        pts.push({ x: sx, y: Y_DOWN })
+        pts.push({ x: mx, y: Y_DOWN })
+        pts.push({ x: mx, y: Y_UP })
+        pts.push({ x: tx, y: Y_UP })
+    }
+    pts.push({ x: tx, y: ty })
+
+    const deduped: Array<{ x: number; y: number }> = []
+    for (const p of pts) {
+        const last = deduped[deduped.length - 1]
+        if (!last || Math.abs(p.x - last.x) > 0.5 || Math.abs(p.y - last.y) > 0.5) {
+            deduped.push(p)
+        }
+    }
+    if (deduped.length < 2) deduped.push({ x: tx, y: ty })
+
+    const path = deduped.map((p, i) =>
+        i === 0 ? `M ${p.x},${p.y}` : `L ${p.x},${p.y}`,
+    ).join(' ')
+
+    return { path, points: deduped }
+}
+
 function buildRoutedPath(
+    id: string,
     sx: number, sy: number,
     tx: number, ty: number,
     waypoints: Array<{ x: number; y: number }>,
+    nodes: Node[],
+    straight: boolean = false,
 ): { path: string; points: Array<{ x: number; y: number }> } {
     const clean = waypoints.filter(w => w != null && typeof w.x === 'number')
     const pts: Array<{ x: number; y: number }> = [{ x: sx, y: sy }]
 
-    if (clean.length === 0) {
-        const mx = (sx + tx) / 2
-        pts.push({ x: mx, y: sy })
-        pts.push({ x: mx, y: ty })
+    if (straight) {
+        pts.push({ x: tx, y: ty })
+    } else if (clean.length === 0) {
+        const offset = getDeterministicOffset(id)
+        const Y_UP = 20 + offset
+        const Y_DOWN = 275 + offset
+
+        const obstacles = getObstacles(nodes)
+
+        if (obstacles.length === 0) {
+            const mx = (sx + tx) / 2
+            return buildOrthPath(sx, sy, tx, ty, mx, Y_UP, Y_DOWN)
+        }
+
+        const minObsX = Math.min(...obstacles.map(o => o.left))
+        const maxObsX = Math.max(...obstacles.map(o => o.right))
+        
+        const outerLeft = minObsX - 40
+        const outerRight = maxObsX + 40
+
+        const corridors: Array<{ left: number; right: number }> = []
+        corridors.push({ left: outerLeft, right: minObsX })
+
+        for (let i = 0; i < obstacles.length - 1; i++) {
+            const left = obstacles[i].right
+            const right = obstacles[i + 1].left
+            if (right - left >= 15) {
+                corridors.push({ left, right })
+            }
+        }
+
+        corridors.push({ left: maxObsX, right: outerRight })
+
+        const idealMx = (sx + tx) / 2
+        const minST = Math.min(sx, tx)
+        const maxST = Math.max(sx, tx)
+
+        let bestMx = idealMx
+        let bestCost = Infinity
+
+        for (const corridor of corridors) {
+            const center = (corridor.left + corridor.right) / 2
+            
+            let distOutside = 0
+            if (center < minST) {
+                distOutside = minST - center
+            } else if (center > maxST) {
+                distOutside = center - maxST
+            }
+
+            const cost = Math.abs(center - idealMx) + 2 * distOutside
+
+            if (cost < bestCost) {
+                bestCost = cost
+                bestMx = Math.max(corridor.left + 5, Math.min(corridor.right - 5, center + offset))
+            }
+        }
+
+        const mx = bestMx
+        return buildOrthPath(sx, sy, tx, ty, mx, Y_UP, Y_DOWN)
     } else {
         let cx = sx, cy = sy
         for (const wp of clean) {
@@ -48,10 +197,9 @@ function buildRoutedPath(
             cy = wp.y
         }
         if (Math.abs(tx - cx) > 0.5) pts.push({ x: tx, y: cy })
+        pts.push({ x: tx, y: ty })
     }
-    pts.push({ x: tx, y: ty })
 
-    // Dedup consecutive identical points
     const deduped: Array<{ x: number; y: number }> = []
     for (const p of pts) {
         const last = deduped[deduped.length - 1]
@@ -72,7 +220,7 @@ export function WireEdge({
     id, sourceX, sourceY, targetX, targetY,
     style, selected, data, label,
 }: EdgeProps) {
-    const { setEdges, getZoom } = useReactFlow()
+    const { setEdges, getZoom, getNodes } = useReactFlow()
     const d = data as WireData | undefined
 
     const cornersRef = useRef<Array<{ x: number; y: number }>>([])
@@ -83,9 +231,12 @@ export function WireEdge({
         w => w != null && typeof w.x === 'number',
     )
 
+    const isStraight = d?.straight ?? false
+    const nodes = getNodes()
+
     const { path, points } = useMemo(
-        () => buildRoutedPath(sourceX, sourceY, targetX, targetY, waypoints),
-        [sourceX, sourceY, targetX, targetY, waypoints],
+        () => buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraight),
+        [id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraight],
     )
 
     cornersRef.current = points.slice(1, -1)
@@ -181,7 +332,7 @@ export function WireEdge({
                         {label}
                     </div>
                 )}
-                {corners.map((wp, i) => (
+                {selected && corners.map((wp, i) => (
                     <Fragment key={`wp-${i}`}>
                         <div onMouseDown={onWaypointMD(i)} onContextMenu={onWaypointCtx(i)}
                             title="Drag to move · Right-click to remove"

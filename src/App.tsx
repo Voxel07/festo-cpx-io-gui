@@ -46,7 +46,6 @@ export default function App() {
     // Poll test-run status for topology highlighting (slow when idle)
     useEffect(() => {
         let active = false
-        let interval = 5000
         const poll = async () => {
             try {
                 const r = await fetch('/test-run/status')

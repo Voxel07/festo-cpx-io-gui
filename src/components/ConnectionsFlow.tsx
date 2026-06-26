@@ -77,6 +77,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     const [savePath, setSavePath] = useState('connections.jsonc')
     const [loadPath, setLoadPath] = useState('connections.jsonc')
     const [statusMsg, setStatusMsg] = useState<{ text: string; severity: 'success' | 'error' } | null>(null)
+    const [wiringDisplay, setWiringDisplay] = useState<'all' | 'selected' | 'none'>('selected')
+    const [straightWires, setStraightWires] = useState(false)
 
     // ── Wire Test state ────────────────────────────────────
     const [showTestPanel, setShowTestPanel] = useState(false)
@@ -203,12 +205,12 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             zIndex: 1000,
             style: { stroke: wireColor, strokeWidth: 2 },
             label: `#${srcNode}:${pSrc} \u2192 #${tgtNode}:${pTgt}`,
-            data: { kind: 'io', portSrc: pSrc, portTgt: pTgt, wireColor },
+            data: { kind: 'io', portSrc: pSrc, portTgt: pTgt, wireColor, straight: straightWires },
         }
         // Only deduplicate by edge ID — allow fan-out (one output → many inputs)
         // and fan-in (many outputs → one input). Exact duplicate = same ID.
         setEdges(prev => prev.some(e => e.id === edgeId) ? prev : [...prev, newEdge])
-    }, [setEdges])
+    }, [setEdges, straightWires])
 
     // ── Reconnect: drag an existing IO edge endpoint to a new port ──
     const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
@@ -252,6 +254,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 target_handle: String(e.targetHandle ?? ''),
                 label: typeof e.label === 'string' ? e.label : '',
                 waypoints: (d.waypoints as Array<{ x: number; y: number }>) ?? undefined,
+                straight: d.straight === true ? true : undefined,
             }
         })
 
@@ -309,6 +312,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     portSrc: c.source_channel,
                     portTgt: c.target_channel,
                     waypoints: c.waypoints ?? undefined,
+                    straight: c.straight ?? false,
                 },
             }))
 
@@ -468,9 +472,17 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     }
 
     // ── Visible edges ─────────────────────────────────────
-    const visibleEdges = showCables
-        ? edges
-        : edges.filter(e => (e.data as Record<string, unknown>)?.kind !== 'cable')
+    const visibleEdges = edges.filter(e => {
+        const isCable = (e.data as Record<string, unknown>)?.kind === 'cable'
+        if (isCable) return showCables
+        if (wiringDisplay === 'none') return false
+        if (wiringDisplay === 'selected') {
+            const srcNode = nodes.find(n => n.id === e.source)
+            const tgtNode = nodes.find(n => n.id === e.target)
+            return e.selected || srcNode?.selected || tgtNode?.selected
+        }
+        return true
+    })
 
     const ioCount = ioEdgesRef.current.length
 
@@ -529,6 +541,53 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     }}
                 >
                     🔌 {showCables ? 'Hide Cables' : 'Show Cables'}
+                </Button>
+
+                <Divider orientation="vertical" flexItem />
+
+                {/* Wiring display mode selection */}
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                    <Typography sx={{ fontSize: '0.72rem', fontWeight: 600, color: '#333', whiteSpace: 'nowrap' }}>
+                        Wiring View:
+                    </Typography>
+                    <Button
+                        size="small"
+                        variant={wiringDisplay === 'all' ? 'contained' : 'outlined'}
+                        onClick={() => setWiringDisplay('all')}
+                        sx={{ fontSize: '0.68rem', py: 0.2, px: 1, minWidth: 40 }}
+                    >
+                        All
+                    </Button>
+                    <Button
+                        size="small"
+                        variant={wiringDisplay === 'selected' ? 'contained' : 'outlined'}
+                        color="warning"
+                        onClick={() => setWiringDisplay('selected')}
+                        sx={{ fontSize: '0.68rem', py: 0.2, px: 1, minWidth: 80 }}
+                    >
+                        Selected Only
+                    </Button>
+                    <Button
+                        size="small"
+                        variant={wiringDisplay === 'none' ? 'contained' : 'outlined'}
+                        onClick={() => setWiringDisplay('none')}
+                        sx={{ fontSize: '0.68rem', py: 0.2, px: 1, minWidth: 50 }}
+                    >
+                        Hidden
+                    </Button>
+                </Stack>
+
+                <Divider orientation="vertical" flexItem />
+
+                {/* Wire routing style */}
+                <Button
+                    size="small"
+                    variant={straightWires ? 'contained' : 'outlined'}
+                    color="primary"
+                    onClick={() => setStraightWires(s => !s)}
+                    sx={{ fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap' }}
+                >
+                    🛣️ {straightWires ? 'Straight Wires' : 'Smart Stepped Wires'}
                 </Button>
 
                 <Divider orientation="vertical" flexItem />

@@ -56,6 +56,8 @@ export interface IOConnection {
     label?: string
     /** 90°-corner waypoints for the routed cable (canvas coordinates) */
     waypoints?: Array<{ x: number; y: number }>
+    /** True if point-to-point straight line routing is used */
+    straight?: boolean
 }
 
 export interface ConnectionEntry {

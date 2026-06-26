@@ -14,7 +14,7 @@ import {
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import RefreshIcon from '@mui/icons-material/Refresh'
 
-const POLL_MS = 800
+const POLL_MS = 2000
 
 const TOPO_PATH = 'topology.jsonc'
 const CONN_PATH = 'connections.jsonc'
@@ -46,9 +46,10 @@ interface TestRunState {
 }
 
 const AVAILABLE_TESTS = [
-    { id: 'validate-connections', label: 'Connection Validation' },
+    { id: 'connection-validation', label: 'Connection Validation' },
     { id: 'compare-topology', label: 'Topology Comparison' },
     { id: 'output-toggle', label: 'Output Toggle' },
+    { id: 'valve-toggle', label: 'Valve Toggle (VABX)' },
     { id: 'condition-counter', label: 'Condition Counter' },
     { id: 'valve-condition-counter', label: 'Valve CC (VABX)' },
     { id: 'remanent-params', label: 'Remanent Parameters' },
@@ -59,7 +60,7 @@ interface Props {
 }
 
 export default function TestRunTab({ ip }: Props) {
-    const [selected, setSelected] = useState<string[]>(['validate-connections', 'compare-topology'])
+    const [selected, setSelected] = useState<string[]>(['connection-validation', 'compare-topology'])
     const [runState, setRunState] = useState<TestRunState>({ status: 'idle' })
     const [sseLogs, setSseLogs] = useState<LogEntry[]>([])
     const [busy, setBusy] = useState(false)
@@ -127,7 +128,7 @@ export default function TestRunTab({ ip }: Props) {
         const threshold = 60  // px from bottom — if user scrolled up more than this, don't auto-scroll
         const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
         if (distFromBottom < threshold) {
-            logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+            logsEndRef.current?.scrollIntoView({ behavior: 'auto' })
         }
     }, [displayLogs])
 
