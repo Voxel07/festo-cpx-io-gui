@@ -52,6 +52,8 @@ export type ModuleNodeData = {
     suppressIoHandles?: boolean
     /** Called when the user changes which valves are mounted; indices are 0-based */
     onValveChange?: (addr: number, mountedValves: number[]) => void
+    /** True when this module is currently being tested (pulse highlight) */
+    active?: boolean
 }
 
 export type ModuleNodeType = Node<ModuleNodeData, 'mod'>
@@ -80,6 +82,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         hiddenValves = [],
         connections = [],
         onValveChange,
+        active = false,
     } = data
 
     const svgMaps = useSvgMap()
@@ -137,12 +140,19 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         <Box sx={{
             border: isBackplane ? 'none' : `2px solid ${st.border}`,
             background: isBackplane ? 'transparent' : st.bg,
-            boxShadow: isBackplane ? 'none' : '0 2px 6px rgba(0,0,0,0.14)',
+            boxShadow: isBackplane ? 'none' : active
+                ? '0 0 12px 4px rgba(255,152,0,0.6), 0 2px 6px rgba(0,0,0,0.14)'
+                : '0 2px 6px rgba(0,0,0,0.14)',
             borderRadius: 1.5,
             p: isBackplane ? '2px 0' : '4px 4px 6px',
             width: DISP_W + (isBackplane ? 0 : 8),
             textAlign: 'center',
             position: 'relative',
+            animation: active ? 'pulse 1.2s ease-in-out infinite' : 'none',
+            '@keyframes pulse': {
+                '0%, 100%': { boxShadow: '0 0 8px 2px rgba(255,152,0,0.4), 0 2px 6px rgba(0,0,0,0.14)' },
+                '50%': { boxShadow: '0 0 16px 6px rgba(255,152,0,0.7), 0 2px 6px rgba(0,0,0,0.14)' },
+            },
         }}>
 
             {/* ── Left / Right cable handles (standard AP-I) ── */}
@@ -185,6 +195,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     <img
                         src={displayUrl}
                         alt={mod.Name}
+                        loading="lazy"
+                        decoding="async"
                         style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }}
                         onError={e => { (e.target as HTMLImageElement).src = '/svg/CPX-AP-A_Generic.svg' }}
                     />

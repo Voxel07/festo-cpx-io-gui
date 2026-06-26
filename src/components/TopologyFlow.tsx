@@ -79,9 +79,11 @@ interface Props {
     onToggleFullscreen: () => void
     /** IO wiring edges from ConnectionsFlow to display here */
     ioEdges?: Edge[]
+    /** Module address currently being tested (for highlighting) */
+    activeModuleAddr?: number | null
 }
 
-export default function TopologyFlow({ topology, diffStatus, removedModules = [], fullscreen, onToggleFullscreen, ioEdges = [] }: Props) {
+export default function TopologyFlow({ topology, diffStatus, removedModules = [], fullscreen, onToggleFullscreen, ioEdges = [], activeModuleAddr = null }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])  // BackplaneNode | ModuleNode
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
     const [showCables, setShowCables] = useState(true)
@@ -100,9 +102,16 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
         const mergedStatus: DiffStatus = { ...(diffStatus ?? {}) }
         for (const rm of removedModules) mergedStatus[rm.Adress] = 'removed'
         const { nodes: newNodes, edges: chainEdges } = buildLayout(allMods, mergedStatus, false)
-        setNodes(newNodes as Node[])
+        // Highlight active module under test
+        const withActive = (newNodes as Node[]).map(n => {
+            if (activeModuleAddr != null && n.id === String(activeModuleAddr) && n.type === 'mod') {
+                return { ...n, data: { ...(n.data as Record<string, unknown>), active: true } }
+            }
+            return { ...n, data: { ...(n.data as Record<string, unknown>), active: false } }
+        })
+        setNodes(withActive)
         setEdges([...chainEdges, ...ioEdgesRef.current])
-    }, [topology, diffStatus, removedModules, setNodes, setEdges])
+    }, [topology, diffStatus, removedModules, activeModuleAddr, setNodes, setEdges])
 
     const onEdgesChange = useCallback((changes: EdgeChange[]) => {
         _onEdgesChange(changes.filter(c => c.type !== 'remove'))
@@ -136,13 +145,13 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
         >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
             <Controls />
-            <MiniMap
+            {/* <MiniMap
                 nodeColor={n => {
                     const d = n.data as Record<string, unknown>
                     return STATUS_STYLE[d?.status as keyof typeof STATUS_STYLE]?.border ?? '#90caf9'
                 }}
                 zoomable pannable
-            />
+            /> */}
             <Panel position="top-right">
                 <Box sx={{
                     background: 'rgba(255,255,255,0.96)', border: '1px solid #e0e0e0',

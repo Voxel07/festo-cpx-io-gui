@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Box, AppBar, Toolbar, Typography, TextField, Tabs, Tab, Stack, Button, Tooltip } from '@mui/material'
 import type { SxProps, Theme } from '@mui/material'
 import GenerateCompareTab from './components/GenerateCompareTab'
@@ -17,7 +17,7 @@ const MAX_CANVAS_W = 3000
 
 export default function App() {
     const [tab, setTab] = useState(0)
-    const [ip, setIp] = useState('192.168.1.11')
+    const [ip, setIp] = useState('192.168.0.11')
     const [timeout, setTimeout_] = useState(0)
     const [topology, setTopology] = useState<Topology | null>(null)
     const [diffStatus, setDiff] = useState<DiffStatus | null>(null)
@@ -27,6 +27,8 @@ export default function App() {
     const [fullscreen, setFullscreen] = useState(false)
     const [pbStatus, setPbStatus] = useState<'unknown' | 'ok' | 'error'>('unknown')
     const [pbChecking, setPbChecking] = useState(false)
+    const [showTopology, setShowTopology] = useState(true)
+    const [activeModuleAddr, setActiveModuleAddr] = useState<number | null>(null)
 
     async function checkPocketBase() {
         setPbChecking(true)
@@ -40,6 +42,28 @@ export default function App() {
             setPbChecking(false)
         }
     }
+
+    // Poll test-run status for topology highlighting (slow when idle)
+    useEffect(() => {
+        let active = false
+        let interval = 5000
+        const poll = async () => {
+            try {
+                const r = await fetch('/test-run/status')
+                if (!r.ok) return
+                const d = await r.json()
+                if (d.status === 'running') {
+                    active = true
+                    setActiveModuleAddr(d.progress?.current_module != null ? Number(d.progress.current_module) : null)
+                } else {
+                    if (active) setActiveModuleAddr(null)
+                    active = false
+                }
+            } catch { /* ignore */ }
+        }
+        const timer = setInterval(poll, 2000)
+        return () => clearInterval(timer)
+    }, [])
 
     // Drag-to-resize height handle
     const dragRef = useRef({ active: false, startY: 0, startH: 0 })
@@ -118,6 +142,16 @@ export default function App() {
                         sx={{ ...appBarFieldSx, width: 120 }}
                     />
                     <Stack direction="row" spacing={1} sx={{ ml: 'auto', alignItems: 'center' }}>
+                        <Tooltip title={showTopology ? 'Hide topology map' : 'Show topology map'}>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => setShowTopology(s => !s)}
+                                sx={{ fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap', color: '#fff', borderColor: 'rgba(255,255,255,0.4)' }}
+                            >
+                                {showTopology ? '▼ Map' : '▶ Map'}
+                            </Button>
+                        </Tooltip>
                         <Tooltip title={pbStatus === 'ok' ? 'PocketBase: connected' : pbStatus === 'error' ? 'PocketBase: unreachable' : 'Check PocketBase connection'}>
                             <Button
                                 size="small"
@@ -138,7 +172,8 @@ export default function App() {
                 </Toolbar>
             </AppBar>
 
-            {/* ── Topology canvas ── */}
+            {/* ── Topology canvas (collapsible) ── */}
+            {showTopology && (
             <Box sx={fullscreen
                 ? { position: 'fixed', inset: 0, zIndex: 1300, background: '#fafafa' }
                 : {
@@ -161,6 +196,7 @@ export default function App() {
                         removedModules={removedModules}
                         fullscreen={fullscreen}
                         onToggleFullscreen={() => setFullscreen(f => !f)}
+                        activeModuleAddr={activeModuleAddr}
                     />
                 </Box>
 
@@ -175,9 +211,10 @@ export default function App() {
                     }} />
                 )}
             </Box>
+            )}
 
             {/* ── Drag-resize handle ── */}
-            {!fullscreen && (
+            {!fullscreen && showTopology && (
                 <Box onMouseDown={onDragStart} sx={{
                     height: 6, flexShrink: 0, cursor: 'row-resize',
                     background: 'linear-gradient(to bottom, #e0e0e0 0%, #bdbdbd 50%, #e0e0e0 100%)',
@@ -202,10 +239,14 @@ export default function App() {
 
             {/* ── Tab content ── */}
             {!fullscreen && (
-                <Box sx={{ flex: 1, overflow: tab === 1 ? 'hidden' : 'auto', background: '#fafafa' }}>
-                    {tab === 0 && <GenerateCompareTab ip={ip} timeout={timeout} onResult={onResult} />}
+                <Box sx={{ flex: 1, overflow: 'hidden', background: '#fafafa', display: 'flex', flexDirection: 'column' }}>
+                    {tab === 0 && (
+                        <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                            <GenerateCompareTab ip={ip} timeout={timeout} onResult={onResult} />
+                        </Box>
+                    )}
                     {tab === 1 && (
-                        <Box sx={{ height: '100%', overflow: 'hidden' }}>
+                        <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
                             <ConnectionsFlow
                                 topology={topology}
                                 diffStatus={diffStatus}
@@ -215,7 +256,11 @@ export default function App() {
                         </Box>
                     )}
                     {tab === 2 && <TestRunTab ip={ip} />}
-                    {tab === 3 && <HistoryTab />}
+                    {tab === 3 && (
+                        <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                            <HistoryTab />
+                        </Box>
+                    )}
                 </Box>
             )}
         </Box>

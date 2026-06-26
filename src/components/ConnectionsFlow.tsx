@@ -548,7 +548,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     <Button size="small" variant="contained" color="success"
                         onClick={doSave}
                         sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}>
-                        💾 Save
+                        Save
                     </Button>
                 </Stack>
 
@@ -567,7 +567,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     <Button size="small" variant="outlined" color="primary"
                         onClick={doLoad}
                         sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}>
-                        📂 Load
+                        Load
                     </Button>
                 </Stack>
 
@@ -577,7 +577,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                         <Button size="small" variant="outlined" color="error"
                             onClick={doClear}
                             sx={{ fontSize: '0.72rem', py: 0.4, whiteSpace: 'nowrap' }}>
-                            🗑️ Clear
+                            Clear
                         </Button>
                     </Tooltip>
                 )}
@@ -597,7 +597,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                                     ...(showTestPanel ? {} : { color: '#546e7a', borderColor: '#546e7a' }),
                                 }}
                             >
-                                ⚡ Test Wiring
+                                Test Wiring
                             </Button>
                         </Tooltip>
                     </>
@@ -669,13 +669,13 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     >
                         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
                         <Controls />
-                        <MiniMap
+                        {/* <MiniMap
                             nodeColor={n => {
                                 const d = n.data as Record<string, unknown>
                                 return STATUS_STYLE[d?.status as keyof typeof STATUS_STYLE]?.border ?? '#90caf9'
                             }}
                             zoomable pannable
-                        />
+                        /> */}
                     </ReactFlow>
                 </Box>
                 {/* End ReactFlow Canvas Box */}
@@ -692,7 +692,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                         <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid #e0e0e0', background: '#fff', flexShrink: 0 }}>
                             <Stack direction="row" spacing={1} sx={{ mb: 0.75, alignItems: 'center' }}>
                                 <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', flex: 1 }}>
-                                    ⚡ Wire Test
+                                    Wire Test
                                 </Typography>
                                 {!ip && <Chip label="No IP" size="small" color="warning" sx={{ fontSize: '0.65rem' }} />}
                                 {testAllBusy && <CircularProgress size={16} />}
@@ -768,7 +768,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                                             >
                                                 {isBusy
                                                     ? <CircularProgress size={12} color="inherit" />
-                                                    : isOn ? '💡 ON' : '○ OFF'}
+                                                    : isOn ? 'ON' : 'OFF'}
                                             </Button>
 
                                             {/* Input reading result: per-channel chips for M12, single chip otherwise */}
