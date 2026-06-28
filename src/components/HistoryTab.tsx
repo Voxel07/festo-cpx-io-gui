@@ -72,14 +72,16 @@ export default function HistoryTab() {
         }
     }
 
-    function parseTests(raw: string | string[]): string[] {
+    function parseTests(raw: string | string[] | null | undefined): string[] {
+        if (raw == null) return []
         if (Array.isArray(raw)) return raw
-        try { return JSON.parse(raw) } catch { return [] }
+        try { return JSON.parse(raw) ?? [] } catch { return [] }
     }
 
-    function parseResults(raw: string | unknown[]): Array<{ test_id?: string; passed?: boolean; error?: string }> {
+    function parseResults(raw: string | unknown[] | null | undefined): Array<{ test_id?: string; passed?: boolean; error?: string }> {
+        if (raw == null) return []
         if (Array.isArray(raw)) return raw as Array<{ test_id?: string; passed?: boolean; error?: string }>
-        try { return JSON.parse(raw as string) } catch { return [] }
+        try { return JSON.parse(raw as string) ?? [] } catch { return [] }
     }
 
     function formatTime(iso: string): string {
@@ -277,10 +279,12 @@ export default function HistoryTab() {
                             {(() => {
                                 try {
                                     const raw = selectedRun.results
+                                    if (raw == null) return 'null'
                                     if (Array.isArray(raw)) return JSON.stringify(raw, null, 2)
-                                    return JSON.stringify(JSON.parse(raw as string), null, 2)
+                                    const parsed = JSON.parse(raw as string)
+                                    return JSON.stringify(parsed ?? raw, null, 2)
                                 }
-                                catch { return String(selectedRun.results) }
+                                catch { return String(selectedRun.results ?? 'null') }
                             })()}
                         </Box>
                     </Stack>

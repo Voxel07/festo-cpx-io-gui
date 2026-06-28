@@ -1,22 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Box, Button, Tooltip, Typography, Divider } from '@mui/material'
+import { Box, Button, Tooltip, Typography, Divider, Alert } from '@mui/material'
 import {
-    ReactFlow,
-    Background,
-    BackgroundVariant,
-    Controls,
-    MiniMap,
-    Panel,
     useNodesState,
     useEdgesState,
     BaseEdge,
     EdgeLabelRenderer,
+    Panel,
 } from '@xyflow/react'
 import type { Node, Edge, NodeTypes, EdgeTypes, EdgeChange, EdgeProps } from '@xyflow/react'
-import ModuleNode, { STATUS_STYLE } from './ModuleNode'
+import TopologyCanvas from './TopologyCanvas'
+import ModuleNode from './ModuleNode'
 import BackplaneNode from './BackplaneNode'
 import { buildLayout } from '../utils/layoutBuilder'
-import type { Topology, DiffStatus, TopologyModule } from '../types'
+import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnection } from '../types'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -71,23 +67,65 @@ const EDGE_TYPES: EdgeTypes = {
     cable: CableEdge as EdgeTypes[string],
 }
 
+// ── Helper: convert BenchConfig wiring → ReactFlow IO edges ────────────────
+function wiringToEdges(wiring: WiringConnection[]): Edge[] {
+    return wiring.map(c => {
+        const srcAddr = c.source_instance_id.replace(/^mod-0*/, '') || '0'
+        const tgtAddr = c.target_instance_id.replace(/^mod-0*/, '') || '0'
+        return {
+            id: c.id,
+            source: srcAddr,
+            sourceHandle: c.source_handle ?? `src-${c.source_channel}`,
+            target: tgtAddr,
+            targetHandle: c.target_handle ?? `tgt-${c.target_channel}`,
+            type: 'wire' as const,
+            animated: true,
+            zIndex: 1000,
+            style: { stroke: '#e65100', strokeWidth: 2.5 },
+            label: c.label ?? `#${srcAddr}:${c.source_channel} → #${tgtAddr}:${c.target_channel}`,
+            data: { kind: 'io', portSrc: c.source_channel, portTgt: c.target_channel },
+        }
+    })
+}
+
 interface Props {
     topology: Topology | null
     diffStatus: DiffStatus | null
     removedModules?: TopologyModule[]
     fullscreen: boolean
     onToggleFullscreen: () => void
-    /** IO wiring edges from ConnectionsFlow to display here */
-    ioEdges?: Edge[]
     /** Module address currently being tested (for highlighting) */
     activeModuleAddr?: number | null
 }
 
-export default function TopologyFlow({ topology, diffStatus, removedModules = [], fullscreen, onToggleFullscreen, ioEdges = [], activeModuleAddr = null }: Props) {
-    const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])  // BackplaneNode | ModuleNode
+export default function TopologyFlow({ topology, diffStatus, removedModules = [], fullscreen, onToggleFullscreen, activeModuleAddr = null }: Props) {
+    const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
-    const [showCables, setShowCables] = useState(true)
-    const ioEdgesRef = useRef<Edge[]>(ioEdges)
+    const [showApCables, setShowApCables] = useState(true)
+    const [showIoCables, setShowIoCables] = useState(true)
+    const [configWarning, setConfigWarning] = useState<string | null>(null)
+    const [ioEdges, setIoEdges] = useState<Edge[]>([])
+    const ioEdgesRef = useRef<Edge[]>([])
+
+    // ── Auto-load bench_config.json on mount ────────────────────────────
+    useEffect(() => {
+        let cancelled = false
+        fetch('/config?file_path=bench_config.json')
+            .then(async r => {
+                if (!r.ok || cancelled) return
+                const config: BenchConfig = await r.json()
+                const wiring = config.wiring ?? []
+                const edges = wiringToEdges(wiring)
+                if (!cancelled) {
+                    setIoEdges(edges)
+                    if (wiring.length === 0) setConfigWarning('bench_config.json loaded but contains no wiring.')
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setConfigWarning('bench_config.json not found. Save a configuration in the Connections tab to see I/O wiring here.')
+            })
+        return () => { cancelled = true }
+    }, [])
 
     useEffect(() => { ioEdgesRef.current = ioEdges }, [ioEdges])
 
@@ -102,14 +140,32 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
         const mergedStatus: DiffStatus = { ...(diffStatus ?? {}) }
         for (const rm of removedModules) mergedStatus[rm.Adress] = 'removed'
         const { nodes: newNodes, edges: chainEdges } = buildLayout(allMods, mergedStatus, false)
-        // Highlight active module under test
-        const withActive = (newNodes as Node[]).map(n => {
-            if (activeModuleAddr != null && n.id === String(activeModuleAddr) && n.type === 'mod') {
-                return { ...n, data: { ...(n.data as Record<string, unknown>), active: true } }
+        // Preserve hiddenValves from previous render so valve visibility
+        // doesn't reset when topology is rebuilt (e.g. during valve editing).
+        const prevNodeMap = new Map(nodes.map(n => [n.id, n]))
+        // Enrich nodes: highlight active module + show valves on valve bodies
+        const enriched = (newNodes as Node[]).map(n => {
+            const data = n.data as Record<string, unknown>
+            const mod = data.mod as TopologyModule | undefined
+            // Valve bodies always get showValves so the ModuleNode effect can
+            // derive the correct hidden set — even when MountedValves is empty
+            // (all unmounted) or full (all mounted).
+            const isValveBody = mod?.Type === 'Valve' || (mod?.MountedValves?.length ?? 0) > 0
+            const active = activeModuleAddr != null && n.id === String(activeModuleAddr) && n.type === 'mod'
+            const prev = prevNodeMap.get(n.id)
+            const prevHidden = prev ? (prev.data as Record<string, unknown>).hiddenValves : undefined
+            return {
+                ...n,
+                data: {
+                    ...data,
+                    ...(isValveBody ? { showValves: true } : {}),
+                    // Preserve hiddenValves across rebuilds only for valve bodies
+                    ...(prevHidden != null && isValveBody ? { hiddenValves: prevHidden } : {}),
+                    active,
+                },
             }
-            return { ...n, data: { ...(n.data as Record<string, unknown>), active: false } }
         })
-        setNodes(withActive)
+        setNodes(enriched)
         setEdges([...chainEdges, ...ioEdgesRef.current])
     }, [topology, diffStatus, removedModules, activeModuleAddr, setNodes, setEdges])
 
@@ -117,9 +173,13 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
         _onEdgesChange(changes.filter(c => c.type !== 'remove'))
     }, [_onEdgesChange])
 
-    const visibleEdges = showCables
-        ? edges
-        : edges.filter(e => (e.data as Record<string, unknown>)?.kind !== 'cable')
+    // ── Visible edges based on toggles ──────────────────────────────────
+    const visibleEdges = edges.filter(e => {
+        const kind = (e.data as Record<string, unknown>)?.kind
+        if (kind === 'cable') return showApCables
+        if (kind === 'io') return showIoCables
+        return true
+    })
 
     if (!topology) {
         return (
@@ -132,37 +192,49 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
     }
 
     return (
-        <ReactFlow
-            nodes={nodes}
-            edges={visibleEdges}
-            nodeTypes={NODE_TYPES}
-            edgeTypes={EDGE_TYPES}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            fitView fitViewOptions={{ padding: 0.25 }}
-            minZoom={0.1} maxZoom={4}
-            nodesDraggable nodesConnectable={false} elementsSelectable={false}
-        >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-            <Controls />
-            {/* <MiniMap
-                nodeColor={n => {
-                    const d = n.data as Record<string, unknown>
-                    return STATUS_STYLE[d?.status as keyof typeof STATUS_STYLE]?.border ?? '#90caf9'
-                }}
-                zoomable pannable
-            /> */}
-            <Panel position="top-right">
-                <Box sx={{
-                    background: 'rgba(255,255,255,0.96)', border: '1px solid #e0e0e0',
-                    borderRadius: 1.5, p: 1, boxShadow: 2,
-                    display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 180,
-                }}>
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Button size="small" variant={showCables ? 'contained' : 'outlined'} color="primary"
-                            onClick={() => setShowCables(s => !s)}
-                            sx={{ flex: 1, fontSize: '0.65rem', py: 0.25 }}>
-                            {showCables ? '🔌 Cables ON' : '🔌 Cables OFF'}
+        <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
+            {/* ── Config warning banner ── */}
+            {configWarning && (
+                <Alert
+                    severity="warning"
+                    onClose={() => setConfigWarning(null)}
+                    sx={{
+                        position: 'absolute', top: 8, left: '50%',
+                        transform: 'translateX(-50%)', zIndex: 20,
+                        fontSize: '0.75rem', py: 0, maxWidth: '90%',
+                    }}
+                >
+                    {configWarning}
+                </Alert>
+            )}
+
+            <TopologyCanvas
+                nodes={nodes}
+                edges={visibleEdges}
+                nodeTypes={NODE_TYPES}
+                edgeTypes={EDGE_TYPES}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                editMode={false}
+                fitView
+            >
+                <Panel position="top-right">
+                    <Box sx={{
+                        background: 'rgba(255,255,255,0.96)', border: '1px solid #e0e0e0',
+                        borderRadius: 1.5, p: 1, boxShadow: 2,
+                        display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 200,
+                    }}>
+                        {/* AP Cable toggle */}
+                        <Button size="small" variant={showApCables ? 'contained' : 'outlined'} color="primary"
+                            onClick={() => setShowApCables(s => !s)}
+                            sx={{ fontSize: '0.65rem', py: 0.25 }}>
+                            {showApCables ? '🔌 AP Cables ON' : '🔌 AP Cables OFF'}
+                        </Button>
+                        {/* IO Cable toggle */}
+                        <Button size="small" variant={showIoCables ? 'contained' : 'outlined'} color="warning"
+                            onClick={() => setShowIoCables(s => !s)}
+                            sx={{ fontSize: '0.65rem', py: 0.25 }}>
+                            {showIoCables ? '🔗 IO Wires ON' : '🔗 IO Wires OFF'}
                         </Button>
                         <Tooltip title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
                             <Button size="small" variant="outlined" onClick={onToggleFullscreen}
@@ -170,16 +242,16 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
                                 {fullscreen ? '⊠' : '⛶'}
                             </Button>
                         </Tooltip>
+                        <Divider />
+                        <Typography sx={{ fontSize: '0.54rem', color: '#888', lineHeight: 1.7 }}>
+                            <span style={{ color: '#1976d2' }}>■</span> unchanged&nbsp;
+                            <span style={{ color: '#ed6c02' }}>■</span> changed<br />
+                            <span style={{ color: '#2e7d32' }}>■</span> added&nbsp;&nbsp;
+                            <span style={{ color: '#d32f2f' }}>■</span> removed
+                        </Typography>
                     </Box>
-                    <Divider />
-                    <Typography sx={{ fontSize: '0.54rem', color: '#888', lineHeight: 1.7 }}>
-                        <span style={{ color: '#1976d2' }}>■</span> unchanged&nbsp;
-                        <span style={{ color: '#ed6c02' }}>■</span> changed<br />
-                        <span style={{ color: '#2e7d32' }}>■</span> added&nbsp;&nbsp;
-                        <span style={{ color: '#d32f2f' }}>■</span> removed
-                    </Typography>
-                </Box>
-            </Panel>
-        </ReactFlow>
+                </Panel>
+            </TopologyCanvas>
+        </Box>
     )
 }

@@ -44,6 +44,8 @@ export type ModuleNodeData = {
     showApOut?: boolean
     /** Show valve editor button (VABX body modules in ConnectionsFlow) */
     showValveEditor?: boolean
+    /** Show mounted valves visually without editor UI (read-only topology view) */
+    showValves?: boolean
     /** Valve slot group IDs that are hidden (empty, not mounted) */
     hiddenValves?: string[]
     /** IO connections for this module, populated by ConnectionsFlow */
@@ -78,6 +80,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         showLeftHandle, showRightHandle,
         showApIn = false, showApOut = false,
         showValveEditor = false,
+        showValves = false,
         suppressIoHandles = false,
         hiddenValves = [],
         connections = [],
@@ -92,7 +95,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         numOut: mod.NumOfOutputs,
         numInOut: mod.NumOfInOuts,
     })
-    const valveGroups = useValveGroups(showValveEditor ? svgUrl : '')
+    const wantsValves = showValveEditor || showValves
+    const valveGroups = useValveGroups(wantsValves ? svgUrl : '')
     const displayUrl = useModifiedSvg(svgUrl, hiddenValves)
 
     const [valveEditorOpen, setValveEditorOpen] = useState(false)
@@ -100,7 +104,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
     // When valveGroups are loaded and mod.MountedValves is known, derive hiddenValves
     useEffect(() => {
-        if (!showValveEditor || valveGroups.length === 0 || mod.MountedValves === undefined) return
+        if (!wantsValves || valveGroups.length === 0 || mod.MountedValves === undefined) return
         const mountedSet = new Set(mod.MountedValves)
         const expected = valveGroups.filter((_, i) => !mountedSet.has(i))
         setNodes(prev => prev.map(n => {
@@ -109,7 +113,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
             const same = expected.length === cur.length && expected.every(id => cur.includes(id))
             return same ? n : { ...n, data: { ...n.data, hiddenValves: expected } }
         }))
-    }, [valveGroups, mod.MountedValves, showValveEditor, nodeId, setNodes])
+    }, [valveGroups, mod.MountedValves, wantsValves, nodeId, setNodes])
 
     const st = STATUS_STYLE[status] ?? STATUS_STYLE.unchanged
     const hasPorts = ports.length > 0

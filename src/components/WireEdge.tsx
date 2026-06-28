@@ -301,6 +301,12 @@ export function WireEdge({
         }))
     }, [id, points, setEdges])
 
+    const onRemove = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation()
+        e.preventDefault()
+        setEdges(prev => prev.filter(edge => edge.id !== id))
+    }, [id, setEdges])
+
     const hitSegments = useMemo(() =>
         points.slice(0, -1).map((p1, i) => {
             const p2 = points[i + 1]
@@ -321,15 +327,65 @@ export function WireEdge({
                 style={{ stroke: color, strokeWidth, strokeLinejoin: 'round' }}
             />
             <EdgeLabelRenderer>
-                {label && (
+                {(label || selected) && (
                     <div style={{
                         position: 'absolute',
                         transform: `translate(-50%, calc(-100% - 4px)) translate(${(sourceX + targetX) / 2}px, ${(sourceY + targetY) / 2}px)`,
-                        fontSize: 9, color: '#888', whiteSpace: 'nowrap',
-                        pointerEvents: 'none', background: 'rgba(255,255,255,0.85)',
-                        padding: '1px 4px', borderRadius: 3,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        pointerEvents: 'none',
+                        zIndex: 1001,
                     }}>
-                        {label}
+                        {label && (
+                            <div style={{
+                                fontSize: 9,
+                                color: selected ? '#d84315' : '#888',
+                                fontWeight: selected ? 600 : 400,
+                                whiteSpace: 'nowrap',
+                                background: 'rgba(255,255,255,0.9)',
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                boxShadow: selected ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
+                                border: selected ? '1px solid #ffccbc' : 'none',
+                            }}>
+                                {label}
+                            </div>
+                        )}
+                        {selected && (
+                            <button
+                                onClick={onRemove}
+                                title="Remove connection"
+                                style={{
+                                    pointerEvents: 'all',
+                                    background: '#d84315',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: 18,
+                                    height: 18,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 10,
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                    transition: 'all 0.2s ease',
+                                    padding: 0,
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = '#bf360c'
+                                    e.currentTarget.style.transform = 'scale(1.15)'
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = '#d84315'
+                                    e.currentTarget.style.transform = 'scale(1)'
+                                }}
+                            >
+                                ✕
+                            </button>
+                        )}
                     </div>
                 )}
                 {selected && corners.map((wp, i) => (

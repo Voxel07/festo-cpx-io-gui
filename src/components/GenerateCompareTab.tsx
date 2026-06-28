@@ -4,18 +4,20 @@ import {
     Typography, Box, Divider, Chip,
 } from '@mui/material'
 import SplitDiff from './SplitDiff'
-import type { Topology, TopologyModule, DiffStatus, GenerateResult, CompareResult } from '../types'
+import type { Topology, TopologyModule, DiffStatus, CompareResult, BenchConfig } from '../types'
+import { configToTopology } from '../utils/configMapper'
 
 interface Props {
     ip: string
     timeout: number
-    onResult: (topo: Topology | null, status: DiffStatus | null, removed?: TopologyModule[]) => void
+    onResult: (topo: Topology | null, status: DiffStatus | null, removed?: TopologyModule[], rawConfig?: BenchConfig) => void
 }
 
 export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
-    const [filePath, setFilePath] = useState('topology.jsonc')
+    const [filePath, setFilePath] = useState('bench_config.json')
 
     // Stage 1 – Read live
+    const [liveConfig, setLiveConfig] = useState<BenchConfig | null>(null)
     const [liveTopology, setLiveTopology] = useState<Topology | null>(null)
     const [readBusy, setReadBusy] = useState(false)
     const [readError, setReadError] = useState<string | null>(null)
@@ -33,15 +35,18 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
     async function readLive() {
         setReadBusy(true); setReadError(null); setCmpData(null); setSavedTo(null)
         try {
-            const r = await fetch('/topology', {
+            const r = await fetch('/config/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ip_address: ip, timeout, save_path: null }),
+                body: JSON.stringify({ ip_address: ip, timeout, save_path: filePath }),
             })
-            const d: GenerateResult & { detail?: string } = await r.json()
+            const d = await r.json()
             if (!r.ok) throw new Error(d.detail ?? 'Unknown error')
-            setLiveTopology(d.topology)
-            onResult(d.topology, null)
+            const config: BenchConfig = d.config
+            const topo = configToTopology(config)
+            setLiveConfig(config)
+            setLiveTopology(topo)
+            onResult(topo, null, [], config)
         } catch (e) {
             setReadError((e as Error).message)
         } finally {
@@ -49,15 +54,14 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
         }
     }
 
-    // clear removed modules when re-reading live config
     async function compare() {
-        if (!filePath) { setCmpError('Enter a topology file path.'); return }
+        if (!filePath) { setCmpError('Enter a configuration file path.'); return }
         setCmpBusy(true); setCmpError(null)
         try {
-            const r = await fetch('/compare', {
+            const r = await fetch('/config/compare', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ip_address: ip, timeout, stored_path: filePath }),
+                body: JSON.stringify({ ip_address: ip, timeout, config_path: filePath }),
             })
             const d: CompareResult & { detail?: string } = await r.json()
             if (!r.ok) throw new Error(d.detail ?? 'Unknown error')
@@ -76,13 +80,13 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
     }
 
     async function writeToFile() {
-        if (!liveTopology) { setWriteError('Read live config first.'); return }
+        if (!liveConfig) { setWriteError('Read live config first.'); return }
         setWriteBusy(true); setWriteError(null); setSavedTo(null)
         try {
-            const r = await fetch('/topology/save-with-valves', {
+            const r = await fetch('/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topology: liveTopology, save_path: filePath || 'topology.jsonc' }),
+                body: JSON.stringify({ config: liveConfig, save_path: filePath }),
             })
             const d: { saved_to?: string; detail?: string } = await r.json()
             if (!r.ok) throw new Error(d.detail ?? 'Unknown error')
@@ -94,7 +98,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
         }
     }
 
-    const hasContent = readError || liveTopology || cmpError || cmpData || writeError || savedTo
+    const hasContent = readError || liveConfig || cmpError || cmpData || writeError || savedTo
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -113,11 +117,11 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
             }}>
                 {/* File path */}
                 <TextField
-                    label="Topology file"
+                    label="Configuration file"
                     value={filePath}
                     onChange={e => setFilePath(e.target.value)}
                     size="small"
-                    placeholder="topology.jsonc"
+                    placeholder="bench_config.json"
                     sx={{ width: 220 }}
                 />
 

@@ -13,11 +13,8 @@ export default defineConfig({
         proxy: {
             // Forward API calls to the FastAPI backend during dev.
             // SVG images and icon mapping are served locally from public/svg/.
-            '/topology':    { target: 'http://localhost:8000', changeOrigin: true },
-            '/compare':     { target: 'http://localhost:8000', changeOrigin: true },
-            '/connections': { target: 'http://localhost:8000', changeOrigin: true },
+            '/config':      { target: 'http://localhost:8000', changeOrigin: true },
             '/test-run':    { target: 'http://localhost:8000', changeOrigin: true },
-            '/validate-connections': { target: 'http://localhost:8000', changeOrigin: true },
             '/io':          { target: 'http://localhost:8000', changeOrigin: true },
             '/pocketbase':  { target: 'http://localhost:8000', changeOrigin: true },
         },

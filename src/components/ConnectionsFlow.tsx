@@ -11,22 +11,19 @@ import {
     Stack, Chip, CircularProgress,
 } from '@mui/material'
 import {
-    ReactFlow,
-    Background,
-    BackgroundVariant,
-    Controls,
-    MiniMap,
     useNodesState,
     useEdgesState,
     reconnectEdge,
 } from '@xyflow/react'
 import type { Node, Edge, EdgeChange, Connection, NodeTypes, EdgeTypes } from '@xyflow/react'
-import ModuleNode, { STATUS_STYLE } from './ModuleNode'
+import TopologyCanvas from './TopologyCanvas'
+import ModuleNode from './ModuleNode'
 import type { ModuleNodeData } from './ModuleNode'
 import BackplaneNode from './BackplaneNode'
 import { WireEdge } from './WireEdge'
+import ModuleActuateModal from './ModuleActuateModal'
 import { buildLayout } from '../utils/layoutBuilder'
-import type { Topology, DiffStatus, IOConnection, ConnectionEntry } from '../types'
+import type { Topology, DiffStatus, ConnectionEntry, BenchConfig, WiringConnection, TopologyModule } from '../types'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -66,18 +63,20 @@ interface Props {
     ip?: string
     /** Called when a valve body's mounted valves change (indices 0-based) */
     onModuleValveChange?: (addr: number, mountedValves: number[]) => void
+    /** Called when a BenchConfig is loaded — allows parent to sync topology state */
+    onConfigLoad?: (config: BenchConfig) => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValveChange }: Props) {
+export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValveChange, onConfigLoad }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])  // ModuleNode | BackplaneNode
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
     const [showCables, setShowCables] = useState(false)  // hidden by default for cleaner IO editing
-    const [savePath, setSavePath] = useState('connections.jsonc')
-    const [loadPath, setLoadPath] = useState('connections.jsonc')
+    const [savePath, setSavePath] = useState('bench_config.json')
+    const [loadPath, setLoadPath] = useState('bench_config.json')
     const [statusMsg, setStatusMsg] = useState<{ text: string; severity: 'success' | 'error' } | null>(null)
-    const [wiringDisplay, setWiringDisplay] = useState<'all' | 'selected' | 'none'>('selected')
+    const [wiringDisplay, setWiringDisplay] = useState<'all' | 'selected' | 'none'>('all')
     const [straightWires, setStraightWires] = useState(false)
 
     // ── Wire Test state ────────────────────────────────────
@@ -89,6 +88,10 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     /** edge IDs currently awaiting a device call */
     const [testBusy, setTestBusy] = useState<Set<string>>(new Set())
     const [testAllBusy, setTestAllBusy] = useState(false)
+
+    // ── Module Actuate Modal state ─────────────────────────
+    const [actuateModule, setActuateModule] = useState<TopologyModule | null>(null)
+    const [actuateMountedValves, setActuateMountedValves] = useState<number[] | undefined>(undefined)
 
     const ioEdgesRef = useRef<Edge[]>([])
     const topologyName = useRef('')
@@ -168,6 +171,20 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         )
     }, [_onEdgesChange])
 
+    // ── Right-click module → open actuate modal ──────────
+    const onNodeContextMenu = useCallback((_event: React.MouseEvent, node: Node) => {
+        _event.preventDefault()
+        if (node.type !== 'mod') return
+        const d = node.data as ModuleNodeData
+        setActuateModule(d.mod)
+        // Collect mounted valves for valve bodies
+        if (d.mod.MountedValves && d.mod.MountedValves.length >= 0) {
+            setActuateMountedValves(d.mod.MountedValves)
+        } else {
+            setActuateMountedValves(undefined)
+        }
+    }, [])
+
     // ── New connection ────────────────────────────────────
     const onConnect = useCallback((connection: Connection) => {
         let sh = connection.sourceHandle ?? ''
@@ -241,46 +258,65 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     }, [])
 
     // ── Save ──────────────────────────────────────────────
+    // ── Save ──────────────────────────────────────────────
     async function doSave() {
-        const connections: IOConnection[] = ioEdgesRef.current.map(e => {
-            const d = e.data as Record<string, unknown>
-            return {
-                id: e.id,
-                source_module_addr: parseInt(e.source),
-                source_channel: String(d.portSrc ?? portId(String(e.sourceHandle ?? ''))),
-                target_module_addr: parseInt(e.target),
-                target_channel: String(d.portTgt ?? portId(String(e.targetHandle ?? ''))),
-                source_handle: String(e.sourceHandle ?? ''),
-                target_handle: String(e.targetHandle ?? ''),
-                label: typeof e.label === 'string' ? e.label : '',
-                waypoints: (d.waypoints as Array<{ x: number; y: number }>) ?? undefined,
-                straight: d.straight === true ? true : undefined,
-            }
-        })
-
-        // Collect mounted_valves from all mod nodes that have them
-        const mounted_valves: Record<string, number[]> = {}
-        nodes.forEach(n => {
-            if (n.type !== 'mod') return
-            const d = n.data as ModuleNodeData
-            if (d.mod.MountedValves && d.mod.MountedValves.length >= 0) {
-                mounted_valves[String(d.mod.Adress)] = d.mod.MountedValves
-            }
-        })
-
         try {
-            const r = await fetch('/connections', {
+            // 1. Fetch current config
+            const getRes = await fetch(`/config?file_path=${encodeURIComponent(savePath)}`)
+            if (!getRes.ok) throw new Error('Could not read existing configuration to update. Make sure you generate/save a configuration first.')
+            const config: BenchConfig = await getRes.json()
+
+            // 2. Map edges back to WiringConnection structure
+            const wiring: WiringConnection[] = ioEdgesRef.current.map(e => {
+                const d = e.data as Record<string, unknown>
+                const srcAddr = parseInt(e.source)
+                const tgtAddr = parseInt(e.target)
+                const srcInstId = `mod-${srcAddr.toString().padStart(3, '0')}`
+                const tgtInstId = `mod-${tgtAddr.toString().padStart(3, '0')}`
+                return {
+                    id: e.id,
+                    source_instance_id: srcInstId,
+                    source_channel: String(d.portSrc ?? portId(String(e.sourceHandle ?? ''))),
+                    target_instance_id: tgtInstId,
+                    target_channel: String(d.portTgt ?? portId(String(e.targetHandle ?? ''))),
+                    source_handle: String(e.sourceHandle ?? ''),
+                    target_handle: String(e.targetHandle ?? ''),
+                    label: typeof e.label === 'string' ? e.label : '',
+                    waypoints: (d.waypoints as Array<{ x: number; y: number }>) ?? undefined,
+                    straight: d.straight === true ? true : undefined,
+                }
+            })
+
+            // 3. Update mounted valves in module_instances
+            const mountedValvesMap: Record<string, number[]> = {}
+            nodes.forEach(n => {
+                if (n.type !== 'mod') return
+                const d = n.data as ModuleNodeData
+                if (d.mod.MountedValves && d.mod.MountedValves.length >= 0) {
+                    mountedValvesMap[String(d.mod.Adress)] = d.mod.MountedValves
+                }
+            })
+
+            config.wiring = wiring
+            config.module_instances = (config.module_instances || []).map(inst => {
+                const mv = mountedValvesMap[String(inst.address)]
+                if (mv !== undefined) {
+                    return { ...inst, mounted_valves: mv }
+                }
+                return inst
+            })
+
+            // 4. Save entire BenchConfig
+            const saveRes = await fetch('/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    topology_name: topologyName.current,
-                    connections,
-                    mounted_valves: Object.keys(mounted_valves).length > 0 ? mounted_valves : undefined,
+                    config,
                     save_path: savePath,
                 }),
             })
-            const d = await r.json()
-            setStatusMsg(r.ok
+            const d = await saveRes.json()
+            setStatusMsg(saveRes.ok
                 ? { text: `Saved \u2192 ${d.saved_to}`, severity: 'success' }
                 : { text: `Error: ${d.detail}`, severity: 'error' })
         } catch (e) {
@@ -291,30 +327,62 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     // ── Load ──────────────────────────────────────────────
     async function doLoad() {
         try {
-            const r = await fetch(`/connections?file_path=${encodeURIComponent(loadPath)}`)
-            const d = await r.json()
-            if (!r.ok) { setStatusMsg({ text: `Error: ${d.detail}`, severity: 'error' }); return }
+            const r = await fetch(`/config?file_path=${encodeURIComponent(loadPath)}`)
+            const d: BenchConfig = await r.json()
+            if (!r.ok) { setStatusMsg({ text: `Error: ${(d as any).detail ?? 'Unknown error'}`, severity: 'error' }); return }
 
-            const loaded: IOConnection[] = d.connections ?? []
-            const newIo: Edge[] = loaded.map(c => ({
-                id: c.id,
-                source: String(c.source_module_addr),
-                sourceHandle: c.source_handle ?? `src-inout-${c.source_channel}`,
-                target: String(c.target_module_addr),
-                targetHandle: c.target_handle ?? `tgt-inout-${c.target_channel}`,
-                type: 'wire',
-                animated: true,
-                zIndex: 1000,
-                style: { stroke: IO_COLOR, strokeWidth: 2.5 },
-                label: c.label ?? `#${c.source_module_addr}:${c.source_channel} → #${c.target_module_addr}:${c.target_channel}`,
-                data: {
-                    kind: 'io',
-                    portSrc: c.source_channel,
-                    portTgt: c.target_channel,
-                    waypoints: c.waypoints ?? undefined,
-                    straight: c.straight ?? false,
-                },
-            }))
+            // Let the parent sync topology / rawConfig from the loaded file
+            onConfigLoad?.(d)
+
+            // Build an address → category map so we can derive correct handle kind
+            const catByAddr: Record<number, string> = {}
+            ;(d.module_instances ?? []).forEach(inst => {
+                catByAddr[inst.address] = inst.category
+            })
+
+            // Derive the ReactFlow handle kind from the module category:
+            //   output/inout module on the source side → 'out'
+            //   input/inout module on the target side → 'in'
+            //   otherwise → 'inout'
+            function srcKind(addr: number): string {
+                const cat = catByAddr[addr] ?? 'inout'
+                if (cat === 'inout') return 'inout'
+                return 'out'
+            }
+            function tgtKind(addr: number): string {
+                const cat = catByAddr[addr] ?? 'inout'
+                if (cat === 'inout') return 'inout'
+                return 'in'
+            }
+
+            const loaded: WiringConnection[] = d.wiring ?? []
+            const newIo: Edge[] = loaded.map(c => {
+                const srcAddrStr = c.source_instance_id.replace(/^mod-0*/, '')
+                const tgtAddrStr = c.target_instance_id.replace(/^mod-0*/, '')
+                const srcAddr = srcAddrStr === '' ? 0 : parseInt(srcAddrStr)
+                const tgtAddr = tgtAddrStr === '' ? 0 : parseInt(tgtAddrStr)
+                const resolvedSrcHandle = c.source_handle || `src-${srcKind(srcAddr)}-${c.source_channel}`
+                const resolvedTgtHandle = c.target_handle || `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`
+                return {
+                    id: c.id,
+                    source: String(srcAddr),
+                    sourceHandle: resolvedSrcHandle,
+                    target: String(tgtAddr),
+                    targetHandle: resolvedTgtHandle,
+                    type: 'wire',
+                    animated: true,
+                    zIndex: 1000,
+                    style: { stroke: IO_COLOR, strokeWidth: 2.5 },
+                    label: c.label ?? `#${srcAddr}:${c.source_channel} → #${tgtAddr}:${c.target_channel}`,
+                    data: {
+                        kind: 'io',
+                        portSrc: c.source_channel,
+                        portTgt: c.target_channel,
+                        waypoints: c.waypoints ?? undefined,
+                        straight: c.straight ?? false,
+                    },
+                }
+            })
 
             setEdges(prev => [
                 ...prev.filter(e => (e.data as Record<string, unknown>)?.kind !== 'io'),
@@ -322,10 +390,11 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             ])
 
             // Restore mounted valve config for each valve body
-            const mountedValves = d.mounted_valves as Record<string, number[]> | undefined
-            if (mountedValves) {
-                Object.entries(mountedValves).forEach(([addrStr, mv]) => {
-                    onModuleValveChange?.(parseInt(addrStr), mv)
+            if (d.module_instances) {
+                d.module_instances.forEach(inst => {
+                    if (inst.mounted_valves && inst.mounted_valves.length >= 0) {
+                        onModuleValveChange?.(inst.address, inst.mounted_valves)
+                    }
                 })
             }
 
@@ -540,7 +609,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                         '&:hover': { borderColor: '#455a64', background: showCables ? '#455a64' : 'rgba(84,110,122,0.08)' },
                     }}
                 >
-                    🔌 {showCables ? 'Hide Cables' : 'Show Cables'}
+                    🔌 {showCables ? 'Hide AP Cables' : 'Show AP Cables'}
                 </Button>
 
                 <Divider orientation="vertical" flexItem />
@@ -709,7 +778,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
                 {/* ── ReactFlow Canvas ─────────────────────────────────── */}
                 <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                    <ReactFlow
+                    <TopologyCanvas
                         nodes={nodes}
                         edges={visibleEdges}
                         nodeTypes={NODE_TYPES}
@@ -719,23 +788,10 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                         onConnect={onConnect}
                         onReconnect={onReconnect}
                         isValidConnection={isValidConnection}
-                        edgesReconnectable
-                        elementsSelectable
+                        onNodeContextMenu={onNodeContextMenu}
+                        editMode
                         fitView
-                        fitViewOptions={{ padding: 0.25 }}
-                        minZoom={0.1}
-                        maxZoom={4}
-                    >
-                        <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-                        <Controls />
-                        {/* <MiniMap
-                            nodeColor={n => {
-                                const d = n.data as Record<string, unknown>
-                                return STATUS_STYLE[d?.status as keyof typeof STATUS_STYLE]?.border ?? '#90caf9'
-                            }}
-                            zoomable pannable
-                        /> */}
-                    </ReactFlow>
+                    />
                 </Box>
                 {/* End ReactFlow Canvas Box */}
 
@@ -881,6 +937,15 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
             </Box>
             {/* End content area */}
+
+            {/* ── Module Actuate Modal (right-click context) ──────── */}
+            <ModuleActuateModal
+                open={actuateModule !== null}
+                module={actuateModule}
+                ip={ip ?? ''}
+                mountedValves={actuateMountedValves}
+                onClose={() => setActuateModule(null)}
+            />
         </Box>
     )
 }

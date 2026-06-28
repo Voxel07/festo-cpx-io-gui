@@ -6,40 +6,37 @@
  * web UI or CI.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import {
-    Box, Button, Stack, Typography, Checkbox, FormControlLabel,
-    LinearProgress, Chip, Alert, Paper, CircularProgress,
-    Tooltip, IconButton,
-} from '@mui/material'
-import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import RefreshIcon from '@mui/icons-material/Refresh'
+import { Box, Stack, Typography, Alert, Paper, CircularProgress } from '@mui/material'
+import TestSelection from './TestSelection'
+import TestProgress from './TestProgress'
+import TestResults from './TestResults'
+import TestLiveLog from './TestLiveLog'
 
 const POLL_MS = 2000
 
-const TOPO_PATH = 'topology.jsonc'
-const CONN_PATH = 'connections.jsonc'
+const CONFIG_PATH = 'bench_config.json'
 
-interface Checkpoint {
+export interface Checkpoint {
     test: string
     status: 'running' | 'passed' | 'failed' | 'skipped'
     timestamp: number
     error?: string
 }
 
-interface LogEntry {
+export interface LogEntry {
     level: string
     message: string
     timestamp: string
 }
 
-interface TestRunState {
+export interface TestRunState {
     run_id?: string
     status: 'idle' | 'starting' | 'running' | 'completed' | 'error'
     source?: string
     ip_address?: string
     tests?: string[]
     progress?: { completed: number; total: number; current_test: string | null; current_module: string | null }
-    results?: Array<{ test_id?: string; passed?: boolean; error?: string; duration_ms?: number;[k: string]: unknown }>
+    results?: Array<{ test_id?: string; passed?: boolean; error?: string; duration_ms?: number; [k: string]: unknown }>
     checkpoints?: Checkpoint[]
     logs?: LogEntry[]
     error?: string
@@ -64,8 +61,6 @@ export default function TestRunTab({ ip }: Props) {
     const [runState, setRunState] = useState<TestRunState>({ status: 'idle' })
     const [sseLogs, setSseLogs] = useState<LogEntry[]>([])
     const [busy, setBusy] = useState(false)
-    const logsEndRef = useRef<HTMLDivElement>(null)
-    const logsContainerRef = useRef<HTMLDivElement>(null)  // scroll container for smart auto-scroll
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const esRef = useRef<EventSource | null>(null)
 
@@ -74,6 +69,14 @@ export default function TestRunTab({ ip }: Props) {
     const progress = runState.progress
         ? (runState.progress.completed / Math.max(runState.progress.total, 1)) * 100
         : 0
+
+    // Display only the unique selected tests (backend may report per-module instances).
+    const displayTests = useMemo(() => {
+        const serverTests = runState.tests
+        if (!serverTests || serverTests.length === 0) return selected
+        // Deduplicate while preserving order.
+        return [...new Set(serverTests)]
+    }, [runState.tests, selected])
 
     const fetchStatus = useCallback(async () => {
         try {
@@ -120,18 +123,6 @@ export default function TestRunTab({ ip }: Props) {
         return runState.logs ?? []
     }, [sseLogs, runState.logs])
 
-    // Smart auto-scroll: only scroll to bottom when user is already near the bottom.
-    // Prevents fighting user scroll when reading earlier log entries.
-    useEffect(() => {
-        const container = logsContainerRef.current
-        if (!container) return
-        const threshold = 60  // px from bottom — if user scrolled up more than this, don't auto-scroll
-        const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
-        if (distFromBottom < threshold) {
-            logsEndRef.current?.scrollIntoView({ behavior: 'auto' })
-        }
-    }, [displayLogs])
-
     async function doStart() {
         if (selected.length === 0) return
         // Clear previous state
@@ -145,8 +136,7 @@ export default function TestRunTab({ ip }: Props) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ip_address: ip,
-                    connections_path: CONN_PATH,
-                    topology_path: TOPO_PATH,
+                    config_path: CONFIG_PATH,
                     tests: selected,
                     source: 'web',
                 }),
@@ -170,56 +160,21 @@ export default function TestRunTab({ ip }: Props) {
         )
     }
 
-    const cpMap = new Map((runState.checkpoints ?? []).map(c => [c.test, c]))
-
     return (
         <Box sx={{ p: 2, display: 'flex', gap: 2, alignItems: 'stretch', flex: 1, overflow: 'hidden', minHeight: 0 }}>
 
             {/* ── Left column: selection + progress + results ── */}
             <Stack spacing={2} sx={{ flex: '0 0 auto', width: 440, overflowY: 'auto', maxHeight: '100%', pr: 1 }}>
-                {/* ── Test selection ── */}
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                        Select Tests
-                    </Typography>
-                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
-                        {AVAILABLE_TESTS.map(t => (
-                            <FormControlLabel
-                                key={t.id}
-                                control={
-                                    <Checkbox
-                                        size="small"
-                                        checked={selected.includes(t.id)}
-                                        onChange={() => toggleTest(t.id)}
-                                        disabled={isRunning || isStarting}
-                                    />
-                                }
-                                label={<Typography variant="caption">{t.label}</Typography>}
-                                sx={{ mr: 1 }}
-                            />
-                        ))}
-                    </Stack>
-                    <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            startIcon={isStarting || busy ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
-                            onClick={doStart}
-                            disabled={isRunning || isStarting || busy || selected.length === 0}
-                            size="small"
-                        >
-                            {isStarting ? 'Starting…' : isRunning ? 'Running…' : busy ? 'Waiting…' : 'Start Test Run'}
-                        </Button>
-                        {runState.source && runState.source !== 'web' && (
-                            <Chip label={`By: ${runState.source}`} size="small" color="info" />
-                        )}
-                        {isStarting && (
-                            <Typography variant="caption" color="text.secondary">
-                                Connecting to device…
-                            </Typography>
-                        )}
-                    </Stack>
-                </Paper>
+                <TestSelection
+                    availableTests={AVAILABLE_TESTS}
+                    selected={selected}
+                    isRunning={isRunning}
+                    isStarting={isStarting}
+                    busy={busy}
+                    runSource={runState.source}
+                    onToggleTest={toggleTest}
+                    onStart={doStart}
+                />
 
                 {/* ── Error ── */}
                 {runState.status === 'error' && runState.error && (
@@ -240,159 +195,24 @@ export default function TestRunTab({ ip }: Props) {
 
                 {/* ── Progress ── */}
                 {(isRunning || runState.status === 'completed') && (
-                    <Paper variant="outlined" sx={{ p: 2 }}>
-                        <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }} spacing={1}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                {isRunning ? 'Running…' : 'Completed'}
-                            </Typography>
-                            <Box sx={{ flex: 1 }} />
-                            <Tooltip title="Refresh">
-                                <IconButton size="small" onClick={fetchStatus}>
-                                    <RefreshIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        </Stack>
-
-                        <LinearProgress
-                            variant={isRunning ? 'indeterminate' : 'determinate'}
-                            value={progress}
-                            sx={{ mb: 2, height: 6, borderRadius: 3 }}
-                            color={runState.status === 'completed' ? 'success' : 'primary'}
-                        />
-
-                        {runState.progress && (
-                            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                                {runState.progress.completed} / {runState.progress.total} tests
-                                {runState.progress.current_test && (
-                                    <> · Current: <strong>{runState.progress.current_test}</strong></>
-                                )}
-                            </Typography>
-                        )}
-
-                        {/* Per-test status */}
-                        <Stack spacing={0.5}>
-                            {(runState.tests ?? selected).map(testId => {
-                                const cp = cpMap.get(testId)
-                                const status = cp?.status ?? 'pending'
-                                const color =
-                                    status === 'passed' ? 'success' :
-                                        status === 'failed' ? 'error' :
-                                            status === 'skipped' ? 'warning' :
-                                                status === 'running' ? 'info' : 'default'
-                                // Find matching result for duration
-                                const matchResult = (runState.results ?? []).find(
-                                    r => (r as Record<string, unknown>).test_id === testId
-                                )
-                                const testDur = (matchResult as Record<string, unknown> | undefined)?.duration_ms as number | undefined
-                                return (
-                                    <Stack key={testId} direction="row" sx={{ alignItems: 'center' }} spacing={1}>
-                                        <Chip label={testId} size="small" color={color}
-                                            variant={status === 'pending' ? 'outlined' : 'filled'}
-                                            sx={{ minWidth: 180, justifyContent: 'flex-start' }}
-                                        />
-                                        <Typography variant="caption" color={status === 'skipped' ? 'warning.main' : 'text.secondary'}>
-                                            {status === 'passed' ? '✓' : status === 'failed' ? '✗' :
-                                                status === 'skipped' ? '⚠' :
-                                                    status === 'running' ? '⏳' : '○'}{' '}
-                                            {status}
-                                        </Typography>
-                                        {testDur !== undefined && testDur !== null && (
-                                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                                                {testDur}ms
-                                            </Typography>
-                                        )}
-                                        {cp?.error && (
-                                            <Typography variant="caption" color="error" sx={{ flex: 1 }}>
-                                                {cp.error}
-                                            </Typography>
-                                        )}
-                                    </Stack>
-                                )
-                            })}
-                        </Stack>
-                    </Paper>
+                    <TestProgress
+                        status={runState.status}
+                        progress={progress}
+                        progressDetail={runState.progress}
+                        tests={displayTests}
+                        checkpoints={runState.checkpoints ?? []}
+                        results={runState.results}
+                        onRefresh={fetchStatus}
+                    />
                 )}
 
                 {/* ── Results ── */}
                 {(runState.status === 'completed' || isRunning) && runState.results && runState.results.length > 0 && (
-                    <Paper variant="outlined" sx={{ p: 1.5, overflow: 'auto', maxHeight: 400 }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                            {isRunning ? 'Live Results' : 'Detailed Results'}
-                        </Typography>
-                        {runState.results.map((r, ri) => {
-                            const subResults = (r as Record<string, unknown>).results as Array<Record<string, unknown>> | undefined
-                            const testId = String((r as Record<string, unknown>).test_id ?? `Test ${ri + 1}`)
-                            const passed = (r as Record<string, unknown>).passed
-                            const dur = (r as Record<string, unknown>).duration_ms as number | undefined
-                            return (
-                                <Box key={ri} sx={{ mb: 1, borderBottom: '1px solid #eee', pb: 1 }}>
-                                    {/* Test header with duration */}
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 700, flex: 1 }}>
-                                            {testId}
-                                        </Typography>
-                                        {dur !== undefined && dur !== null && (
-                                            <Chip
-                                                label={`${dur}ms`}
-                                                size="small"
-                                                variant="outlined"
-                                                sx={{ fontSize: '0.65rem', height: 20 }}
-                                            />
-                                        )}
-                                        <span style={{
-                                            fontWeight: 700, fontSize: '0.85rem',
-                                            color: passed ? '#2e7d32' : passed === false ? '#d32f2f' : '#888',
-                                        }}>
-                                            {passed ? '✓' : passed === false ? '✗' : '○'}
-                                        </span>
-                                    </Box>
-                                    {/* Sub-results (per-module breakdown) */}
-                                    {subResults && Array.isArray(subResults) && subResults.length > 0 ? (
-                                        <Box sx={{ pl: 1, mt: 0.25 }}>
-                                            {subResults.map((sr, si) => {
-                                                const srPassed = sr.passed as boolean | undefined
-                                                const srErr = sr.error as string | undefined
-                                                const channels = sr.channels as Array<Record<string, unknown>> | undefined
-                                                return (
-                                                    <Box key={si}>
-                                                        <Typography variant="caption" sx={{ display: 'block', color: '#777', fontSize: '0.62rem' }}>
-                                                            #{sr.address ?? '?'} {String(sr.module ?? sr.connection ?? '')}
-                                                            {sr.passed_channels !== undefined ? ` · ${sr.passed_channels}/${sr.total_channels} ch` : ''}
-                                                            {sr.duration_ms !== undefined ? ` · ${sr.duration_ms}ms` : ''}
-                                                            {' '}<span style={{ color: srPassed ? '#2e7d32' : srPassed === false ? '#d32f2f' : '#888' }}>
-                                                                {srPassed ? '✓' : srPassed === false ? '✗' : '○'}
-                                                            </span>
-                                                        </Typography>
-                                                        {srErr && (
-                                                            <Typography variant="caption" sx={{ display: 'block', color: '#d32f2f', fontSize: '0.6rem', pl: 1 }}>
-                                                                {srErr}
-                                                            </Typography>
-                                                        )}
-                                                        {/* Per-channel errors */}
-                                                        {channels && channels.filter(c => !c.passed).map((c, ci) => (
-                                                            <Typography key={ci} variant="caption" sx={{ display: 'block', color: '#d32f2f', fontSize: '0.58rem', pl: 2 }}>
-                                                                ch {String(c.channel)}: {String(c.error ?? 'readback LOW')} · {c.duration_ms}ms
-                                                            </Typography>
-                                                        ))}
-                                                    </Box>
-                                                )
-                                            })}
-                                        </Box>
-                                    ) : (
-                                        /* Fallback for results without sub-structure (e.g. compare-topology) */
-                                        <Typography variant="caption" sx={{ display: 'block', color: '#777', fontSize: '0.62rem', pl: 1 }}>
-                                            {String((r as Record<string, unknown>).error ?? (passed ? 'no differences' : 'differences found'))}
-                                        </Typography>
-                                    )}
-                                    {(r as Record<string, unknown>).error && (
-                                        <Typography variant="caption" color="error" sx={{ display: 'block', fontSize: '0.62rem' }}>
-                                            {String((r as Record<string, unknown>).error)}
-                                        </Typography>
-                                    )}
-                                </Box>
-                            )
-                        })}
-                    </Paper>
+                    <TestResults
+                        status={runState.status}
+                        results={runState.results}
+                        currentModule={runState.progress?.current_module ?? null}
+                    />
                 )}
 
                 {runState.status === 'idle' && !busy && (
@@ -403,45 +223,11 @@ export default function TestRunTab({ ip }: Props) {
             </Stack>
 
             {/* ── Right column: live log ── */}
-            <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <Paper variant="outlined" sx={{ p: 1.5, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                    <Stack direction="row" sx={{ alignItems: 'center', mb: 0.5, flexShrink: 0 }} spacing={1}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600, flex: 1 }}>
-                            Live Log
-                        </Typography>
-                        {runState.logs && runState.logs.length > 0 && (
-                            <Typography variant="caption" color="text.secondary">
-                                {displayLogs.length} entries{sseLogs.length > 0 ? ' (live)' : ''}
-                            </Typography>
-                        )}
-                    </Stack>
-                    <Box ref={logsContainerRef} sx={{
-                        flex: 1,
-                        overflow: 'auto',
-                        background: '#1e1e1e', color: '#d4d4d4',
-                        borderRadius: 1, p: 1, fontFamily: 'monospace',
-                        fontSize: '0.75rem', lineHeight: 1.6,
-                    }}>
-                        {displayLogs.length === 0 && (
-                            <Box sx={{ color: '#555', fontStyle: 'italic', mt: 1 }}>
-                                No log entries yet. Start a test run to see output here.
-                            </Box>
-                        )}
-                        {displayLogs.map((entry, i) => (
-                            <div key={i} style={{
-                                color: entry.level === 'error' ? '#f44747' :
-                                    entry.level === 'warning' ? '#cca700' : '#d4d4d4',
-                            }}>
-                                <span style={{ color: '#608b4e', userSelect: 'none' }}>
-                                    [{entry.timestamp?.slice(11, 19) ?? '--:--:--'}]
-                                </span>{' '}
-                                {entry.message}
-                            </div>
-                        ))}
-                        <div ref={logsEndRef} />
-                    </Box>
-                </Paper>
-            </Box>
+            <TestLiveLog
+                displayLogs={displayLogs}
+                sseLogsActive={sseLogs.length > 0}
+                hasLogs={!!runState.logs && runState.logs.length > 0}
+            />
 
         </Box>
     )

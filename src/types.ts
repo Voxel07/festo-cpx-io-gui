@@ -74,3 +74,104 @@ export interface ConnectionFile {
     /** MountedValves per valve-body module, keyed by address string */
     mounted_valves?: Record<string, number[]>
 }
+
+
+// ── BenchConfig Schema ────────────────────────────────────────────────────────
+
+export interface TestBenchMetadata {
+    id: string
+    name: string
+    description: string
+    ip_address: string
+    version: string
+}
+
+export interface ChannelDefinition {
+    index: number
+    port_index?: number
+    name: string
+    supported_modes?: string[]
+    default_mode?: string
+    current_mode?: string
+    capabilities: string[]
+}
+
+export interface ModuleTypeDefinition {
+    module_code: number
+    product_family: string
+    capabilities: string[]
+    num_inputs: number
+    num_outputs: number
+    num_configurable: number
+    valve_count: number
+    channels: ChannelDefinition[]
+    image_asset?: string
+}
+
+export interface ModuleInstance {
+    instance_id: string
+    display_name: string
+    module_code: number
+    product_key: string
+    address: number
+    category: 'input' | 'output' | 'inout' | 'bus' | 'valve'
+    module_type_ref: string
+    mounted_valves?: number[]
+}
+
+export interface WiringConnection {
+    id: string
+    source_instance_id: string
+    source_channel: string
+    target_instance_id: string
+    target_channel: string
+    source_handle?: string
+    target_handle?: string
+    label?: string
+    waypoints?: Array<{ x: number; y: number }>
+    straight?: boolean
+}
+
+export interface TestDefinition {
+    test_id: string
+    name: string
+    version: string
+    description: string
+    required_capabilities: string[]
+    required_wiring_type?: 'physical' | 'simulated' | 'virtual'
+    supported_categories: string[]
+    safety_class: 'safe' | 'caution' | 'destructive'
+    allowed_in_ci: boolean
+    can_run_parallel?: boolean
+    parameters?: Record<string, unknown>
+}
+
+export interface UIModulePosition {
+    instance_id: string
+    x: number
+    y: number
+    image_path?: string
+}
+
+export interface UIChannelAnchor {
+    instance_id: string
+    channel_index: number
+    anchor_x: number
+    anchor_y: number
+    hotspot_radius?: number
+}
+
+export interface UIVisualizationMetadata {
+    module_positions?: UIModulePosition[]
+    channel_anchors?: UIChannelAnchor[]
+}
+
+export interface BenchConfig {
+    schema_version: string
+    test_bench: TestBenchMetadata
+    module_types: Record<string, ModuleTypeDefinition>
+    module_instances: ModuleInstance[]
+    wiring: WiringConnection[]
+    test_definitions?: TestDefinition[]
+    ui_metadata?: UIVisualizationMetadata
+}

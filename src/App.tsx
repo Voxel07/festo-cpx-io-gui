@@ -6,7 +6,8 @@ import TestRunTab from './components/TestRunTab'
 import HistoryTab from './components/HistoryTab'
 import TopologyFlow from './components/TopologyFlow'
 import ConnectionsFlow from './components/ConnectionsFlow'
-import type { Topology, DiffStatus, TopologyModule } from './types'
+import type { Topology, DiffStatus, TopologyModule, BenchConfig } from './types'
+import { configToTopology } from './utils/configMapper'
 
 const MIN_CANVAS_H = 140
 const MAX_CANVAS_H = 800
@@ -103,10 +104,19 @@ export default function App() {
         window.addEventListener('mouseup', onUp)
     }, [canvasW])
 
-    function onResult(topo: Topology | null, status: DiffStatus | null, removed: TopologyModule[] = []) {
+    const [rawConfig, setRawConfig] = useState<BenchConfig | null>(null)
+
+    function onResult(topo: Topology | null, status: DiffStatus | null, removed: TopologyModule[] = [], config?: BenchConfig) {
         setTopology(topo)
         setDiff(status)
         setRemovedModules(removed)
+        if (config) setRawConfig(config)
+    }
+
+    /** Sync topology + rawConfig when a BenchConfig is loaded in ConnectionsFlow */
+    function onConfigLoad(config: BenchConfig) {
+        setRawConfig(config)
+        setTopology(configToTopology(config))
     }
 
     /** Patch MountedValves on a module entry when user configures valves in ConnectionsFlow */
@@ -118,6 +128,15 @@ export default function App() {
                 Topology: prev.Topology.map(m =>
                     m.Adress === addr ? { ...m, MountedValves: mountedValves } : m
                 ),
+            }
+        })
+        setRawConfig(prev => {
+            if (!prev) return prev
+            return {
+                ...prev,
+                module_instances: (prev.module_instances || []).map(inst =>
+                    inst.address === addr ? { ...inst, mounted_valves: mountedValves } : inst
+                )
             }
         })
     }
@@ -251,6 +270,7 @@ export default function App() {
                                 diffStatus={diffStatus}
                                 ip={ip}
                                 onModuleValveChange={onModuleValveChange}
+                                onConfigLoad={onConfigLoad}
                             />
                         </Box>
                     )}
