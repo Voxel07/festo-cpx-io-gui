@@ -8,11 +8,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
     Box, Stack, Typography, Paper, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, Chip, IconButton,
-    Drawer, Divider, CircularProgress,
+    TableContainer, TableHead, TableRow, Chip, Drawer, Divider, CircularProgress,
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import CloseIcon from '@mui/icons-material/Close'
+import DeleteIcon from '@mui/icons-material/Delete'
+import { TooltipButton, TooltipIconButton } from './TooltipButton'
 
 interface LogEntry {
     level: string
@@ -103,9 +104,37 @@ export default function HistoryTab() {
                 <Typography variant="h6" sx={{ fontWeight: 600, flex: 1 }}>
                     Test Run History
                 </Typography>
-                <IconButton onClick={fetchHistory} disabled={loading}>
-                    {loading ? <CircularProgress size={20} /> : <RefreshIcon />}
-                </IconButton>
+                {runs.length > 0 && (
+                    <TooltipButton
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                        onClick={async () => {
+                            if (window.confirm("Are you sure you want to clear all test run history?")) {
+                                try {
+                                    const r = await fetch('/test-run', { method: 'DELETE' })
+                                    if (r.ok) {
+                                        fetchHistory()
+                                        setSelectedRun(null)
+                                    }
+                                } catch (err) {
+                                    alert(`Failed to delete: ${err}`)
+                                }
+                            }
+                        }}
+                        tooltip="Delete all test runs in the database"
+                        icon={<DeleteIcon />}
+                        sx={{ fontSize: '0.72rem', py: 0.3 }}
+                    >
+                        Delete All
+                    </TooltipButton>
+                )}
+                <TooltipIconButton
+                    onClick={fetchHistory}
+                    disabled={loading}
+                    tooltip="Refresh test run history"
+                    icon={loading ? <CircularProgress size={20} /> : <RefreshIcon />}
+                />
             </Stack>
 
             {runs.length === 0 && !loading && (
@@ -125,6 +154,7 @@ export default function HistoryTab() {
                                 <TableCell sx={{ fontWeight: 600 }}>Tests</TableCell>
                                 <TableCell sx={{ fontWeight: 600 }}>Started</TableCell>
                                 <TableCell sx={{ fontWeight: 600 }}>Completed</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -173,6 +203,30 @@ export default function HistoryTab() {
                                                 {formatTime(run.completed_at)}
                                             </Typography>
                                         </TableCell>
+                                        <TableCell align="right">
+                                            <TooltipIconButton
+                                                size="small"
+                                                color="error"
+                                                onClick={async (e) => {
+                                                    e.stopPropagation()
+                                                    if (window.confirm(`Delete test run ${run.run_id}?`)) {
+                                                        try {
+                                                            const r = await fetch(`/test-run/${run.run_id}`, { method: 'DELETE' })
+                                                            if (r.ok) {
+                                                                fetchHistory()
+                                                                if (selectedRun?.run_id === run.run_id) {
+                                                                    setSelectedRun(null)
+                                                                }
+                                                            }
+                                                        } catch (err) {
+                                                            alert(`Failed to delete: ${err}`)
+                                                        }
+                                                    }
+                                                }}
+                                                tooltip="Delete this test run"
+                                                icon={<DeleteIcon fontSize="small" />}
+                                            />
+                                        </TableCell>
                                     </TableRow>
                                 )
                             })}
@@ -194,9 +248,12 @@ export default function HistoryTab() {
                             <Typography variant="h6" sx={{ flex: 1, fontWeight: 600 }}>
                                 {selectedRun.run_id}
                             </Typography>
-                            <IconButton onClick={() => setSelectedRun(null)} size="small">
-                                <CloseIcon />
-                            </IconButton>
+                            <TooltipIconButton
+                                onClick={() => setSelectedRun(null)}
+                                size="small"
+                                tooltip="Close detail drawer"
+                                icon={<CloseIcon />}
+                            />
                         </Stack>
 
                         <Stack direction="row" spacing={2}>

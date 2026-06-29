@@ -28,6 +28,8 @@ interface Props {
     fitViewPadding?: number
     /** Right-click on a module node */
     onNodeContextMenu?: NodeMouseHandler<Node>
+    onNodeClick?: NodeMouseHandler<Node>
+    elementsSelectable?: boolean
     children?: ReactNode
 }
 
@@ -39,6 +41,8 @@ export default function TopologyCanvas({
     fitView = true,
     fitViewPadding = 0.25,
     onNodeContextMenu,
+    onNodeClick,
+    elementsSelectable = editMode,
     children,
 }: Props) {
     return (
@@ -53,8 +57,9 @@ export default function TopologyCanvas({
             onReconnect={onReconnect}
             isValidConnection={isValidConnection}
             onNodeContextMenu={onNodeContextMenu}
+            onNodeClick={onNodeClick}
             edgesReconnectable={editMode}
-            elementsSelectable={editMode}
+            elementsSelectable={elementsSelectable}
             nodesDraggable={editMode}
             nodesConnectable={editMode}
             fitView={fitView}

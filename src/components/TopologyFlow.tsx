@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Box, Button, Tooltip, Typography, Divider, Alert } from '@mui/material'
+import { Box, Typography, Divider, Alert } from '@mui/material'
+import CableIcon from '@mui/icons-material/Cable'
+import LinkIcon from '@mui/icons-material/Link'
+import FullscreenIcon from '@mui/icons-material/Fullscreen'
+import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
+import { TooltipButton } from './TooltipButton'
 import {
     useNodesState,
     useEdgesState,
@@ -23,14 +28,15 @@ const NODE_TYPES: NodeTypes = {
 
 // ── Custom cable edge: 6-segment orthogonal route with stubs ───────────────
 // Path: exit source LEFT → go up → run horizontal → approach target from LEFT → enter target
-function CableEdge({ sourceX, sourceY, targetX, targetY, label, style, markerEnd }: EdgeProps) {
+function CableEdge({ sourceX, sourceY, targetX, targetY, label, style, markerEnd, data }: EdgeProps) {
+    const isExitRight = (data as Record<string, unknown>)?.exitRight === true
     const STUB = 50   // horizontal stub before going vertical
     const aboveY = Math.min(sourceY, targetY) - 80
-    const x1 = sourceX - STUB   // exit source going left
+    const x1 = isExitRight ? sourceX + STUB : sourceX - STUB   // exit source going left/right
     const x2 = targetX - STUB   // approach target from the left
     const path = [
         `M ${sourceX},${sourceY}`,
-        `L ${x1},${sourceY}`,     // go left from source
+        `L ${x1},${sourceY}`,     // go left/right from source
         `L ${x1},${aboveY}`,      // go up
         `L ${x2},${aboveY}`,      // run horizontal
         `L ${x2},${targetY}`,     // go down to target level
@@ -96,9 +102,15 @@ interface Props {
     onToggleFullscreen: () => void
     /** Module address currently being tested (for highlighting) */
     activeModuleAddr?: number | null
+    /** Module address currently selected in Raw Mode (for highlighting) */
+    selectedModuleAddr?: number | null
+    onSelectModuleAddr?: (addr: number | null) => void
 }
 
-export default function TopologyFlow({ topology, diffStatus, removedModules = [], fullscreen, onToggleFullscreen, activeModuleAddr = null }: Props) {
+export default function TopologyFlow({
+    topology, diffStatus, removedModules = [], fullscreen, onToggleFullscreen,
+    activeModuleAddr = null, selectedModuleAddr = null, onSelectModuleAddr
+}: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
     const [showApCables, setShowApCables] = useState(true)
@@ -159,7 +171,8 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
             // derive the correct hidden set — even when MountedValves is empty
             // (all unmounted) or full (all mounted).
             const isValveBody = mod?.Type === 'Valve' || (mod?.MountedValves?.length ?? 0) > 0
-            const active = activeModuleAddr != null && n.id === String(activeModuleAddr) && n.type === 'mod'
+            const active = (activeModuleAddr != null && n.id === String(activeModuleAddr) && n.type === 'mod')
+                || (selectedModuleAddr != null && n.id === String(selectedModuleAddr) && n.type === 'mod')
             const prev = prevNodeMap.get(n.id)
             const prevHidden = prev ? (prev.data as Record<string, unknown>).hiddenValves : undefined
             return {
@@ -175,7 +188,7 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
         })
         setNodes(enriched)
         setEdges([...chainEdges, ...ioEdgesRef.current])
-    }, [topology, diffStatus, removedModules, activeModuleAddr, setNodes, setEdges])
+    }, [topology, diffStatus, removedModules, activeModuleAddr, selectedModuleAddr, setNodes, setEdges])
 
     const onEdgesChange = useCallback((changes: EdgeChange[]) => {
         _onEdgesChange(changes.filter(c => c.type !== 'remove'))
@@ -188,6 +201,15 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
         if (kind === 'io') return showIoCables
         return true
     })
+
+    const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+        if (onSelectModuleAddr && node.type === 'mod') {
+            const mod = (node.data as any).mod as TopologyModule
+            if (mod) {
+                onSelectModuleAddr(mod.Adress)
+            }
+        }
+    }, [onSelectModuleAddr])
 
     if (!topology) {
         return (
@@ -225,6 +247,8 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
                 onEdgesChange={onEdgesChange}
                 editMode={false}
                 fitView
+                onNodeClick={handleNodeClick}
+                elementsSelectable={!!onSelectModuleAddr}
             >
                 <Panel position="top-right">
                     <Box sx={{
@@ -233,23 +257,42 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
                         display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 200,
                     }}>
                         {/* AP Cable toggle */}
-                        <Button size="small" variant={showApCables ? 'contained' : 'outlined'} color="primary"
+                        <TooltipButton
+                            size="small"
+                            variant={showApCables ? 'contained' : 'outlined'}
+                            color="primary"
                             onClick={() => setShowApCables(s => !s)}
-                            sx={{ fontSize: '0.65rem', py: 0.25 }}>
-                            {showApCables ? '🔌 AP Cables ON' : '🔌 AP Cables OFF'}
-                        </Button>
+                            tooltip={showApCables ? 'Hide AP transmission cables' : 'Show AP transmission cables'}
+                            icon={<CableIcon />}
+                            sx={{ fontSize: '0.65rem', py: 0.25 }}
+                        >
+                            {showApCables ? 'AP Cables ON' : 'AP Cables OFF'}
+                        </TooltipButton>
+
                         {/* IO Cable toggle */}
-                        <Button size="small" variant={showIoCables ? 'contained' : 'outlined'} color="warning"
+                        <TooltipButton
+                            size="small"
+                            variant={showIoCables ? 'contained' : 'outlined'}
+                            color="warning"
                             onClick={() => setShowIoCables(s => !s)}
-                            sx={{ fontSize: '0.65rem', py: 0.25 }}>
-                            {showIoCables ? '🔗 IO Wires ON' : '🔗 IO Wires OFF'}
-                        </Button>
-                        <Tooltip title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
-                            <Button size="small" variant="outlined" onClick={onToggleFullscreen}
-                                sx={{ minWidth: 32, px: 0.5, fontSize: '1rem' }}>
-                                {fullscreen ? '⊠' : '⛶'}
-                            </Button>
-                        </Tooltip>
+                            tooltip={showIoCables ? 'Hide IO connection wires' : 'Show IO connection wires'}
+                            icon={<LinkIcon />}
+                            sx={{ fontSize: '0.65rem', py: 0.25 }}
+                        >
+                            {showIoCables ? 'IO Wires ON' : 'IO Wires OFF'}
+                        </TooltipButton>
+
+                        {/* Fullscreen toggle */}
+                        <TooltipButton
+                            size="small"
+                            variant="outlined"
+                            onClick={onToggleFullscreen}
+                            tooltip={fullscreen ? 'Exit fullscreen mode' : 'Enter fullscreen mode'}
+                            icon={fullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+                            sx={{ minWidth: 32, px: 0.5 }}
+                        >
+                            {fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                        </TooltipButton>
                         <Divider />
                         <Typography sx={{ fontSize: '0.54rem', color: '#888', lineHeight: 1.7 }}>
                             <span style={{ color: '#1976d2' }}>■</span> unchanged&nbsp;

@@ -7,9 +7,21 @@
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
-    Box, Button, TextField, Typography, Divider, Alert, Tooltip,
+    Box, TextField, Typography, Divider, Alert,
     Stack, Chip, CircularProgress,
 } from '@mui/material'
+import CableIcon from '@mui/icons-material/Cable'
+import TimelineIcon from '@mui/icons-material/Timeline'
+import PowerIcon from '@mui/icons-material/Power'
+import SaveIcon from '@mui/icons-material/Save'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import DeleteIcon from '@mui/icons-material/Delete'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import SettingsInputComponentIcon from '@mui/icons-material/SettingsInputComponent'
+import BoltIcon from '@mui/icons-material/Bolt'
+import RefreshIcon from '@mui/icons-material/Refresh'
+import { Tooltip } from '@mui/material'
+import { TooltipButton, TooltipIconButton } from './TooltipButton'
 import {
     useNodesState,
     useEdgesState,
@@ -78,6 +90,13 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     const [statusMsg, setStatusMsg] = useState<{ text: string; severity: 'success' | 'error' } | null>(null)
     const [wiringDisplay, setWiringDisplay] = useState<'all' | 'selected' | 'none'>('all')
     const [straightWires, setStraightWires] = useState(false)
+
+    // ── Power Supply configuration state ───────────────────
+    const [showPsConfig, setShowPsConfig] = useState(false)
+    const [psComPort, setPsComPort] = useState<string>('')
+    const [psIpAddr, setPsIpAddr] = useState<string>('')
+    const [psPlChannel, setPsPlChannel] = useState<string>('')
+    const [psPsChannel, setPsPsChannel] = useState<string>('')
 
     // ── Wire Test state ────────────────────────────────────
     const [showTestPanel, setShowTestPanel] = useState(false)
@@ -316,6 +335,13 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 return inst
             })
 
+            config.power_supply = {
+                ComPort: psComPort.trim() || null,
+                'Ip addr': psIpAddr.trim() || null,
+                pl_channel: psPlChannel.trim() ? parseInt(psPlChannel) : null,
+                ps_channel: psPsChannel.trim() ? parseInt(psPsChannel) : null,
+            }
+
             // 4. Save entire BenchConfig
             const saveRes = await fetch('/config', {
                 method: 'POST',
@@ -340,6 +366,18 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             const r = await fetch(`/config?file_path=${encodeURIComponent(loadPath)}`)
             const d: BenchConfig = await r.json()
             if (!r.ok) { setStatusMsg({ text: `Error: ${(d as any).detail ?? 'Unknown error'}`, severity: 'error' }); return }
+
+            if (d.power_supply) {
+                setPsComPort(d.power_supply.ComPort || '')
+                setPsIpAddr(d.power_supply['Ip addr'] || '')
+                setPsPlChannel(d.power_supply.pl_channel != null ? String(d.power_supply.pl_channel) : '')
+                setPsPsChannel(d.power_supply.ps_channel != null ? String(d.power_supply.ps_channel) : '')
+            } else {
+                setPsComPort('')
+                setPsIpAddr('')
+                setPsPlChannel('')
+                setPsPsChannel('')
+            }
 
             // Build an address → category map so we can derive correct handle kind
             const catByAddr: Record<number, string> = {}
@@ -614,8 +652,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 flexWrap: 'wrap',
                 flexShrink: 0,
             }}>
-                <Typography sx={{ fontSize: '0.85rem', fontWeight: 700, color: '#e65100', whiteSpace: 'nowrap' }}>
-                    🔧 I/O Connection Editor
+                <Typography sx={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem', fontWeight: 700, color: '#e65100', whiteSpace: 'nowrap' }}>
+                    <SettingsInputComponentIcon sx={{ fontSize: '1rem', mr: 0.5 }} /> I/O Connection Editor
                 </Typography>
 
                 {ioCount > 0 && (
@@ -629,11 +667,13 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 <Divider orientation="vertical" flexItem />
 
                 {/* Cable visibility toggle */}
-                <Button
+                <TooltipButton
                     size="small"
                     variant={showCables ? 'contained' : 'outlined'}
                     color="inherit"
                     onClick={() => setShowCables(s => !s)}
+                    tooltip={showCables ? 'Hide backplane connections and AP cables' : 'Show backplane connections and AP cables'}
+                    icon={<CableIcon />}
                     sx={{
                         fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
                         color: showCables ? '#fff' : '#546e7a',
@@ -642,8 +682,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                         '&:hover': { borderColor: '#455a64', background: showCables ? '#455a64' : 'rgba(84,110,122,0.08)' },
                     }}
                 >
-                    🔌 {showCables ? 'Hide AP Cables' : 'Show AP Cables'}
-                </Button>
+                    {showCables ? 'Hide AP Cables' : 'Show AP Cables'}
+                </TooltipButton>
 
                 <Divider orientation="vertical" flexItem />
 
@@ -652,45 +692,70 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     <Typography sx={{ fontSize: '0.72rem', fontWeight: 600, color: '#333', whiteSpace: 'nowrap' }}>
                         Wiring View:
                     </Typography>
-                    <Button
+                    <TooltipButton
                         size="small"
                         variant={wiringDisplay === 'all' ? 'contained' : 'outlined'}
                         onClick={() => setWiringDisplay('all')}
+                        tooltip="Show all I/O wiring lines"
                         sx={{ fontSize: '0.68rem', py: 0.2, px: 1, minWidth: 40 }}
                     >
                         All
-                    </Button>
-                    <Button
+                    </TooltipButton>
+                    <TooltipButton
                         size="small"
                         variant={wiringDisplay === 'selected' ? 'contained' : 'outlined'}
                         color="warning"
                         onClick={() => setWiringDisplay('selected')}
+                        tooltip="Only show wiring connected to the currently selected module"
                         sx={{ fontSize: '0.68rem', py: 0.2, px: 1, minWidth: 80 }}
                     >
                         Selected Only
-                    </Button>
-                    <Button
+                    </TooltipButton>
+                    <TooltipButton
                         size="small"
                         variant={wiringDisplay === 'none' ? 'contained' : 'outlined'}
                         onClick={() => setWiringDisplay('none')}
+                        tooltip="Hide all I/O wiring lines"
                         sx={{ fontSize: '0.68rem', py: 0.2, px: 1, minWidth: 50 }}
                     >
                         Hidden
-                    </Button>
+                    </TooltipButton>
                 </Stack>
 
                 <Divider orientation="vertical" flexItem />
 
                 {/* Wire routing style */}
-                <Button
+                <TooltipButton
                     size="small"
                     variant={straightWires ? 'contained' : 'outlined'}
                     color="primary"
                     onClick={() => setStraightWires(s => !s)}
+                    tooltip={straightWires ? 'Use smart right-angle routing' : 'Use point-to-point straight line routing'}
+                    icon={<TimelineIcon />}
                     sx={{ fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap' }}
                 >
-                    🛣️ {straightWires ? 'Straight Wires' : 'Smart Stepped Wires'}
-                </Button>
+                    {straightWires ? 'Straight Wires' : 'Smart Stepped Wires'}
+                </TooltipButton>
+
+                <Divider orientation="vertical" flexItem />
+
+                {/* Power Supply toggle */}
+                <TooltipButton
+                    size="small"
+                    variant={showPsConfig ? 'contained' : 'outlined'}
+                    onClick={() => setShowPsConfig(s => !s)}
+                    tooltip={showPsConfig ? 'Hide power supply configuration panel' : 'Show power supply configuration panel'}
+                    icon={<PowerIcon />}
+                    sx={{
+                        fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
+                        color: showPsConfig ? '#fff' : '#673ab7',
+                        background: showPsConfig ? '#673ab7' : 'transparent',
+                        borderColor: '#673ab7',
+                        '&:hover': { borderColor: '#5e35b1', background: showPsConfig ? '#5e35b1' : 'rgba(103,58,183,0.08)' },
+                    }}
+                >
+                    Power Supply
+                </TooltipButton>
 
                 <Divider orientation="vertical" flexItem />
 
@@ -706,11 +771,17 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                         sx={{ width: 180 }}
                         slotProps={{ htmlInput: { style: { fontSize: '0.72rem', padding: '4px 8px' } } }}
                     />
-                    <Button size="small" variant="contained" color="success"
+                    <TooltipButton
+                        size="small"
+                        variant="contained"
+                        color="success"
                         onClick={doSave}
-                        sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}>
+                        tooltip="Save wiring and configuration to the JSON file"
+                        icon={<SaveIcon />}
+                        sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}
+                    >
                         Save
-                    </Button>
+                    </TooltipButton>
                 </Stack>
 
                 {/* Load */}
@@ -725,42 +796,52 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                         sx={{ width: 180 }}
                         slotProps={{ htmlInput: { style: { fontSize: '0.72rem', padding: '4px 8px' } } }}
                     />
-                    <Button size="small" variant="outlined" color="primary"
+                    <TooltipButton
+                        size="small"
+                        variant="outlined"
+                        color="primary"
                         onClick={doLoad}
-                        sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}>
+                        tooltip="Load wiring and configuration from the JSON file"
+                        icon={<FolderOpenIcon />}
+                        sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}
+                    >
                         Load
-                    </Button>
+                    </TooltipButton>
                 </Stack>
 
                 {/* Clear */}
                 {ioCount > 0 && (
-                    <Tooltip title="Delete all drawn I/O wires">
-                        <Button size="small" variant="outlined" color="error"
-                            onClick={doClear}
-                            sx={{ fontSize: '0.72rem', py: 0.4, whiteSpace: 'nowrap' }}>
-                            Clear
-                        </Button>
-                    </Tooltip>
+                    <TooltipButton
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        onClick={doClear}
+                        tooltip="Delete all drawn I/O wires"
+                        icon={<DeleteIcon />}
+                        sx={{ fontSize: '0.72rem', py: 0.4, whiteSpace: 'nowrap' }}
+                    >
+                        Clear
+                    </TooltipButton>
                 )}
 
                 {/* Test Wiring toggle */}
                 {ioCount > 0 && (
                     <>
                         <Divider orientation="vertical" flexItem />
-                        <Tooltip title={showTestPanel ? 'Hide wire test panel' : 'Open interactive wire test panel'}>
-                            <Button
-                                size="small"
-                                variant={showTestPanel ? 'contained' : 'outlined'}
-                                color={showTestPanel ? 'warning' : 'inherit'}
-                                onClick={() => setShowTestPanel(p => !p)}
-                                sx={{
-                                    fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
-                                    ...(showTestPanel ? {} : { color: '#546e7a', borderColor: '#546e7a' }),
-                                }}
-                            >
-                                Test Wiring
-                            </Button>
-                        </Tooltip>
+                        <TooltipButton
+                            size="small"
+                            variant={showTestPanel ? 'contained' : 'outlined'}
+                            color={showTestPanel ? 'warning' : 'inherit'}
+                            onClick={() => setShowTestPanel(p => !p)}
+                            tooltip={showTestPanel ? 'Hide interactive wire test panel' : 'Open interactive wire test panel'}
+                            icon={<PlayArrowIcon />}
+                            sx={{
+                                fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
+                                ...(showTestPanel ? {} : { color: '#546e7a', borderColor: '#546e7a' }),
+                            }}
+                        >
+                            Test Wiring
+                        </TooltipButton>
                     </>
                 )}
 
@@ -775,6 +856,68 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     </Alert>
                 )}
             </Box>
+
+            {showPsConfig && (
+                <Box sx={{
+                    background: '#f9f9f9',
+                    borderBottom: '1px solid #e0e0e0',
+                    px: 3, py: 1.5,
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 2,
+                    flexWrap: 'wrap',
+                }}>
+                    <Typography sx={{ display: 'flex', alignItems: 'center', fontSize: '0.78rem', fontWeight: 700, color: '#333' }}>
+                        <PowerIcon sx={{ fontSize: '1rem', mr: 0.5 }} /> Power Supply Configuration:
+                    </Typography>
+                    <TextField
+                        label="COM Port"
+                        size="small"
+                        value={psComPort}
+                        onChange={e => setPsComPort(e.target.value)}
+                        placeholder="e.g. COM3"
+                        sx={{ width: 120, background: '#fff' }}
+                        slotProps={{ htmlInput: { style: { fontSize: '0.75rem', padding: '6px 10px' } } }}
+                        InputLabelProps={{ style: { fontSize: '0.75rem' } }}
+                    />
+                    <TextField
+                        label="IP Address"
+                        size="small"
+                        value={psIpAddr}
+                        onChange={e => setPsIpAddr(e.target.value)}
+                        placeholder="e.g. 192.168.0.20"
+                        sx={{ width: 150, background: '#fff' }}
+                        slotProps={{ htmlInput: { style: { fontSize: '0.75rem', padding: '6px 10px' } } }}
+                        InputLabelProps={{ style: { fontSize: '0.75rem' } }}
+                    />
+                    <TextField
+                        label="PL Channel"
+                        size="small"
+                        type="number"
+                        value={psPlChannel}
+                        onChange={e => setPsPlChannel(e.target.value)}
+                        placeholder="1"
+                        sx={{ width: 100, background: '#fff' }}
+                        slotProps={{ htmlInput: { style: { fontSize: '0.75rem', padding: '6px 10px' } } }}
+                        InputLabelProps={{ style: { fontSize: '0.75rem' } }}
+                    />
+                    <TextField
+                        label="PS Channel"
+                        size="small"
+                        type="number"
+                        value={psPsChannel}
+                        onChange={e => setPsPsChannel(e.target.value)}
+                        placeholder="2"
+                        sx={{ width: 100, background: '#fff' }}
+                        slotProps={{ htmlInput: { style: { fontSize: '0.75rem', padding: '6px 10px' } } }}
+                        InputLabelProps={{ style: { fontSize: '0.75rem' } }}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                        (Only ComPort or IP addr should be populated to connect)
+                    </Typography>
+                </Box>
+            )}
 
             {/* ── Legend Bar ───────────────────────────────────────── */}
             <Box sx={{
@@ -853,26 +996,26 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                                 Input is read automatically. Output stays on until toggled off.
                             </Typography>
                             <Stack direction="row" spacing={0.5}>
-                                <Tooltip title="Pulse each output HIGH→read input→LOW sequentially">
-                                    <span>
-                                        <Button
-                                            size="small" variant="contained" color="warning"
-                                            onClick={testAll}
-                                            disabled={testAllBusy || !ip || testConns.length === 0}
-                                            sx={{ fontSize: '0.7rem', py: 0.3 }}
-                                        >
-                                            ▶ Test All (pulse)
-                                        </Button>
-                                    </span>
-                                </Tooltip>
-                                <Button
+                                <TooltipButton
+                                    size="small" variant="contained" color="warning"
+                                    onClick={testAll}
+                                    disabled={testAllBusy || !ip || testConns.length === 0}
+                                    tooltip="Pulse each output HIGH, read input, and set LOW sequentially"
+                                    icon={<PlayArrowIcon />}
+                                    sx={{ fontSize: '0.7rem', py: 0.3 }}
+                                >
+                                    Test All (pulse)
+                                </TooltipButton>
+                                <TooltipButton
                                     size="small" variant="outlined" color="error"
                                     onClick={clearAllOutputs}
                                     disabled={!Object.values(outputStates).some(v => v)}
+                                    tooltip="Turn off all outputs immediately"
+                                    icon={<BoltIcon />}
                                     sx={{ fontSize: '0.7rem', py: 0.3 }}
                                 >
-                                    ■ All OFF
-                                </Button>
+                                    All OFF
+                                </TooltipButton>
                             </Stack>
                         </Box>
 
@@ -904,12 +1047,13 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                                         </Typography>
                                         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                                             {/* Output toggle */}
-                                            <Button
+                                            <TooltipButton
                                                 size="small"
                                                 variant={isOn ? 'contained' : 'outlined'}
                                                 color={isOn ? 'error' : 'inherit'}
                                                 onClick={() => toggleOutput(conn)}
                                                 disabled={isBusy || testAllBusy || !ip}
+                                                tooltip={isOn ? 'Turn output OFF' : 'Turn output ON'}
                                                 sx={{
                                                     fontSize: '0.68rem', py: 0.2, px: 0.75,
                                                     minWidth: 64, fontWeight: isOn ? 700 : 400,
@@ -920,7 +1064,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                                                 {isBusy
                                                     ? <CircularProgress size={12} color="inherit" />
                                                     : isOn ? 'ON' : 'OFF'}
-                                            </Button>
+                                            </TooltipButton>
 
                                             {/* Input reading result: per-channel chips for M12, single chip otherwise */}
                                             {result && !result.error && result.values && result.values.length > 1
@@ -928,7 +1072,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                                                     <Tooltip key={i} title={`#${conn.tgtAddr}:${conn.tgtCh} channel ${i}`}>
                                                         <Chip
                                                             size="small"
-                                                            label={v ? `✓ CH${i}` : `✗ CH${i}`}
+                                                            label={v ? `CH${i} HIGH` : `CH${i} LOW`}
                                                             color={v ? 'success' : 'error'}
                                                             sx={{ fontSize: '0.65rem', height: 20, cursor: 'default' }}
                                                         />
@@ -938,7 +1082,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                                                     <Tooltip title={result.error ?? `#${conn.tgtAddr}:${conn.tgtCh}`}>
                                                         <Chip
                                                             size="small"
-                                                            label={result.error ? '⚠ ERR' : result.value ? '✓ HIGH' : '✗ LOW'}
+                                                            label={result.error ? 'ERR' : result.value ? 'HIGH' : 'LOW'}
                                                             color={(result.error ? 'default' : result.value ? 'success' : 'error') as 'default' | 'success' | 'error'}
                                                             sx={{ fontSize: '0.65rem', height: 20, cursor: 'default' }}
                                                         />
@@ -948,15 +1092,13 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
                                             {/* Re-read button when output is live */}
                                             {isOn && !isBusy && (
-                                                <Tooltip title={`Read #${conn.tgtAddr}:${conn.tgtCh}`}>
-                                                    <Button
-                                                        size="small" variant="text"
-                                                        onClick={() => doReadInput(conn)}
-                                                        sx={{ fontSize: '0.65rem', py: 0, px: 0.5, minWidth: 0 }}
-                                                    >
-                                                        🔄
-                                                    </Button>
-                                                </Tooltip>
+                                                <TooltipIconButton
+                                                    size="small"
+                                                    onClick={() => doReadInput(conn)}
+                                                    tooltip={`Read #${conn.tgtAddr}:${conn.tgtCh}`}
+                                                    icon={<RefreshIcon sx={{ fontSize: '0.9rem' }} />}
+                                                    sx={{ py: 0, px: 0.5 }}
+                                                />
                                             )}
 
                                             <Typography variant="caption"

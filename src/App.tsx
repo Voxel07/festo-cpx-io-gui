@@ -1,11 +1,20 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Box, AppBar, Toolbar, Typography, TextField, Tabs, Tab, Stack, Button, Tooltip } from '@mui/material'
+import { Box, AppBar, Toolbar, Typography, TextField, Tabs, Tab, Stack } from '@mui/material'
 import type { SxProps, Theme } from '@mui/material'
+import VisibilityIcon from '@mui/icons-material/Visibility'
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+import CloudIcon from '@mui/icons-material/Cloud'
+import CloudOffIcon from '@mui/icons-material/CloudOff'
+import StorageIcon from '@mui/icons-material/Storage'
+import ReportProblemIcon from '@mui/icons-material/ReportProblem'
+import { TooltipButton } from './components/TooltipButton'
 import GenerateCompareTab from './components/GenerateCompareTab'
 import TestRunTab from './components/TestRunTab'
 import HistoryTab from './components/HistoryTab'
 import TopologyFlow from './components/TopologyFlow'
 import ConnectionsFlow from './components/ConnectionsFlow'
+import RawModeTab from './components/RawModeTab'
+import DiagnosticsModal from './components/DiagnosticsModal'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig } from './types'
 import { configToTopology } from './utils/configMapper'
 
@@ -30,6 +39,15 @@ export default function App() {
     const [pbChecking, setPbChecking] = useState(false)
     const [showTopology, setShowTopology] = useState(true)
     const [activeModuleAddr, setActiveModuleAddr] = useState<number | null>(null)
+    const [rawSelectedAddr, setRawSelectedAddr] = useState<number | null>(null)
+    const [diagOpen, setDiagOpen] = useState(false)
+
+    // Clear selection outline when leaving Raw Mode tab
+    useEffect(() => {
+        if (tab !== 3) {
+            setRawSelectedAddr(null)
+        }
+    }, [tab])
 
     async function checkPocketBase() {
         setPbChecking(true)
@@ -160,32 +178,49 @@ export default function App() {
                         sx={{ ...appBarFieldSx, width: 120 }}
                     />
                     <Stack direction="row" spacing={1} sx={{ ml: 'auto', alignItems: 'center' }}>
-                        <Tooltip title={showTopology ? 'Hide topology map' : 'Show topology map'}>
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => setShowTopology(s => !s)}
-                                sx={{ fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap', color: '#fff', borderColor: 'rgba(255,255,255,0.4)' }}
-                            >
-                                {showTopology ? '▼ Map' : '▶ Map'}
-                            </Button>
-                        </Tooltip>
-                        <Tooltip title={pbStatus === 'ok' ? 'PocketBase: connected' : pbStatus === 'error' ? 'PocketBase: unreachable' : 'Check PocketBase connection'}>
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={checkPocketBase}
-                                disabled={pbChecking}
-                                sx={{
-                                    fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap',
-                                    borderColor: pbStatus === 'ok' ? '#4caf50' : pbStatus === 'error' ? '#f44336' : 'rgba(255,255,255,0.5)',
-                                    color: pbStatus === 'ok' ? '#4caf50' : pbStatus === 'error' ? '#f44336' : '#fff',
-                                    '&:hover': { borderColor: '#fff', color: '#fff' },
-                                }}
-                            >
-                                {pbChecking ? '…' : pbStatus === 'ok' ? '🟢 PocketBase' : pbStatus === 'error' ? '🔴 PocketBase' : '⚪ PocketBase'}
-                            </Button>
-                        </Tooltip>
+                        <TooltipButton
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setShowTopology(s => !s)}
+                            tooltip={showTopology ? 'Hide topology map' : 'Show topology map'}
+                            icon={showTopology ? <VisibilityOffIcon sx={{ fontSize: '1rem' }} /> : <VisibilityIcon sx={{ fontSize: '1rem' }} />}
+                            sx={{ fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap', color: '#fff', borderColor: 'rgba(255,255,255,0.4)', '& .MuiButton-startIcon': { mr: 0.5 } }}
+                        >
+                            Map
+                        </TooltipButton>
+                        <TooltipButton
+                            size="small"
+                            variant="outlined"
+                            onClick={checkPocketBase}
+                            disabled={pbChecking}
+                            tooltip={pbStatus === 'ok' ? 'PocketBase: connected' : pbStatus === 'error' ? 'PocketBase: unreachable' : 'Check PocketBase connection'}
+                            icon={pbStatus === 'ok' ? <CloudIcon sx={{ fontSize: '1rem' }} /> : pbStatus === 'error' ? <CloudOffIcon sx={{ fontSize: '1rem' }} /> : <StorageIcon sx={{ fontSize: '1rem' }} />}
+                            sx={{
+                                fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap',
+                                borderColor: pbStatus === 'ok' ? '#4caf50' : pbStatus === 'error' ? '#f44336' : 'rgba(255,255,255,0.5)',
+                                color: pbStatus === 'ok' ? '#4caf50' : pbStatus === 'error' ? '#f44336' : '#fff',
+                                '&:hover': { borderColor: '#fff', color: '#fff' },
+                                '& .MuiButton-startIcon': { mr: 0.5 }
+                            }}
+                        >
+                            {pbChecking ? 'Checking...' : 'PocketBase'}
+                        </TooltipButton>
+                        <TooltipButton
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setDiagOpen(true)}
+                            tooltip="Show live system diagnostics raised"
+                            icon={<ReportProblemIcon sx={{ fontSize: '1rem' }} />}
+                            sx={{
+                                fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap',
+                                borderColor: 'rgba(255,255,255,0.5)',
+                                color: '#fff',
+                                '&:hover': { borderColor: '#fff', color: '#fff' },
+                                '& .MuiButton-startIcon': { mr: 0.5 }
+                            }}
+                        >
+                            Diags
+                        </TooltipButton>
                     </Stack>
                 </Toolbar>
             </AppBar>
@@ -215,6 +250,8 @@ export default function App() {
                         fullscreen={fullscreen}
                         onToggleFullscreen={() => setFullscreen(f => !f)}
                         activeModuleAddr={activeModuleAddr}
+                        selectedModuleAddr={tab === 3 ? rawSelectedAddr : null}
+                        onSelectModuleAddr={tab === 3 ? setRawSelectedAddr : undefined}
                     />
                 </Box>
 
@@ -250,6 +287,7 @@ export default function App() {
                         <Tab label="Topology" sx={{ minHeight: 38 }} />
                         <Tab label="Connections" sx={{ minHeight: 38 }} />
                         <Tab label="Test Run" sx={{ minHeight: 38 }} />
+                        <Tab label="Raw Mode" sx={{ minHeight: 38 }} />
                         <Tab label="History" sx={{ minHeight: 38 }} />
                     </Tabs>
                 </Box>
@@ -276,12 +314,21 @@ export default function App() {
                     )}
                     {tab === 2 && <TestRunTab ip={ip} />}
                     {tab === 3 && (
+                        <RawModeTab
+                            topology={topology}
+                            ip={ip}
+                            selectedModuleAddr={rawSelectedAddr}
+                            onSelectModuleAddr={setRawSelectedAddr}
+                        />
+                    )}
+                    {tab === 4 && (
                         <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
                             <HistoryTab />
                         </Box>
                     )}
                 </Box>
             )}
+            <DiagnosticsModal open={diagOpen} onClose={() => setDiagOpen(false)} ip={ip} />
         </Box>
     )
 }

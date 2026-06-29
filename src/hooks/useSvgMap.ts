@@ -43,9 +43,23 @@ export function resolveIcon(
     maps: { byName: SvgMap; byCode: SvgMap },
     moduleCode?: number,
 ): string {
-    const file = maps.byName[name]
+    let file = maps.byName[name]
         ?? (moduleCode != null ? maps.byCode[String(moduleCode)] : undefined)
-        ?? 'CPX-AP-A_Generic.svg'
+
+    if (!file) {
+        const upperName = name.toUpperCase()
+        if (upperName.includes('CPX-AP-I') || upperName.includes('AP-I')) {
+            if (upperName.includes('M12')) {
+                file = 'CPX-AP-I-M12.svg'
+            } else if (upperName.includes('M8') || upperName.includes('16DI')) {
+                file = 'CPX-AP-I-M8.svg'
+            }
+        }
+    }
+
+    if (!file) {
+        file = 'CPX-AP-A_Generic.svg'
+    }
     return `/svg/${file}`
 }
 

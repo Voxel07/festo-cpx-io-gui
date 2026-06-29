@@ -22,10 +22,15 @@ export function isVabxApInterface(name: string): boolean {
     return /^VABX-A-(?:S-)?EL-\w+-API/.test(name)
 }
 
+export function isApIM12orM8(name: string): boolean {
+    const upperName = name.toUpperCase()
+    return (upperName.includes('CPX-AP-I') || upperName.includes('AP-I')) && (upperName.includes('M12') || upperName.includes('M8'))
+}
+
 /** AP-chain interface — module that has explicit ap-in / ap-out handles instead of
  *  the standard left/right cable handles. */
 export function isApChainInterface(name: string): boolean {
-    return isEpli(name) || isVabxApInterface(name)
+    return isEpli(name) || isVabxApInterface(name) || isApIM12orM8(name)
 }
 
 /** Handle position percentages within the SVG image container box (60 × 128 px).
@@ -38,6 +43,12 @@ export function getApHandlePos(name: string): {
         // VABX-A-EL-API-S.svg viewBox 46×109; objectFit:contain scale = 128/109 ≈ 1.174
         // XF10 cy=23.5 → 21.6 %  |  XF20 cy=44.5 → 40.8 %  |  cx=12.0 → 28.5 %
         return { apInTop: '21.6%', apInLeft: '28.5%', apOutTop: '40.8%', apOutLeft: '28.5%' }
+    }
+    if (isApIM12orM8(name)) {
+        // M12/M8 SVG 33.005×186; objectFit:contain scale = 128/186 ≈ 0.688
+        // XF10 cx=8.5, cy=139.5 → cx = 25.75%, cy = 75%
+        // XF20 cx=25.5, cy=139.5 → cx = 77.26%, cy = 75%
+        return { apInTop: '75%', apInLeft: '25.75%', apOutTop: '75%', apOutLeft: '77.26%' }
     }
     // EPLI SVG 31×107; objectFit:contain scale = 128/107 ≈ 1.196
     // XF10 cy=40.5 → 37.85 %  |  XF20 cy=56.5 → 52.8 %  |  cx=15.5 → 50 %
@@ -217,6 +228,9 @@ export function buildLayout(
         const tgtNode   = next.epliId ?? nextFirstId
         const tgtHandle = next.epliId ? 'ap-in' : 'left'
 
+        const srcMod = mods.find(m => String(m.Adress) === srcNode)
+        const exitRight = srcMod ? isApIM12orM8(srcMod.Name) : false
+
         edges.push({
             id: `cable-${si}`,
             source: srcNode,
@@ -229,7 +243,7 @@ export function buildLayout(
             labelBgStyle: { fill: '#e3f2fd', fillOpacity: 0.9 },
             style: cableStyle,
             zIndex: 2,
-            data: { kind: 'cable' },
+            data: { kind: 'cable', exitRight },
         })
     })
 

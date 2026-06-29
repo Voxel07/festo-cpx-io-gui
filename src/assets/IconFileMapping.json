@@ -69,6 +69,12 @@
       "ModuleCode": "8199"
     },
     {
+      "OrderCode": "CPX-AP-I-16DI-M8-3P",
+      "PartNumber": "8086600",
+      "FileName": "CPX-AP-I-M8.svg",
+      "ModuleCode": "8501"
+    },
+    {
       "OrderCode": "CPX-AP-I-8DI-M12-5P",
       "PartNumber": "8086602",
       "FileName": "CPX-AP-I-M12.svg",
