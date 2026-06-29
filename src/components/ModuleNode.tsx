@@ -1,5 +1,5 @@
 import { memo, Fragment, useState, useEffect } from 'react'
-import { Handle, Position, useReactFlow } from '@xyflow/react'
+import { Handle, Position, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
 import type { NodeProps, Node } from '@xyflow/react'
 import { Box, Typography, Chip, Tooltip, IconButton } from '@mui/material'
 import type { ChipOwnProps } from '@mui/material'
@@ -107,6 +107,12 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
     const [valveEditorOpen, setValveEditorOpen] = useState(false)
     const { setNodes } = useReactFlow()
+    const updateNodeInternals = useUpdateNodeInternals()
+
+    // Notify React Flow when SVG port handles mount/dismount so edges can resolve
+    useEffect(() => {
+        if (nodeId) updateNodeInternals(nodeId)
+    }, [ports, nodeId, updateNodeInternals])
 
     // When valveGroups are loaded and mod.MountedValves is known, derive hiddenValves.
     // undefined MountedValves → effect is skipped → hiddenValves stays [] (all mounted by default).
@@ -177,19 +183,29 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     style={{ background: '#546e7a', width: 10, height: 10, border: '2px solid #fff' }} />
             )}
 
-            {/* ── Generic fallback IO handles (edit mode, not suppressed) ── */}
-            {editMode && !suppressIoHandles && !hasPorts && Array.from({ length: topCount }, (_, i) => (
+            {/* ── Generic fallback IO handles (always rendered, invisible when not editing) ── */}
+            {!suppressIoHandles && !hasPorts && Array.from({ length: topCount }, (_, i) => (
                 <Handle key={`fo-${i}`} id={`src-out-out${i}`} type="source" position={Position.Top}
                     style={{
-                        left: pct(i, topCount), background: PORT_COLOR.out,
-                        width: 9, height: 9, border: '2px solid #fff', borderRadius: '50%', top: -5
+                        left: pct(i, topCount),
+                        background: editMode ? PORT_COLOR.out : 'transparent',
+                        width: 9, height: 9,
+                        border: editMode ? '2px solid #fff' : 'none',
+                        borderRadius: '50%', top: -5,
+                        opacity: editMode ? 1 : 0,
+                        pointerEvents: editMode ? undefined : 'none',
                     }} />
             ))}
-            {editMode && !suppressIoHandles && !hasPorts && Array.from({ length: botCount }, (_, i) => (
+            {!suppressIoHandles && !hasPorts && Array.from({ length: botCount }, (_, i) => (
                 <Handle key={`fi-${i}`} id={`tgt-in-in${i}`} type="target" position={Position.Bottom}
                     style={{
-                        left: pct(i, botCount), background: PORT_COLOR.in,
-                        width: 9, height: 9, border: '2px solid #fff', borderRadius: '50%', bottom: -5
+                        left: pct(i, botCount),
+                        background: editMode ? PORT_COLOR.in : 'transparent',
+                        width: 9, height: 9,
+                        border: editMode ? '2px solid #fff' : 'none',
+                        borderRadius: '50%', bottom: -5,
+                        opacity: editMode ? 1 : 0,
+                        pointerEvents: editMode ? undefined : 'none',
                     }} />
             ))}
 
@@ -259,47 +275,51 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     />
                 )}
 
-                {/* ── SVG-port handles (edit mode, not suppressed) ── */}
-                {editMode && !suppressIoHandles && hasPorts && ports.map(port => {
-                    const portColor = PORT_COLOR[port.kind]
-                    return (
-                        <Fragment key={port.id}>
-                            {/* Coloured source handle – kind encoded in ID for validation */}
-                            <Handle
-                                id={`src-${port.kind}-${port.id}`}
-                                type="source"
-                                position={port.side}
-                                style={{
-                                    position: 'absolute',
-                                    left: `${port.cx * 100}%`,
-                                    top: `${port.cy * 100}%`,
-                                    transform: 'translate(-50%,-50%)',
-                                    width: PORT_D, height: PORT_D,
-                                    background: portColor,
-                                    border: '2.5px solid #fff',
-                                    borderRadius: '50%',
-                                    boxShadow: `0 0 0 2px ${portColor}`,
-                                    zIndex: 10,
-                                    cursor: 'crosshair',
-                                }}
-                            />
-                            {/* Transparent target hit-area – kind also encoded */}
-                            <Handle
-                                id={`tgt-${port.kind}-${port.id}`}
-                                type="target"
-                                position={port.side}
-                                style={{
-                                    position: 'absolute',
-                                    left: `${port.cx * 100}%`,
-                                    top: `${port.cy * 100}%`,
-                                    transform: 'translate(-50%,-50%)',
-                                    width: PORT_HIT_D, height: PORT_HIT_D,
-                                    background: 'transparent',
-                                    border: 'none',
-                                    borderRadius: '50%',
-                                    opacity: 0,
-                                }}
-                            />
+                {/* ── SVG-port handles (always rendered so edges can resolve handle IDs;
+                     invisible when not in edit mode per React Flow best-practice) ── */}
+            {!suppressIoHandles && hasPorts && ports.map(port => {
+                const portColor = PORT_COLOR[port.kind]
+                return (
+                    <Fragment key={port.id}>
+                        {/* Coloured source handle – kind encoded in ID for validation */}
+                        <Handle
+                            id={`src-${port.kind}-${port.id}`}
+                            type="source"
+                            position={port.side}
+                            style={{
+                                position: 'absolute',
+                                left: `${port.cx * 100}%`,
+                                top: `${port.cy * 100}%`,
+                                transform: 'translate(-50%,-50%)',
+                                width: PORT_D, height: PORT_D,
+                                background: editMode ? portColor : 'transparent',
+                                border: editMode ? '2.5px solid #fff' : 'none',
+                                borderRadius: '50%',
+                                boxShadow: editMode ? `0 0 0 2px ${portColor}` : 'none',
+                                zIndex: 10,
+                                cursor: editMode ? 'crosshair' : 'default',
+                                opacity: editMode ? 1 : 0,
+                                pointerEvents: editMode ? undefined : 'none',
+                            }}
+                        />
+                        {/* Transparent target hit-area – kind also encoded */}
+                        <Handle
+                            id={`tgt-${port.kind}-${port.id}`}
+                            type="target"
+                            position={port.side}
+                            style={{
+                                position: 'absolute',
+                                left: `${port.cx * 100}%`,
+                                top: `${port.cy * 100}%`,
+                                transform: 'translate(-50%,-50%)',
+                                width: PORT_HIT_D, height: PORT_HIT_D,
+                                background: 'transparent',
+                                border: 'none',
+                                borderRadius: '50%',
+                                opacity: 0,
+                                pointerEvents: editMode ? undefined : 'none',
+                            }}
+                        />
                         </Fragment>
                     )
                 })}

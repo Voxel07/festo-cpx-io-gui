@@ -17,7 +17,7 @@ import TopologyCanvas from './TopologyCanvas'
 import ModuleNode from './ModuleNode'
 import BackplaneNode from './BackplaneNode'
 import { buildLayout } from '../utils/layoutBuilder'
-import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnection } from '../types'
+import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnection, ModuleInstance } from '../types'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -74,17 +74,34 @@ const EDGE_TYPES: EdgeTypes = {
 }
 
 // ── Helper: convert BenchConfig wiring → ReactFlow IO edges ────────────────
-function wiringToEdges(wiring: WiringConnection[]): Edge[] {
+function wiringToEdges(wiring: WiringConnection[], instances: ModuleInstance[]): Edge[] {
+    // Build address → category map to derive correct handle kind (in/out/inout)
+    const catByAddr: Record<number, string> = {}
+    for (const inst of instances) {
+        catByAddr[inst.address] = inst.category
+    }
+    const srcKind = (addr: number): string => {
+        const cat = catByAddr[addr] ?? 'inout'
+        if (cat === 'inout') return 'inout'
+        return 'out'
+    }
+    const tgtKind = (addr: number): string => {
+        const cat = catByAddr[addr] ?? 'inout'
+        if (cat === 'inout') return 'inout'
+        return 'in'
+    }
+
     return wiring.map(c => {
-        const srcAddr = c.source_instance_id.replace(/^mod-0*/, '') || '0'
-        const tgtAddr = c.target_instance_id.replace(/^mod-0*/, '') || '0'
+        const srcAddrStr = c.source_instance_id.replace(/^mod-0*/, '') || '0'
+        const tgtAddrStr = c.target_instance_id.replace(/^mod-0*/, '') || '0'
+        const srcAddr = parseInt(srcAddrStr) || 0
+        const tgtAddr = parseInt(tgtAddrStr) || 0
         return {
             id: c.id,
-            source: srcAddr,
-            sourceHandle: c.source_handle ?? `src-${c.source_channel}`,
-            target: tgtAddr,
-            targetHandle: c.target_handle ?? `tgt-${c.target_channel}`,
-            type: 'wire' as const,
+            source: String(srcAddr),
+            sourceHandle: `src-${srcKind(srcAddr)}-${c.source_channel}`,
+            target: String(tgtAddr),
+            targetHandle: `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`,
             animated: true,
             zIndex: 1000,
             style: { stroke: '#e65100', strokeWidth: 2.5 },
@@ -127,7 +144,7 @@ export default function TopologyFlow({
                 if (!r.ok || cancelled) return
                 const config: BenchConfig = await r.json()
                 const wiring = config.wiring ?? []
-                const edges = wiringToEdges(wiring)
+                const edges = wiringToEdges(wiring, config.module_instances ?? [])
                 if (!cancelled) {
                     setIoEdges(edges)
                     if (wiring.length === 0) setConfigWarning('bench_config.json loaded but contains no wiring.')

@@ -123,7 +123,11 @@ export default function TestRunTab({ ip }: Props) {
             try {
                 const entry = JSON.parse(e.data) as LogEntry & { type?: string }
                 if (entry.type === 'done') { es.close(); esRef.current = null; return }
-                if (entry.level) setSseLogs(prev => [...prev, entry as LogEntry])
+                if (entry.level) setSseLogs(prev => {
+                    const next = [...prev, entry as LogEntry]
+                    // Cap at 500 entries to keep spread + render fast
+                    return next.length > 500 ? next.slice(-500) : next
+                })
             } catch { /* ignore malformed frames */ }
         }
         es.onerror = () => { es.close(); esRef.current = null }
