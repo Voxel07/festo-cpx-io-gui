@@ -16,6 +16,34 @@ export function isEpli(name: string): boolean {
     return name.includes('EPLI')
 }
 
+/** VABX valve interface with AP pass-through connectors (e.g. VABX-A-S-EL-E12-API).
+ *  XF10 (top) = AP-in, XF20 (bottom) = AP-out — positioned on left side of SVG. */
+export function isVabxApInterface(name: string): boolean {
+    return /^VABX-A-(?:S-)?EL-\w+-API/.test(name)
+}
+
+/** AP-chain interface — module that has explicit ap-in / ap-out handles instead of
+ *  the standard left/right cable handles. */
+export function isApChainInterface(name: string): boolean {
+    return isEpli(name) || isVabxApInterface(name)
+}
+
+/** Handle position percentages within the SVG image container box (60 × 128 px).
+ *  Derived from connector circle centres in each module's SVG. */
+export function getApHandlePos(name: string): {
+    apInTop: string; apInLeft: string
+    apOutTop: string; apOutLeft: string
+} {
+    if (isVabxApInterface(name)) {
+        // VABX-A-EL-API-S.svg viewBox 46×109; objectFit:contain scale = 128/109 ≈ 1.174
+        // XF10 cy=23.5 → 21.6 %  |  XF20 cy=44.5 → 40.8 %  |  cx=12.0 → 28.5 %
+        return { apInTop: '21.6%', apInLeft: '28.5%', apOutTop: '40.8%', apOutLeft: '28.5%' }
+    }
+    // EPLI SVG 31×107; objectFit:contain scale = 128/107 ≈ 1.196
+    // XF10 cy=40.5 → 37.85 %  |  XF20 cy=56.5 → 52.8 %  |  cx=15.5 → 50 %
+    return { apInTop: '37.85%', apInLeft: '50%', apOutTop: '52.8%', apOutLeft: '50%' }
+}
+
 /** Valve bank body – physically snapped directly to its interface, no cable.
  *  Matches both: VABX-A-BV-* and VABX-A-S-BV-* (with 'S-' infix). */
 export function isValveBody(name: string): boolean {
@@ -136,6 +164,8 @@ export function buildLayout(
             const stride  = NODE_W + INLINE_G
             const isDirectValveBody = seg.kind === 'apa' && isValveBody(m.Name)
             const modIsEpli = isEpli(m.Name)
+            const modIsApChain = isApChainInterface(m.Name)
+            const apPos = modIsApChain ? getApHandlePos(m.Name) : undefined
 
             modNodes.push({
                 id,
@@ -150,10 +180,14 @@ export function buildLayout(
                     status: diffStatus?.[m.Adress] ?? 'unchanged',
                     editMode,
                     isBackplane: seg.kind === 'apa' || (seg.kind === 'valve' && !isFirst),
-                    showLeftHandle:    isFirst && !modIsEpli,
-                    showRightHandle:   isLast  && !modIsEpli,
-                    showApIn:          modIsEpli,
-                    showApOut:         modIsEpli,
+                    showLeftHandle:    isFirst && !modIsApChain,
+                    showRightHandle:   isLast  && !modIsApChain,
+                    showApIn:          modIsApChain,
+                    showApOut:         modIsApChain,
+                    ...(apPos ? {
+                        apInPos:  { top: apPos.apInTop,  left: apPos.apInLeft  },
+                        apOutPos: { top: apPos.apOutTop, left: apPos.apOutLeft },
+                    } : {}),
                     showValveEditor:   editMode && ((seg.kind === 'valve' && !isFirst) || isDirectValveBody),
                     suppressIoHandles: (seg.kind === 'valve' && !isFirst) || isDirectValveBody,
                 },
@@ -161,9 +195,9 @@ export function buildLayout(
             lastId = id
         })
 
-        // Find EPLI module in this segment for ap-in/ap-out cable routing
-        const epliMod = seg.mods.find(m => isEpli(m.Name))
-        const epliId = epliMod ? String(epliMod.Adress) : null
+        // Find AP-chain interface module in this segment for ap-in/ap-out cable routing
+        const apChainMod = seg.mods.find(m => isApChainInterface(m.Name))
+        const epliId = apChainMod ? String(apChainMod.Adress) : null
         placed.push({ seg, lastId, epliId })
         const segW = seg.mods.length * (NODE_W + INLINE_G)
         curX += segW + CABLE_G

@@ -6,7 +6,8 @@
  * web UI or CI.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Box, Stack, Typography, Alert, Paper, CircularProgress } from '@mui/material'
+import { Box, Stack, Typography, Alert, Paper, CircularProgress, TextField, Tooltip } from '@mui/material'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import TestSelection from './TestSelection'
 import TestProgress from './TestProgress'
 import TestResults from './TestResults'
@@ -36,7 +37,7 @@ export interface TestRunState {
     ip_address?: string
     tests?: string[]
     progress?: { completed: number; total: number; current_test: string | null; current_module: string | null }
-    results?: Array<{ test_id?: string; passed?: boolean; error?: string; duration_ms?: number; [k: string]: unknown }>
+    results?: Array<{ test_id?: string; passed?: boolean; error?: string; duration_ms?: number;[k: string]: unknown }>
     checkpoints?: Checkpoint[]
     logs?: LogEntry[]
     error?: string
@@ -50,7 +51,12 @@ const AVAILABLE_TESTS = [
     { id: 'condition-counter', label: 'Condition Counter' },
     { id: 'valve-condition-counter', label: 'Valve CC (VABX)' },
     { id: 'remanent-params', label: 'Remanent Parameters' },
+    { id: 'factory-reset', label: 'Factory Reset' },
+    { id: 'open-load-diag', label: 'Open-Load Diagnostic' },
 ]
+
+/** Tests that require a power supply comport to perform a real power cycle. */
+const POWER_CYCLE_TESTS = new Set(['remanent-params', 'condition-counter', 'factory-reset'])
 
 interface Props {
     ip: string
@@ -61,8 +67,15 @@ export default function TestRunTab({ ip }: Props) {
     const [runState, setRunState] = useState<TestRunState>({ status: 'idle' })
     const [sseLogs, setSseLogs] = useState<LogEntry[]>([])
     const [busy, setBusy] = useState(false)
+    const [psComport, setPsComport] = useState<string>('')
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const esRef = useRef<EventSource | null>(null)
+
+    /** True when at least one selected test benefits from a power supply. */
+    const needsPs = useMemo(
+        () => selected.some(id => POWER_CYCLE_TESTS.has(id)),
+        [selected],
+    )
 
     const isRunning = runState.status === 'running'
     const isStarting = runState.status === 'starting'
@@ -130,6 +143,17 @@ export default function TestRunTab({ ip }: Props) {
         if (esRef.current) { esRef.current.close(); esRef.current = null }
         setRunState({ status: 'starting', tests: selected, checkpoints: [], logs: [] })
         setBusy(true)
+
+        // Build per-test parameter overrides: inject power_supply_comport where needed.
+        const testParameters: Record<string, Record<string, unknown>> = {}
+        if (psComport.trim()) {
+            for (const id of selected) {
+                if (POWER_CYCLE_TESTS.has(id)) {
+                    testParameters[id] = { power_supply_comport: psComport.trim() }
+                }
+            }
+        }
+
         try {
             const r = await fetch('/test-run/start', {
                 method: 'POST',
@@ -139,6 +163,7 @@ export default function TestRunTab({ ip }: Props) {
                     config_path: CONFIG_PATH,
                     tests: selected,
                     source: 'web',
+                    test_parameters: testParameters,
                 }),
             })
             if (!r.ok) {
@@ -175,6 +200,30 @@ export default function TestRunTab({ ip }: Props) {
                     onToggleTest={toggleTest}
                     onStart={doStart}
                 />
+
+                {/* ── Power-supply comport (shown when a power-cycle test is selected) ── */}
+                {needsPs && (
+                    <Paper variant="outlined" sx={{ p: 1.5 }}>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                            <Typography variant="caption" fontWeight={600}>
+                                Power Supply
+                            </Typography>
+                            <Tooltip title="Serial port of the HMP40x0 power supply used for power-cycle tests (e.g. COM3 or /dev/ttyUSB0). Leave empty to skip the power-cycle phase.">
+                                <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.secondary', cursor: 'help' }} />
+                            </Tooltip>
+                        </Stack>
+                        <TextField
+                            size="small"
+                            label="Comport (e.g. COM3)"
+                            value={psComport}
+                            onChange={e => setPsComport(e.target.value)}
+                            disabled={isRunning || isStarting}
+                            placeholder="COM3"
+                            fullWidth
+                            inputProps={{ spellCheck: false }}
+                        />
+                    </Paper>
+                )}
 
                 {/* ── Error ── */}
                 {runState.status === 'error' && runState.error && (

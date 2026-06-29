@@ -129,6 +129,14 @@ export default function TopologyFlow({ topology, diffStatus, removedModules = []
 
     useEffect(() => { ioEdgesRef.current = ioEdges }, [ioEdges])
 
+    // When ioEdges load (possibly after topology is already set), merge them in
+    useEffect(() => {
+        setEdges(prev => {
+            const nonIo = prev.filter(e => (e.data as Record<string, unknown>)?.kind !== 'io')
+            return [...nonIo, ...ioEdges]
+        })
+    }, [ioEdges, setEdges])
+
     useEffect(() => {
         if (!topology?.Topology?.length) { setNodes([]); setEdges([]); return }
         // Append removed modules (from stored file but absent in live) so they

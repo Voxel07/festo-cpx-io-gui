@@ -7,6 +7,127 @@ import SplitDiff from './SplitDiff'
 import type { Topology, TopologyModule, DiffStatus, CompareResult, BenchConfig } from '../types'
 import { configToTopology } from '../utils/configMapper'
 
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+interface ConfigFileInputProps {
+    value: string
+    onChange: (v: string) => void
+}
+function ConfigFileInput({ value, onChange }: ConfigFileInputProps) {
+    return (
+        <TextField
+            label="Configuration file"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            size="small"
+            placeholder="bench_config.json"
+            sx={{ width: 220 }}
+        />
+    )
+}
+
+interface ReadLiveStepProps {
+    busy: boolean
+    result: Topology | null
+    onRead: () => void
+}
+function ReadLiveStep({ busy, result, onRead }: ReadLiveStepProps) {
+    return (
+        <>
+            <Button
+                variant="contained" color="primary"
+                onClick={onRead} disabled={busy}
+                startIcon={busy ? <CircularProgress size={14} color="inherit" /> : undefined}
+                sx={{ height: 36, whiteSpace: 'nowrap' }}
+            >
+                {busy ? 'Reading…' : '1 · Read Live Config'}
+            </Button>
+            {result && !busy && (
+                <Chip label={`${result.Topology.length} modules`} size="small" color="primary" variant="outlined" />
+            )}
+        </>
+    )
+}
+
+interface CompareStepProps {
+    busy: boolean
+    result: CompareResult | null
+    disabled: boolean
+    onCompare: () => void
+}
+function CompareStep({ busy, result, disabled, onCompare }: CompareStepProps) {
+    return (
+        <>
+            <Button
+                variant="contained" color="secondary"
+                onClick={onCompare} disabled={busy || disabled}
+                startIcon={busy ? <CircularProgress size={14} color="inherit" /> : undefined}
+                sx={{ height: 36, whiteSpace: 'nowrap' }}
+            >
+                {busy ? 'Comparing…' : '2 · Compare with File'}
+            </Button>
+            {result && !busy && (
+                <Chip
+                    label={result.has_diff ? `${result.changes.length} diff(s)` : 'Matches'}
+                    size="small"
+                    color={result.has_diff ? 'warning' : 'success'}
+                />
+            )}
+        </>
+    )
+}
+
+interface WriteStepProps {
+    busy: boolean
+    savedTo: string | null
+    disabled: boolean
+    onWrite: () => void
+}
+function WriteStep({ busy, savedTo, disabled, onWrite }: WriteStepProps) {
+    return (
+        <>
+            <Button
+                variant="contained" color="success"
+                onClick={onWrite} disabled={busy || disabled}
+                startIcon={busy ? <CircularProgress size={14} color="inherit" /> : undefined}
+                sx={{ height: 36, whiteSpace: 'nowrap' }}
+            >
+                {busy ? 'Saving…' : '3 · Write to File'}
+            </Button>
+            {savedTo && !busy && (
+                <Chip label="Saved ✓" size="small" color="success" />
+            )}
+        </>
+    )
+}
+
+interface LiveConfigPreviewProps {
+    topology: Topology
+}
+function LiveConfigPreview({ topology }: LiveConfigPreviewProps) {
+    return (
+        <Box sx={{ width: '60%', border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
+            <Box sx={{
+                background: '#f5f5f5', color: '#1565c0',
+                px: 1.5, py: 0.75, borderBottom: '1px solid #e0e0e0',
+                fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 700,
+                display: 'flex', alignItems: 'center', gap: 1,
+            }}>
+                <span>Live · {topology.Name}</span>
+                <Chip label={`${topology.Topology.length} modules`} size="small"
+                    sx={{ height: 18, fontSize: '0.62rem' }} />
+            </Box>
+            <Box sx={{ overflow: 'auto', maxHeight: '60vh', background: '#fafafa', p: 1.5 }}>
+                <pre style={{ margin: 0, fontSize: '0.72rem', color: '#333', fontFamily: 'monospace', lineHeight: 1.5 }}>
+                    {JSON.stringify(topology, null, 2)}
+                </pre>
+            </Box>
+        </Box>
+    )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 interface Props {
     ip: string
     timeout: number
@@ -115,64 +236,16 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
                 flexWrap: 'wrap',
                 flexShrink: 0,
             }}>
-                {/* File path */}
-                <TextField
-                    label="Configuration file"
-                    value={filePath}
-                    onChange={e => setFilePath(e.target.value)}
-                    size="small"
-                    placeholder="bench_config.json"
-                    sx={{ width: 220 }}
-                />
+                <ConfigFileInput value={filePath} onChange={setFilePath} />
 
                 <Divider orientation="vertical" flexItem sx={{ my: 0.25 }} />
-
-                {/* Step 1 */}
-                <Button
-                    variant="contained" color="primary"
-                    onClick={readLive} disabled={readBusy}
-                    startIcon={readBusy ? <CircularProgress size={14} color="inherit" /> : undefined}
-                    sx={{ height: 36, whiteSpace: 'nowrap' }}
-                >
-                    {readBusy ? 'Reading…' : '1 · Read Live Config'}
-                </Button>
-                {liveTopology && !readBusy && (
-                    <Chip label={`${liveTopology.Topology.length} modules`} size="small" color="primary" variant="outlined" />
-                )}
+                <ReadLiveStep busy={readBusy} result={liveTopology} onRead={readLive} />
 
                 <Divider orientation="vertical" flexItem sx={{ my: 0.25 }} />
-
-                {/* Step 2 */}
-                <Button
-                    variant="contained" color="secondary"
-                    onClick={compare} disabled={cmpBusy || !liveTopology}
-                    startIcon={cmpBusy ? <CircularProgress size={14} color="inherit" /> : undefined}
-                    sx={{ height: 36, whiteSpace: 'nowrap' }}
-                >
-                    {cmpBusy ? 'Comparing…' : '2 · Compare with File'}
-                </Button>
-                {cmpData && !cmpBusy && (
-                    <Chip
-                        label={cmpData.has_diff ? `${cmpData.changes.length} diff(s)` : 'Matches'}
-                        size="small"
-                        color={cmpData.has_diff ? 'warning' : 'success'}
-                    />
-                )}
+                <CompareStep busy={cmpBusy} result={cmpData} disabled={!liveTopology} onCompare={compare} />
 
                 <Divider orientation="vertical" flexItem sx={{ my: 0.25 }} />
-
-                {/* Step 3 */}
-                <Button
-                    variant="contained" color="success"
-                    onClick={writeToFile} disabled={writeBusy || !liveTopology}
-                    startIcon={writeBusy ? <CircularProgress size={14} color="inherit" /> : undefined}
-                    sx={{ height: 36, whiteSpace: 'nowrap' }}
-                >
-                    {writeBusy ? 'Saving…' : '3 · Write to File'}
-                </Button>
-                {savedTo && !writeBusy && (
-                    <Chip label="Saved ✓" size="small" color="success" />
-                )}
+                <WriteStep busy={writeBusy} savedTo={savedTo} disabled={!liveTopology} onWrite={writeToFile} />
             </Box>
 
             {/* ── Results area ──────────────────────────────────── */}
@@ -196,7 +269,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
                     </Box>
                 )}
 
-                {/* ── Alerts row (always full-width within center column) ── */}
+                {/* ── Alerts row ── */}
                 {(readError || cmpError || writeError || savedTo) && (
                     <Stack spacing={1} sx={{ width: '100%', maxWidth: '70%', mb: 2 }}>
                         {readError && <Alert severity="error">{readError}</Alert>}
@@ -208,23 +281,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
 
                 {/* ── Step 1: Live JSON preview (only when no compare yet) ── */}
                 {liveTopology && !cmpData && (
-                    <Box sx={{ width: '60%', border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
-                        <Box sx={{
-                            background: '#f5f5f5', color: '#1565c0',
-                            px: 1.5, py: 0.75, borderBottom: '1px solid #e0e0e0',
-                            fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 700,
-                            display: 'flex', alignItems: 'center', gap: 1,
-                        }}>
-                            <span>⚡ Live · {liveTopology.Name}</span>
-                            <Chip label={`${liveTopology.Topology.length} modules`} size="small"
-                                sx={{ height: 18, fontSize: '0.62rem' }} />
-                        </Box>
-                        <Box sx={{ overflow: 'auto', background: '#fafafa', p: 1.5 }}>
-                            <pre style={{ margin: 0, fontSize: '0.72rem', color: '#333', fontFamily: 'monospace', lineHeight: 1.5 }}>
-                                {JSON.stringify(liveTopology, null, 2)}
-                            </pre>
-                        </Box>
-                    </Box>
+                    <LiveConfigPreview topology={liveTopology} />
                 )}
 
                 {/* ── Step 2: Side-by-side diff (replaces preview after compare) ── */}

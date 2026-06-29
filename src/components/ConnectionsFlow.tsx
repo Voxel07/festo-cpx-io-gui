@@ -94,6 +94,9 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     const [actuateMountedValves, setActuateMountedValves] = useState<number[] | undefined>(undefined)
 
     const ioEdgesRef = useRef<Edge[]>([])
+    /** IO edges stashed by doLoad so the topology rebuild effect restores them
+     *  rather than wiping them when onConfigLoad triggers a topology change. */
+    const pendingIoRef = useRef<Edge[]>([])
     const topologyName = useRef('')
 
     // Keep ioEdgesRef current
@@ -131,9 +134,13 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             }
         })
         setNodes(enriched)
-        // Preserve existing IO edges if nodes are still valid
+        // Preserve existing IO edges if nodes are still valid.
+        // Prefer pendingIoRef (set by doLoad) over ioEdgesRef so that topology
+        // rebuilds triggered by onConfigLoad don't wipe freshly loaded IO edges.
         const validIds = new Set(topology.Topology.map(m => String(m.Adress)))
-        const validIo = ioEdgesRef.current.filter(
+        const sourceIo = pendingIoRef.current.length > 0 ? pendingIoRef.current : ioEdgesRef.current
+        pendingIoRef.current = []
+        const validIo = sourceIo.filter(
             e => validIds.has(e.source) && validIds.has(e.target),
         )
         setEdges([...chainEdges, ...validIo])
@@ -192,7 +199,6 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         let srcNode = connection.source
         let tgtNode = connection.target
         if (!sh.startsWith('src-') || !th.startsWith('tgt-')) return
-        if (srcNode === tgtNode) return
 
         // Normalise direction: animation always flows output → input.
         // If the user dragged FROM an input port, flip source↔target.
@@ -205,6 +211,9 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
         const pSrc = portId(sh)
         const pTgt = portId(th)
+        // Block same-port self-loop (same module AND same port ID) but allow
+        // cross-port connections on the same module (DIDO / DIO loopback).
+        if (srcNode === tgtNode && pSrc === pTgt) return
         const edgeId = `io-${srcNode}-${pSrc}-${tgtNode}-${pTgt}`
 
         // Wire colour by source port kind
@@ -237,7 +246,6 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     // ── Validate: enforce input→output compatibility + block exact duplicates ──
     const isValidConnection = useCallback((conn: Connection | Edge): boolean => {
         const c = conn as Connection
-        if (c.source === c.target) return false
         const sh = c.sourceHandle ?? ''
         const th = c.targetHandle ?? ''
         if (!sh.startsWith('src-') || !th.startsWith('tgt-')) return false
@@ -253,6 +261,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             nsh = th.replace(/^tgt-/, 'src-')
             nth = sh.replace(/^src-/, 'tgt-')
         }
+        // Block same-port self-loop; allow cross-port same-module connections (DIDO / DIO loopback).
+        if (srcNode === tgtNode && portId(nsh) === portId(nth)) return false
         const edgeId = `io-${srcNode}-${portId(nsh)}-${tgtNode}-${portId(nth)}`
         return !ioEdgesRef.current.some(e => e.id === edgeId)
     }, [])
@@ -331,14 +341,11 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             const d: BenchConfig = await r.json()
             if (!r.ok) { setStatusMsg({ text: `Error: ${(d as any).detail ?? 'Unknown error'}`, severity: 'error' }); return }
 
-            // Let the parent sync topology / rawConfig from the loaded file
-            onConfigLoad?.(d)
-
             // Build an address → category map so we can derive correct handle kind
             const catByAddr: Record<number, string> = {}
-            ;(d.module_instances ?? []).forEach(inst => {
-                catByAddr[inst.address] = inst.category
-            })
+                ; (d.module_instances ?? []).forEach(inst => {
+                    catByAddr[inst.address] = inst.category
+                })
 
             // Derive the ReactFlow handle kind from the module category:
             //   output/inout module on the source side → 'out'
@@ -384,6 +391,16 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 }
             })
 
+            // Stash IO edges BEFORE calling onConfigLoad so the topology rebuild
+            // effect (triggered by onConfigLoad changing topology) picks them up
+            // from pendingIoRef instead of the not-yet-updated ioEdgesRef.
+            pendingIoRef.current = newIo
+
+            // Let the parent sync topology / rawConfig from the loaded file
+            onConfigLoad?.(d)
+
+            // Also set edges directly – covers cases where topology doesn't change
+            // (same config already loaded) so the topology rebuild effect won't fire.
             setEdges(prev => [
                 ...prev.filter(e => (e.data as Record<string, unknown>)?.kind !== 'io'),
                 ...newIo,
@@ -418,11 +435,20 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         srcCPP: number; tgtCPP: number
     }
 
-    /** Safely parse JSON from a Response; returns null on empty / non-JSON body. */
-    async function safeJson(r: Response): Promise<Record<string, unknown> | null> {
-        const text = await r.text()
-        if (!text.trim()) return null
-        try { return JSON.parse(text) } catch { return null }
+    /** Extract a human-readable error string from a non-ok Response.
+     *  Tries JSON → detail field first, then falls back to raw text, then to "HTTP <status>". */
+    async function extractErrMsg(r: Response): Promise<string> {
+        try {
+            const text = await r.text()
+            if (text.trim()) {
+                try {
+                    const j = JSON.parse(text)
+                    if (j.detail) return String(j.detail)
+                } catch { /* not JSON — use raw text */ }
+                return text.trim().slice(0, 300)
+            }
+        } catch { /* body unreadable */ }
+        return `HTTP ${r.status}`
     }
     const isM12 = (name?: string) => !!(name ?? '').includes('M12')
     const testConns: TestConn[] = edges
@@ -448,12 +474,14 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         try {
             const r = await fetch(
                 `/io/read-input?ip_address=${encodeURIComponent(ip)}&module_addr=${conn.tgtAddr}&channel=${encodeURIComponent(conn.tgtCh)}&channels_per_port=${conn.tgtCPP}`,
+                { signal: AbortSignal.timeout(8000) },
             )
-            const d = await r.json()
             if (!r.ok) {
-                setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: d.detail } }))
+                const errMsg = await extractErrMsg(r)
+                setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: errMsg } }))
                 return
             }
+            const d = await r.json()
             const vals: boolean[] = Array.isArray(d.values) ? d.values.map(Boolean) : [Boolean(d.value)]
             setTestResults(prev => ({ ...prev, [conn.id]: { values: vals, value: vals.every(Boolean) } }))
         } catch (e) {
@@ -469,10 +497,11 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: newVal, channels_per_port: conn.srcCPP }),
+                signal: AbortSignal.timeout(8000),
             })
-            const d = await safeJson(r)
             if (!r.ok) {
-                setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: d?.detail as string ?? `HTTP ${r.status}` } }))
+                const errMsg = await extractErrMsg(r)
+                setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: errMsg } }))
                 return
             }
             setOutputStates(prev => ({ ...prev, [conn.id]: newVal }))
@@ -499,21 +528,23 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: true, channels_per_port: conn.srcCPP }),
+                        signal: AbortSignal.timeout(8000),
                     })
                     setOutputStates(prev => ({ ...prev, [conn.id]: true }))
                     if (rOn.ok) {
                         await new Promise(res => setTimeout(res, 300))
                         await doReadInput(conn)
                     } else {
-                        const errData = await safeJson(rOn)
-                        setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: errData?.detail as string ?? `HTTP ${rOn.status}` } }))
+                        const errMsg = await extractErrMsg(rOn)
+                        setTestResults(prev => ({ ...prev, [conn.id]: { value: null, error: errMsg } }))
                     }
                     // Set LOW
                     await fetch('/io/set-output', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: false, channels_per_port: conn.srcCPP }),
-                    })
+                        signal: AbortSignal.timeout(8000),
+                    }).catch(() => { /* best-effort LOW */ })
                     setOutputStates(prev => ({ ...prev, [conn.id]: false }))
                 } finally {
                     setTestBusy(prev => { const n = new Set(prev); n.delete(conn.id); return n })
@@ -553,7 +584,9 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         return true
     })
 
-    const ioCount = ioEdgesRef.current.length
+    // Compute ioCount directly from edges state (not from the ref) so the
+    // displayed count is always in sync with what's actually rendered.
+    const ioCount = edges.filter(e => (e.data as Record<string, unknown>)?.kind === 'io').length
 
     // ─────────────────────────────────────────────────────
     if (!topology) {
@@ -809,7 +842,10 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                                 <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', flex: 1 }}>
                                     Wire Test
                                 </Typography>
-                                {!ip && <Chip label="No IP" size="small" color="warning" sx={{ fontSize: '0.65rem' }} />}
+                                {ip
+                                    ? <Chip label={ip} size="small" color="info" sx={{ fontSize: '0.62rem', maxWidth: 140, overflow: 'hidden' }} />
+                                    : <Chip label="No IP set" size="small" color="warning" sx={{ fontSize: '0.65rem' }} />
+                                }
                                 {testAllBusy && <CircularProgress size={16} />}
                             </Stack>
                             <Typography variant="caption" sx={{ color: '#888', display: 'block', mb: 0.75, lineHeight: 1.3 }}>

@@ -42,6 +42,10 @@ export type ModuleNodeData = {
     showApIn?: boolean
     /** EPLI module: show AP-out handle on bottom */
     showApOut?: boolean
+    /** Override handle position for AP-in (percentage within SVG image box); defaults to EPLI positions */
+    apInPos?: { top: string; left: string }
+    /** Override handle position for AP-out (percentage within SVG image box); defaults to EPLI positions */
+    apOutPos?: { top: string; left: string }
     /** Show valve editor button (VABX body modules in ConnectionsFlow) */
     showValveEditor?: boolean
     /** Show mounted valves visually without editor UI (read-only topology view) */
@@ -79,6 +83,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         mod, status, editMode, isBackplane,
         showLeftHandle, showRightHandle,
         showApIn = false, showApOut = false,
+        apInPos,
+        apOutPos,
         showValveEditor = false,
         showValves = false,
         suppressIoHandles = false,
@@ -102,9 +108,11 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const [valveEditorOpen, setValveEditorOpen] = useState(false)
     const { setNodes } = useReactFlow()
 
-    // When valveGroups are loaded and mod.MountedValves is known, derive hiddenValves
+    // When valveGroups are loaded and mod.MountedValves is known, derive hiddenValves.
+    // undefined MountedValves → effect is skipped → hiddenValves stays [] (all mounted by default).
     useEffect(() => {
         if (!wantsValves || valveGroups.length === 0 || mod.MountedValves === undefined) return
+        if (mod.MountedValves.length === 0) return  // empty = not yet configured → default all mounted
         const mountedSet = new Set(mod.MountedValves)
         const expected = valveGroups.filter((_, i) => !mountedSet.has(i))
         setNodes(prev => prev.map(n => {
@@ -214,13 +222,15 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     }} />
                 )}
 
-                {/* ── EPLI AP-bus handles at physical XF10/XF20 port positions ──
-                     SVG viewBox 31×107: XF10 at cy=40.5 (37.85%), XF20 at cy=56.5 (52.8%) */}
+                {/* ── EPLI / VABX-AP AP-bus handles at physical XF10/XF20 port positions ──
+                     EPLI SVG 31×107: XF10 at cy=40.5 (37.85%), XF20 at cy=56.5 (52.8%)
+                     VABX-EL-API SVG 46×109: XF10 at cy=23.5 (21.6%), XF20 at cy=44.5 (40.8%) */}
                 {showApIn && (
                     <Handle id="ap-in" type="target" position={Position.Left}
                         style={{
                             position: 'absolute',
-                            left: '50%', top: '37.85%',
+                            left: apInPos?.left ?? '50%',
+                            top: apInPos?.top ?? '37.85%',
                             transform: 'translate(-50%,-50%)',
                             width: 10, height: 10,
                             background: '#1565c0',
@@ -235,7 +245,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     <Handle id="ap-out" type="source" position={Position.Right}
                         style={{
                             position: 'absolute',
-                            left: '50%', top: '52.8%',
+                            left: apOutPos?.left ?? '50%',
+                            top: apOutPos?.top ?? '52.8%',
                             transform: 'translate(-50%,-50%)',
                             width: 10, height: 10,
                             background: '#2e7d32',

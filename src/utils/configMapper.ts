@@ -28,7 +28,7 @@ export function configToTopology(config: BenchConfig): Topology {
                 NumOfInputs: num_in,
                 NumOfOutputs: num_out,
                 NumOfInOuts: num_io,
-                MountedValves: inst.mounted_valves || [],
+                MountedValves: inst.mounted_valves ?? undefined,
             }
         })
     }
