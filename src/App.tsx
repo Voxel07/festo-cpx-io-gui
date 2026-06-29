@@ -1,13 +1,7 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
-import { Box, AppBar, Toolbar, Typography, TextField, Tabs, Tab, Stack } from '@mui/material'
+import { useReducer, useRef, useCallback, useEffect } from 'react'
+import { Box, Tabs, Tab, Stack } from '@mui/material'
 import type { SxProps, Theme } from '@mui/material'
-import VisibilityIcon from '@mui/icons-material/Visibility'
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
-import CloudIcon from '@mui/icons-material/Cloud'
-import CloudOffIcon from '@mui/icons-material/CloudOff'
-import StorageIcon from '@mui/icons-material/Storage'
-import ReportProblemIcon from '@mui/icons-material/ReportProblem'
-import { TooltipButton } from './components/TooltipButton'
+import AppHeader from './components/AppHeader'
 import GenerateCompareTab from './components/GenerateCompareTab'
 import TestRunTab from './components/TestRunTab'
 import HistoryTab from './components/HistoryTab'
@@ -25,73 +19,217 @@ const DEFAULT_CANVAS_H = 320
 const MIN_CANVAS_W = 300
 const MAX_CANVAS_W = 3000
 
-export default function App() {
-    const [tab, setTab] = useState(0)
-    const [ip, setIp] = useState('192.168.0.11')
-    const [timeout, setTimeout_] = useState(0)
-    const [topology, setTopology] = useState<Topology | null>(null)
-    const [diffStatus, setDiff] = useState<DiffStatus | null>(null)
-    const [removedModules, setRemovedModules] = useState<TopologyModule[]>([])
-    const [canvasH, setCanvasH] = useState(DEFAULT_CANVAS_H)
-    const [canvasW, setCanvasW] = useState<number | null>(null)
-    const [fullscreen, setFullscreen] = useState(false)
-    const [pbStatus, setPbStatus] = useState<'unknown' | 'ok' | 'error'>('unknown')
-    const [pbChecking, setPbChecking] = useState(false)
-    const [showTopology, setShowTopology] = useState(true)
-    const [activeModuleAddr, setActiveModuleAddr] = useState<number | null>(null)
-    const [rawSelectedAddr, setRawSelectedAddr] = useState<number | null>(null)
-    const [diagOpen, setDiagOpen] = useState(false)
+interface AppState {
+    tab: number
+    ip: string
+    timeout: number
+    topology: Topology | null
+    diffStatus: DiffStatus | null
+    removedModules: TopologyModule[]
+    canvasH: number
+    canvasW: number | null
+    fullscreen: boolean
+    pbStatus: 'unknown' | 'ok' | 'error'
+    pbChecking: boolean
+    showTopology: boolean
+    activeModuleAddr: number | null
+    rawSelectedAddr: number | null
+    diagOpen: boolean
+    rawConfig: BenchConfig | null
+}
 
-    // Clear selection outline when leaving Raw Mode tab
-    useEffect(() => {
-        if (tab !== 3) {
-            setRawSelectedAddr(null)
+const initialAppState: AppState = {
+    tab: 0,
+    ip: '192.168.0.11',
+    timeout: 0,
+    topology: null,
+    diffStatus: null,
+    removedModules: [],
+    canvasH: DEFAULT_CANVAS_H,
+    canvasW: null,
+    fullscreen: false,
+    pbStatus: 'unknown',
+    pbChecking: false,
+    showTopology: true,
+    activeModuleAddr: null,
+    rawSelectedAddr: null,
+    diagOpen: false,
+    rawConfig: null,
+}
+
+type AppAction =
+    | { type: 'SET_TAB'; tab: number }
+    | { type: 'SET_IP'; ip: string }
+    | { type: 'SET_TIMEOUT'; timeout: number }
+    | { type: 'SET_TOPOLOGY'; topology: Topology | null }
+    | { type: 'SET_DIFF_STATUS'; status: DiffStatus | null }
+    | { type: 'SET_REMOVED_MODULES'; removed: TopologyModule[] }
+    | { type: 'SET_CANVAS_H'; height: number }
+    | { type: 'SET_CANVAS_W'; width: number | null }
+    | { type: 'SET_FULLSCREEN'; fullscreen: boolean }
+    | { type: 'SET_PB_STATUS'; status: 'unknown' | 'ok' | 'error' }
+    | { type: 'SET_PB_CHECKING'; checking: boolean }
+    | { type: 'TOGGLE_TOPOLOGY' }
+    | { type: 'SET_ACTIVE_MODULE_ADDR'; addr: number | null }
+    | { type: 'SET_RAW_SELECTED_ADDR'; addr: number | null }
+    | { type: 'SET_DIAG_OPEN'; open: boolean }
+    | { type: 'SET_RAW_CONFIG'; config: BenchConfig | null }
+    | { type: 'SET_RESULT'; topo: Topology | null; status: DiffStatus | null; removed: TopologyModule[]; config?: BenchConfig }
+    | { type: 'CONFIG_LOAD'; config: BenchConfig }
+    | { type: 'MODULE_VALVE_CHANGE'; addr: number; mountedValves: number[] }
+
+function appReducer(state: AppState, action: AppAction): AppState {
+    switch (action.type) {
+        case 'SET_TAB':
+            return {
+                ...state,
+                tab: action.tab,
+                rawSelectedAddr: action.tab !== 3 ? null : state.rawSelectedAddr,
+            }
+        case 'SET_IP':
+            return { ...state, ip: action.ip }
+        case 'SET_TIMEOUT':
+            return { ...state, timeout: action.timeout }
+        case 'SET_TOPOLOGY':
+            return { ...state, topology: action.topology }
+        case 'SET_DIFF_STATUS':
+            return { ...state, diffStatus: action.status }
+        case 'SET_REMOVED_MODULES':
+            return { ...state, removedModules: action.removed }
+        case 'SET_CANVAS_H':
+            return { ...state, canvasH: action.height }
+        case 'SET_CANVAS_W':
+            return { ...state, canvasW: action.width }
+        case 'SET_FULLSCREEN':
+            return { ...state, fullscreen: action.fullscreen }
+        case 'SET_PB_STATUS':
+            return { ...state, pbStatus: action.status }
+        case 'SET_PB_CHECKING':
+            return { ...state, pbChecking: action.checking }
+        case 'TOGGLE_TOPOLOGY':
+            return { ...state, showTopology: !state.showTopology }
+        case 'SET_ACTIVE_MODULE_ADDR':
+            return { ...state, activeModuleAddr: action.addr }
+        case 'SET_RAW_SELECTED_ADDR':
+            return { ...state, rawSelectedAddr: action.addr }
+        case 'SET_DIAG_OPEN':
+            return { ...state, diagOpen: action.open }
+        case 'SET_RAW_CONFIG':
+            return { ...state, rawConfig: action.config }
+        case 'SET_RESULT':
+            return {
+                ...state,
+                topology: action.topo,
+                diffStatus: action.status,
+                removedModules: action.removed,
+                rawConfig: action.config !== undefined ? action.config : state.rawConfig,
+            }
+        case 'CONFIG_LOAD':
+            return {
+                ...state,
+                rawConfig: action.config,
+                topology: configToTopology(action.config),
+            }
+        case 'MODULE_VALVE_CHANGE': {
+            const nextTopo = state.topology ? {
+                ...state.topology,
+                Topology: state.topology.Topology.map(m =>
+                    m.Adress === action.addr ? { ...m, MountedValves: action.mountedValves } : m
+                ),
+            } : null
+            const nextRaw = state.rawConfig ? {
+                ...state.rawConfig,
+                module_instances: (state.rawConfig.module_instances || []).map(inst =>
+                    inst.address === action.addr ? { ...inst, mounted_valves: action.mountedValves } : inst
+                )
+            } : null
+            return {
+                ...state,
+                topology: nextTopo,
+                rawConfig: nextRaw,
+            }
         }
-    }, [tab])
+        default:
+            return state
+    }
+}
+
+async function pollTestRunStatus(onStatusUpdate: (active: boolean, currentModule: number | null) => void) {
+    try {
+        const r = await fetch('/test-run/status')
+        if (!r.ok) return
+        const d = await r.json()
+        if (d.status === 'running') {
+            const currentMod = d.progress?.current_module != null ? Number(d.progress.current_module) : null
+            onStatusUpdate(true, currentMod)
+        } else {
+            onStatusUpdate(false, null)
+        }
+    } catch { /* ignore */ }
+}
+
+export default function App() {
+    const [state, dispatch] = useReducer(appReducer, initialAppState)
+    const {
+        tab,
+        ip,
+        timeout,
+        topology,
+        diffStatus,
+        removedModules,
+        canvasH,
+        canvasW,
+        fullscreen,
+        pbStatus,
+        pbChecking,
+        showTopology,
+        activeModuleAddr,
+        rawSelectedAddr,
+        diagOpen,
+        rawConfig,
+    } = state
 
     async function checkPocketBase() {
-        setPbChecking(true)
+        dispatch({ type: 'SET_PB_CHECKING', checking: true })
         try {
             const r = await fetch('/pocketbase/health')
             const d = await r.json()
-            setPbStatus(d.status === 'ok' ? 'ok' : 'error')
+            dispatch({ type: 'SET_PB_STATUS', status: d.status === 'ok' ? 'ok' : 'error' })
+            dispatch({ type: 'SET_PB_CHECKING', checking: false })
         } catch {
-            setPbStatus('error')
-        } finally {
-            setPbChecking(false)
+            dispatch({ type: 'SET_PB_STATUS', status: 'error' })
+            dispatch({ type: 'SET_PB_CHECKING', checking: false })
         }
     }
 
     // Poll test-run status for topology highlighting (slow when idle)
+
+
     useEffect(() => {
         let active = false
-        const poll = async () => {
-            try {
-                const r = await fetch('/test-run/status')
-                if (!r.ok) return
-                const d = await r.json()
-                if (d.status === 'running') {
+        const timer = setInterval(() => {
+            pollTestRunStatus((isRunning, currentMod) => {
+                if (isRunning) {
                     active = true
-                    setActiveModuleAddr(d.progress?.current_module != null ? Number(d.progress.current_module) : null)
+                    dispatch({ type: 'SET_ACTIVE_MODULE_ADDR', addr: currentMod })
                 } else {
-                    if (active) setActiveModuleAddr(null)
+                    if (active) dispatch({ type: 'SET_ACTIVE_MODULE_ADDR', addr: null })
                     active = false
                 }
-            } catch { /* ignore */ }
-        }
-        const timer = setInterval(poll, 2000)
+            })
+        }, 2000)
         return () => clearInterval(timer)
     }, [])
 
     // Drag-to-resize height handle
     const dragRef = useRef({ active: false, startY: 0, startH: 0 })
-    const onDragStart = useCallback((e: React.MouseEvent) => {
+    function onDragStart(e: React.MouseEvent) {
         dragRef.current = { active: true, startY: e.clientY, startH: canvasH }
         e.preventDefault()
         const onMove = (ev: MouseEvent) => {
             if (!dragRef.current.active) return
             const delta = ev.clientY - dragRef.current.startY
-            setCanvasH(Math.min(MAX_CANVAS_H, Math.max(MIN_CANVAS_H, dragRef.current.startH + delta)))
+            dispatch({ type: 'SET_CANVAS_H', height: Math.min(MAX_CANVAS_H, Math.max(MIN_CANVAS_H, dragRef.current.startH + delta)) })
         }
         const onUp = () => {
             dragRef.current.active = false
@@ -100,18 +238,18 @@ export default function App() {
         }
         window.addEventListener('mousemove', onMove)
         window.addEventListener('mouseup', onUp)
-    }, [canvasH])
+    }
 
     // Drag-to-resize width handle
     const wDragRef = useRef({ active: false, startX: 0, startW: 0 })
-    const onWidthDragStart = useCallback((e: React.MouseEvent) => {
+    function onWidthDragStart(e: React.MouseEvent) {
         const startW = canvasW ?? (e.currentTarget.parentElement?.getBoundingClientRect().width ?? 800)
         wDragRef.current = { active: true, startX: e.clientX, startW }
         e.preventDefault()
         const onMove = (ev: MouseEvent) => {
             if (!wDragRef.current.active) return
             const delta = ev.clientX - wDragRef.current.startX
-            setCanvasW(Math.min(MAX_CANVAS_W, Math.max(MIN_CANVAS_W, wDragRef.current.startW + delta)))
+            dispatch({ type: 'SET_CANVAS_W', width: Math.min(MAX_CANVAS_W, Math.max(MIN_CANVAS_W, wDragRef.current.startW + delta)) })
         }
         const onUp = () => {
             wDragRef.current.active = false
@@ -120,152 +258,78 @@ export default function App() {
         }
         window.addEventListener('mousemove', onMove)
         window.addEventListener('mouseup', onUp)
-    }, [canvasW])
-
-    const [rawConfig, setRawConfig] = useState<BenchConfig | null>(null)
+    }
 
     function onResult(topo: Topology | null, status: DiffStatus | null, removed: TopologyModule[] = [], config?: BenchConfig) {
-        setTopology(topo)
-        setDiff(status)
-        setRemovedModules(removed)
-        if (config) setRawConfig(config)
+        dispatch({ type: 'SET_RESULT', topo, status, removed, config })
     }
 
     /** Sync topology + rawConfig when a BenchConfig is loaded in ConnectionsFlow */
     function onConfigLoad(config: BenchConfig) {
-        setRawConfig(config)
-        setTopology(configToTopology(config))
+        dispatch({ type: 'CONFIG_LOAD', config })
     }
 
     /** Patch MountedValves on a module entry when user configures valves in ConnectionsFlow */
     function onModuleValveChange(addr: number, mountedValves: number[]) {
-        setTopology(prev => {
-            if (!prev) return prev
-            return {
-                ...prev,
-                Topology: prev.Topology.map(m =>
-                    m.Adress === addr ? { ...m, MountedValves: mountedValves } : m
-                ),
-            }
-        })
-        setRawConfig(prev => {
-            if (!prev) return prev
-            return {
-                ...prev,
-                module_instances: (prev.module_instances || []).map(inst =>
-                    inst.address === addr ? { ...inst, mounted_valves: mountedValves } : inst
-                )
-            }
-        })
+        dispatch({ type: 'MODULE_VALVE_CHANGE', addr, mountedValves })
     }
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-            <AppBar position="static" sx={{ background: '#003366', flexShrink: 0, pt: 1, pb: 1 }}>
-                <Toolbar variant="dense" sx={{ gap: 2, flexWrap: 'wrap' }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700, mr: 2, whiteSpace: 'nowrap' }}>
-                        CPX-AP Topology Manager
-                    </Typography>
-                    <TextField
-                        label="IP Address" value={ip}
-                        onChange={e => setIp(e.target.value)}
-                        size="small" variant="outlined" sx={appBarFieldSx}
-                    />
-                    <TextField
-                        label="Timeout (s)" value={timeout}
-                        onChange={e => setTimeout_(parseFloat(e.target.value) || 0)}
-                        size="small" type="number" variant="outlined"
-                        sx={{ ...appBarFieldSx, width: 120 }}
-                    />
-                    <Stack direction="row" spacing={1} sx={{ ml: 'auto', alignItems: 'center' }}>
-                        <TooltipButton
-                            size="small"
-                            variant="outlined"
-                            onClick={() => setShowTopology(s => !s)}
-                            tooltip={showTopology ? 'Hide topology map' : 'Show topology map'}
-                            icon={showTopology ? <VisibilityOffIcon sx={{ fontSize: '1rem' }} /> : <VisibilityIcon sx={{ fontSize: '1rem' }} />}
-                            sx={{ fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap', color: '#fff', borderColor: 'rgba(255,255,255,0.4)', '& .MuiButton-startIcon': { mr: 0.5 } }}
-                        >
-                            Map
-                        </TooltipButton>
-                        <TooltipButton
-                            size="small"
-                            variant="outlined"
-                            onClick={checkPocketBase}
-                            disabled={pbChecking}
-                            tooltip={pbStatus === 'ok' ? 'PocketBase: connected' : pbStatus === 'error' ? 'PocketBase: unreachable' : 'Check PocketBase connection'}
-                            icon={pbStatus === 'ok' ? <CloudIcon sx={{ fontSize: '1rem' }} /> : pbStatus === 'error' ? <CloudOffIcon sx={{ fontSize: '1rem' }} /> : <StorageIcon sx={{ fontSize: '1rem' }} />}
-                            sx={{
-                                fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap',
-                                borderColor: pbStatus === 'ok' ? '#4caf50' : pbStatus === 'error' ? '#f44336' : 'rgba(255,255,255,0.5)',
-                                color: pbStatus === 'ok' ? '#4caf50' : pbStatus === 'error' ? '#f44336' : '#fff',
-                                '&:hover': { borderColor: '#fff', color: '#fff' },
-                                '& .MuiButton-startIcon': { mr: 0.5 }
-                            }}
-                        >
-                            {pbChecking ? 'Checking...' : 'PocketBase'}
-                        </TooltipButton>
-                        <TooltipButton
-                            size="small"
-                            variant="outlined"
-                            onClick={() => setDiagOpen(true)}
-                            tooltip="Show live system diagnostics raised"
-                            icon={<ReportProblemIcon sx={{ fontSize: '1rem' }} />}
-                            sx={{
-                                fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap',
-                                borderColor: 'rgba(255,255,255,0.5)',
-                                color: '#fff',
-                                '&:hover': { borderColor: '#fff', color: '#fff' },
-                                '& .MuiButton-startIcon': { mr: 0.5 }
-                            }}
-                        >
-                            Diags
-                        </TooltipButton>
-                    </Stack>
-                </Toolbar>
-            </AppBar>
+            <AppHeader
+                ip={ip}
+                onIpChange={v => dispatch({ type: 'SET_IP', ip: v })}
+                timeout={timeout}
+                onTimeoutChange={v => dispatch({ type: 'SET_TIMEOUT', timeout: v })}
+                showTopology={showTopology}
+                onToggleTopology={() => dispatch({ type: 'TOGGLE_TOPOLOGY' })}
+                pbChecking={pbChecking}
+                pbStatus={pbStatus}
+                onCheckPocketBase={checkPocketBase}
+                onOpenDiagnostics={() => dispatch({ type: 'SET_DIAG_OPEN', open: true })}
+            />
 
             {/* ── Topology canvas (collapsible) ── */}
             {showTopology && (
-            <Box sx={fullscreen
-                ? { position: 'fixed', inset: 0, zIndex: 1300, background: '#fafafa' }
-                : {
-                    display: 'flex', flexDirection: 'row',
-                    height: canvasH, flexShrink: 0,
-                    borderBottom: '1px solid #ddd', background: '#fafafa',
-                }
-            }>
-                {/* Canvas area (width-constrained when user has dragged) */}
-                <Box sx={{
-                    flex: canvasW ? 'none' : 1,
-                    width: canvasW ?? undefined,
-                    height: '100%',
-                    overflow: 'hidden',
-                    position: 'relative',
-                }}>
-                    <TopologyFlow
-                        topology={topology}
-                        diffStatus={diffStatus}
-                        removedModules={removedModules}
-                        fullscreen={fullscreen}
-                        onToggleFullscreen={() => setFullscreen(f => !f)}
-                        activeModuleAddr={activeModuleAddr}
-                        selectedModuleAddr={tab === 3 ? rawSelectedAddr : null}
-                        onSelectModuleAddr={tab === 3 ? setRawSelectedAddr : undefined}
-                    />
-                </Box>
+                <Box sx={fullscreen
+                    ? { position: 'fixed', inset: 0, zIndex: 1300, background: '#fafafa' }
+                    : {
+                        display: 'flex', flexDirection: 'row',
+                        height: canvasH, flexShrink: 0,
+                        borderBottom: '1px solid #ddd', background: '#fafafa',
+                    }
+                }>
+                    {/* Canvas area (width-constrained when user has dragged) */}
+                    <Box sx={{
+                        flex: canvasW ? 'none' : 1,
+                        width: canvasW ?? undefined,
+                        height: '100%',
+                        overflow: 'hidden',
+                        position: 'relative',
+                    }}>
+                        <TopologyFlow
+                            topology={topology}
+                            diffStatus={diffStatus}
+                            removedModules={removedModules}
+                            fullscreen={fullscreen}
+                            onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
+                            activeModuleAddr={activeModuleAddr}
+                            selectedModuleAddr={tab === 3 ? rawSelectedAddr : null}
+                            onSelectModuleAddr={tab === 3 ? (addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })) : undefined}
+                        />
+                    </Box>
 
-                {/* Right-edge width resize handle */}
-                {!fullscreen && (
-                    <Box onMouseDown={onWidthDragStart} sx={{
-                        width: 6, flexShrink: 0, cursor: 'col-resize',
-                        background: 'linear-gradient(to right, #e0e0e0 0%, #bdbdbd 50%, #e0e0e0 100%)',
-                        '&:hover': { background: '#1976d2' },
-                        transition: 'background 0.15s',
-                        userSelect: 'none',
-                    }} />
-                )}
-            </Box>
+                    {/* Right-edge width resize handle */}
+                    {!fullscreen && (
+                        <Box onMouseDown={onWidthDragStart} sx={{
+                            width: 6, flexShrink: 0, cursor: 'col-resize',
+                            background: 'linear-gradient(to right, #e0e0e0 0%, #bdbdbd 50%, #e0e0e0 100%)',
+                            '&:hover': { background: '#1976d2' },
+                            transition: 'background 0.15s',
+                            userSelect: 'none',
+                        }} />
+                    )}
+                </Box>
             )}
 
             {/* ── Drag-resize handle ── */}
@@ -282,7 +346,7 @@ export default function App() {
             {/* ── Tab bar ── */}
             {!fullscreen && (
                 <Box sx={{ background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
-                    <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 38 }}
+                    <Tabs value={tab} onChange={(_, v) => dispatch({ type: 'SET_TAB', tab: v })} sx={{ minHeight: 38 }}
                         variant="scrollable" scrollButtons="auto">
                         <Tab label="Topology" sx={{ minHeight: 38 }} />
                         <Tab label="Connections" sx={{ minHeight: 38 }} />
@@ -318,7 +382,7 @@ export default function App() {
                             topology={topology}
                             ip={ip}
                             selectedModuleAddr={rawSelectedAddr}
-                            onSelectModuleAddr={setRawSelectedAddr}
+                            onSelectModuleAddr={addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })}
                         />
                     )}
                     {tab === 4 && (
@@ -328,14 +392,9 @@ export default function App() {
                     )}
                 </Box>
             )}
-            <DiagnosticsModal open={diagOpen} onClose={() => setDiagOpen(false)} ip={ip} />
+            {diagOpen && (
+                <DiagnosticsModal open={diagOpen} onClose={() => dispatch({ type: 'SET_DIAG_OPEN', open: false })} ip={ip} />
+            )}
         </Box>
     )
-}
-
-const appBarFieldSx: SxProps<Theme> = {
-    width: 170,
-    '& .MuiInputBase-root': { background: 'rgba(255,255,255,0.12)' },
-    '& .MuiInputLabel-root, & input': { color: '#fff' },
-    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.35)' },
 }

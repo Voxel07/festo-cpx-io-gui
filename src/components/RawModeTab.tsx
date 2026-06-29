@@ -1,16 +1,9 @@
-import { useState, useEffect, Fragment } from 'react'
-import {
-    Box, Typography, Divider, TextField, Table,
-    TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Select, MenuItem, Alert, CircularProgress, Stack, Paper, IconButton, Collapse
-} from '@mui/material'
-import RefreshIcon from '@mui/icons-material/Refresh'
+import { useReducer, useState } from 'react'
+import { Box, Typography, Alert, Stack, Paper } from '@mui/material'
 import SettingsIcon from '@mui/icons-material/Settings'
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import ModuleActuatePanel from './ModuleActuatePanel'
 import type { Topology, TopologyModule } from '../types'
-import { TooltipButton } from './TooltipButton'
+import ParametersTable from './ParametersTable'
 
 interface ParameterMetadata {
     parameter_id: number
@@ -30,119 +23,233 @@ interface Props {
     onSelectModuleAddr: (addr: number | null) => void
 }
 
+interface RawModeState {
+    parameters: ParameterMetadata[]
+    paramValues: Record<string, string>
+    loadingParams: boolean
+    readingParams: Record<string, boolean>
+    writingParams: Record<string, boolean>
+    expandedParams: Record<number, boolean>
+    paramFeedback: Record<string, { severity: 'success' | 'error'; text: string }>
+    readingAll: boolean
+    tabError: string | null
+}
+
+const initialRawModeState: RawModeState = {
+    parameters: [],
+    paramValues: {},
+    loadingParams: false,
+    readingParams: {},
+    writingParams: {},
+    expandedParams: {},
+    paramFeedback: {},
+    readingAll: false,
+    tabError: null,
+}
+
+type RawModeAction =
+    | { type: 'RESET_MODULE' }
+    | { type: 'FETCH_PARAMS_START' }
+    | { type: 'FETCH_PARAMS_SUCCESS'; parameters: ParameterMetadata[] }
+    | { type: 'FETCH_PARAMS_FAIL'; error: string }
+    | { type: 'SET_READING_PARAM'; key: string; reading: boolean }
+    | { type: 'SET_WRITING_PARAM'; key: string; writing: boolean }
+    | { type: 'SET_PARAM_VALUE'; key: string; value: string }
+    | { type: 'SET_PARAM_VALUES'; values: Record<string, string> }
+    | { type: 'TOGGLE_EXPAND'; paramId: number }
+    | { type: 'SET_FEEDBACK'; key: string; feedback: { severity: 'success' | 'error'; text: string } | undefined }
+    | { type: 'SET_READING_ALL'; reading: boolean }
+    | { type: 'SET_TAB_ERROR'; error: string | null }
+
+function rawModeReducer(state: RawModeState, action: RawModeAction): RawModeState {
+    switch (action.type) {
+        case 'RESET_MODULE':
+            return {
+                ...state,
+                parameters: [],
+                paramValues: {},
+                expandedParams: {},
+                paramFeedback: {},
+                tabError: null,
+            }
+        case 'FETCH_PARAMS_START':
+            return {
+                ...state,
+                loadingParams: true,
+                tabError: null,
+            }
+        case 'FETCH_PARAMS_SUCCESS':
+            return {
+                ...state,
+                loadingParams: false,
+                parameters: action.parameters,
+                paramValues: {},
+                expandedParams: {},
+                paramFeedback: {},
+            }
+        case 'FETCH_PARAMS_FAIL':
+            return {
+                ...state,
+                loadingParams: false,
+                tabError: action.error,
+                parameters: [],
+            }
+        case 'SET_READING_PARAM':
+            return {
+                ...state,
+                readingParams: { ...state.readingParams, [action.key]: action.reading },
+            }
+        case 'SET_WRITING_PARAM':
+            return {
+                ...state,
+                writingParams: { ...state.writingParams, [action.key]: action.writing },
+            }
+        case 'SET_PARAM_VALUE':
+            return {
+                ...state,
+                paramValues: { ...state.paramValues, [action.key]: action.value },
+            }
+        case 'SET_PARAM_VALUES':
+            return {
+                ...state,
+                paramValues: { ...state.paramValues, ...action.values },
+            }
+        case 'TOGGLE_EXPAND':
+            return {
+                ...state,
+                expandedParams: {
+                    ...state.expandedParams,
+                    [action.paramId]: !state.expandedParams[action.paramId],
+                },
+            }
+        case 'SET_FEEDBACK': {
+            const next = { ...state.paramFeedback }
+            if (action.feedback === undefined) {
+                delete next[action.key]
+            } else {
+                next[action.key] = action.feedback
+            }
+            return { ...state, paramFeedback: next }
+        }
+        case 'SET_READING_ALL':
+            return {
+                ...state,
+                readingAll: action.reading,
+            }
+        case 'SET_TAB_ERROR':
+            return {
+                ...state,
+                tabError: action.error,
+            }
+        default:
+            return state
+    }
+}
+
 export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectModuleAddr }: Props) {
-    const [parameters, setParameters] = useState<ParameterMetadata[]>([])
-    // Store values as "paramId_instanceIdx" -> value string
-    const [paramValues, setParamValues] = useState<Record<string, string>>({})
-    const [loadingParams, setLoadingParams] = useState(false)
-    const [readingParams, setReadingParams] = useState<Record<string, boolean>>({})
-    const [writingParams, setWritingParams] = useState<Record<string, boolean>>({})
-    const [expandedParams, setExpandedParams] = useState<Record<number, boolean>>({})
-    const [paramFeedback, setParamFeedback] = useState<Record<string, { severity: 'success' | 'error'; text: string }>>({})
-    const [readingAll, setReadingAll] = useState(false)
-    const [tabError, setTabError] = useState<string | null>(null)
+    const [state, dispatch] = useReducer(rawModeReducer, initialRawModeState)
+    const {
+        parameters,
+        paramValues,
+        loadingParams,
+        readingParams,
+        writingParams,
+        expandedParams,
+        paramFeedback,
+        readingAll,
+        tabError,
+    } = state
 
     // Lookup selected module
     const selectedModule = topology?.Topology?.find(m => m.Adress === selectedModuleAddr) || null
 
-    // Load parameters when selected module changes
-    useEffect(() => {
-        if (!selectedModule || !ip) {
-            setParameters([])
-            setParamValues({})
-            setExpandedParams({})
-            setParamFeedback({})
-            setTabError(null)
-            return
-        }
-
-        async function fetchParams() {
-            setLoadingParams(true)
-            setTabError(null)
-            try {
-                const r = await fetch(`/io/module/${selectedModule!.Adress}/parameters?ip_address=${encodeURIComponent(ip)}`)
-                const d = await r.json()
-                if (!r.ok) {
-                    setTabError(d.detail ?? 'Failed to load parameters.')
-                    setParameters([])
-                } else {
-                    setParameters(d)
-                    setParamValues({})
-                    setExpandedParams({})
-                    setParamFeedback({})
-                }
-            } catch (err) {
-                setTabError((err as Error).message)
-                setParameters([])
-            } finally {
-                setLoadingParams(false)
+    async function fetchParams(address: number, ipAddress: string) {
+        dispatch({ type: 'FETCH_PARAMS_START' })
+        try {
+            const r = await fetch(`/io/module/${address}/parameters?ip_address=${encodeURIComponent(ipAddress)}`)
+            const d = await r.json()
+            if (!r.ok) {
+                dispatch({ type: 'FETCH_PARAMS_FAIL', error: d.detail ?? 'Failed to load parameters.' })
+            } else {
+                dispatch({ type: 'FETCH_PARAMS_SUCCESS', parameters: d })
             }
+        } catch (err) {
+            dispatch({ type: 'FETCH_PARAMS_FAIL', error: (err as Error).message })
         }
-        fetchParams()
-    }, [selectedModule, ip])
+    }
+
+    const [prevSelectedAddr, setPrevSelectedAddr] = useState<number | null>(null)
+
+    if (selectedModuleAddr !== prevSelectedAddr) {
+        setPrevSelectedAddr(selectedModuleAddr)
+        if (!selectedModule || !ip) {
+            dispatch({ type: 'RESET_MODULE' })
+        } else {
+            fetchParams(selectedModule.Adress, ip)
+        }
+    }
 
     // Helper to trigger and clear feedback
     const setFeedback = (key: string, severity: 'success' | 'error', text: string) => {
-        setParamFeedback(prev => ({ ...prev, [key]: { severity, text } }))
+        dispatch({ type: 'SET_FEEDBACK', key, feedback: { severity, text } })
         if (severity === 'success') {
             setTimeout(() => {
-                setParamFeedback(prev => {
-                    const next = { ...prev }
-                    if (next[key]?.severity === 'success') delete next[key]
-                    return next
-                })
+                dispatch({ type: 'SET_FEEDBACK', key, feedback: undefined })
             }, 4000)
         }
     }
 
-    // Toggle collapsible channels view
     const toggleExpand = (paramId: number) => {
-        setExpandedParams(prev => ({ ...prev, [paramId]: !prev[paramId] }))
+        dispatch({ type: 'TOGGLE_EXPAND', paramId })
+    }
+
+    const onValueChange = (key: string, value: string) => {
+        dispatch({ type: 'SET_PARAM_VALUE', key, value })
     }
 
     // Read a specific instance of a parameter
     async function handleReadParamInstance(paramId: number, instanceIdx: number) {
         if (!selectedModule || !ip) return
         const key = `${paramId}_${instanceIdx}`
-        setReadingParams(prev => ({ ...prev, [key]: true }))
-        setTabError(null)
+        dispatch({ type: 'SET_READING_PARAM', key, reading: true })
+        dispatch({ type: 'SET_TAB_ERROR', error: null })
         try {
             const r = await fetch(`/io/module/${selectedModule.Adress}/parameter/${paramId}?ip_address=${encodeURIComponent(ip)}&instance=${instanceIdx}`)
             const d = await r.json()
             if (!r.ok) {
                 const errText = d.detail ?? `Failed to read parameter ${paramId} instance ${instanceIdx}.`
                 setFeedback(key, 'error', errText)
-                setTabError(errText)
+                dispatch({ type: 'SET_TAB_ERROR', error: errText })
             } else {
-                setParamValues(prev => ({ ...prev, [key]: d.value }))
+                dispatch({ type: 'SET_PARAM_VALUE', key, value: String(d.value) })
                 setFeedback(key, 'success', '✓ Read')
             }
+            dispatch({ type: 'SET_READING_PARAM', key, reading: false })
         } catch (err) {
             const errText = (err as Error).message
             setFeedback(key, 'error', errText)
-            setTabError(errText)
-        } finally {
-            setReadingParams(prev => ({ ...prev, [key]: false }))
+            dispatch({ type: 'SET_TAB_ERROR', error: errText })
+            dispatch({ type: 'SET_READING_PARAM', key, reading: false })
         }
     }
 
-    // Read all instances of a specific parameter (using single backend call returning a list)
+    // Read all instances of a specific parameter
     async function handleReadParamAllInstances(paramId: number, numInstances: number) {
         if (!selectedModule || !ip) return
         const readKey = `${paramId}_all`
-        setReadingParams(prev => ({ ...prev, [readKey]: true }))
-        setTabError(null)
+        dispatch({ type: 'SET_READING_PARAM', key: readKey, reading: true })
+        dispatch({ type: 'SET_TAB_ERROR', error: null })
         try {
             const r = await fetch(`/io/module/${selectedModule.Adress}/parameter/${paramId}?ip_address=${encodeURIComponent(ip)}`)
             const d = await r.json()
             if (!r.ok) {
                 const errText = d.detail ?? `Failed to read parameter ${paramId}.`
-                setTabError(errText)
+                dispatch({ type: 'SET_TAB_ERROR', error: errText })
                 for (let i = 0; i < numInstances; i++) {
                     setFeedback(`${paramId}_${i}`, 'error', errText)
                 }
             } else {
-                const nextVals = { ...paramValues }
+                const nextVals: Record<string, string> = {}
                 if (Array.isArray(d.value)) {
                     for (let i = 0; i < numInstances; i++) {
                         nextVals[`${paramId}_${i}`] = d.value[i] !== undefined ? String(d.value[i]) : ''
@@ -152,26 +259,26 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
                     nextVals[`${paramId}_0`] = String(d.value)
                     setFeedback(`${paramId}_0`, 'success', '✓ Read')
                 }
-                setParamValues(nextVals)
+                dispatch({ type: 'SET_PARAM_VALUES', values: nextVals })
             }
+            dispatch({ type: 'SET_READING_PARAM', key: readKey, reading: false })
         } catch (err) {
             const errText = (err as Error).message
-            setTabError(errText)
+            dispatch({ type: 'SET_TAB_ERROR', error: errText })
             for (let i = 0; i < numInstances; i++) {
                 setFeedback(`${paramId}_${i}`, 'error', errText)
             }
-        } finally {
-            setReadingParams(prev => ({ ...prev, [readKey]: false }))
+            dispatch({ type: 'SET_READING_PARAM', key: readKey, reading: false })
         }
     }
 
     // Read all parameters on the selected module
     async function handleReadAll() {
         if (!selectedModule || !ip || parameters.length === 0) return
-        setReadingAll(true)
-        setTabError(null)
+        dispatch({ type: 'SET_READING_ALL', reading: true })
+        dispatch({ type: 'SET_TAB_ERROR', error: null })
         const errors: string[] = []
-        const nextVals = { ...paramValues }
+        const nextVals: Record<string, string> = {}
 
         for (const p of parameters) {
             try {
@@ -203,11 +310,11 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
             }
         }
 
-        setParamValues(nextVals)
+        dispatch({ type: 'SET_PARAM_VALUES', values: nextVals })
         if (errors.length > 0) {
-            setTabError(`Some parameters failed to read:\n${errors.join('\n')}`)
+            dispatch({ type: 'SET_TAB_ERROR', error: `Some parameters failed to read:\n${errors.join('\n')}` })
         }
-        setReadingAll(false)
+        dispatch({ type: 'SET_READING_ALL', reading: false })
     }
 
     // Write a specific parameter instance
@@ -216,12 +323,12 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
         const key = `${paramId}_${instanceIdx}`
         const val = paramValues[key]
         if (val === undefined || val.trim() === '') {
-            setTabError('Please enter a value to write.')
+            dispatch({ type: 'SET_TAB_ERROR', error: 'Please enter a value to write.' })
             return
         }
 
-        setWritingParams(prev => ({ ...prev, [key]: true }))
-        setTabError(null)
+        dispatch({ type: 'SET_WRITING_PARAM', key, writing: true })
+        dispatch({ type: 'SET_TAB_ERROR', error: null })
         try {
             const r = await fetch(`/io/module/${selectedModule.Adress}/parameter/${paramId}`, {
                 method: 'POST',
@@ -236,17 +343,17 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
             if (!r.ok) {
                 const errText = d.detail ?? `Failed to write parameter ${paramId} instance ${instanceIdx}.`
                 setFeedback(key, 'error', errText)
-                setTabError(errText)
+                dispatch({ type: 'SET_TAB_ERROR', error: errText })
             } else {
-                setParamValues(prev => ({ ...prev, [key]: d.value }))
+                dispatch({ type: 'SET_PARAM_VALUE', key, value: String(d.value) })
                 setFeedback(key, 'success', '✓ Written')
             }
+            dispatch({ type: 'SET_WRITING_PARAM', key, writing: false })
         } catch (err) {
             const errText = (err as Error).message
             setFeedback(key, 'error', errText)
-            setTabError(errText)
-        } finally {
-            setWritingParams(prev => ({ ...prev, [key]: false }))
+            dispatch({ type: 'SET_TAB_ERROR', error: errText })
+            dispatch({ type: 'SET_WRITING_PARAM', key, writing: false })
         }
     }
 
@@ -273,7 +380,7 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
 
             {tabError && (
                 <Box sx={{ px: 3, pt: 2 }}>
-                    <Alert severity="error" onClose={() => setTabError(null)} sx={{ fontSize: '0.75rem' }}>
+                    <Alert severity="error" onClose={() => dispatch({ type: 'SET_TAB_ERROR', error: null })} sx={{ fontSize: '0.75rem' }}>
                         {tabError}
                     </Alert>
                 </Box>
@@ -294,6 +401,7 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
                                 Output Control Panel
                             </Typography>
                             <ModuleActuatePanel
+                                key={selectedModule.Adress}
                                 module={selectedModule}
                                 ip={ip}
                                 mountedValves={selectedModule.MountedValves}
@@ -302,270 +410,24 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
 
                         {/* Parameters Section */}
                         <Paper variant="outlined" sx={{ p: 2.5, background: '#fff', flex: 1 }}>
-                            <Stack direction="row" sx={{ alignItems: 'center', mb: 2 }}>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.8rem', color: '#1976d2', flex: 1 }}>
-                                    Device Parameters
-                                </Typography>
-                                {parameters.length > 0 && (
-                                    <TooltipButton
-                                        size="small"
-                                        variant="outlined"
-                                        onClick={handleReadAll}
-                                        disabled={readingAll || !ip}
-                                        tooltip="Read current values of all parameters"
-                                        icon={readingAll ? <CircularProgress size={14} /> : <RefreshIcon />}
-                                        sx={{ fontSize: '0.68rem', py: 0.2 }}
-                                    >
-                                        Read All
-                                    </TooltipButton>
-                                )}
-                            </Stack>
-
-                            {loadingParams ? (
-                                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                                    <CircularProgress size={24} />
-                                </Box>
-                            ) : parameters.length === 0 ? (
-                                <Alert severity="info" sx={{ fontSize: '0.75rem', py: 0 }}>
-                                    No parameters metadata retrieved from this module type.
-                                </Alert>
-                            ) : (
-                                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 600, overflowY: 'auto' }}>
-                                    <Table size="small">
-                                        <TableHead sx={{ background: '#f5f5f5' }}>
-                                            <TableRow>
-                                                <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700 }}>Parameter Name</TableCell>
-                                                <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700 }}>Value</TableCell>
-                                                <TableCell align="right" sx={{ fontSize: '0.7rem', fontWeight: 700 }}>Actions</TableCell>
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {parameters.map(p => {
-                                                const hasMultiple = p.num_instances > 1
-                                                const isExpanded = !!expandedParams[p.parameter_id]
-                                                const val0 = paramValues[`${p.parameter_id}_0`] ?? ''
-                                                const isReading0 = readingParams[`${p.parameter_id}_0`] === true
-                                                const isWriting0 = writingParams[`${p.parameter_id}_0`] === true
-                                                const isReadingAllP = readingParams[`${p.parameter_id}_all`] === true
-                                                const fb0 = paramFeedback[`${p.parameter_id}_0`]
-
-                                                return (
-                                                    <Fragment key={p.parameter_id}>
-                                                        {/* Main Parameter Row */}
-                                                        <TableRow sx={{ '& > *': { borderBottom: hasMultiple ? 'none' : undefined } }}>
-                                                            <TableCell sx={{ py: 1 }}>
-                                                                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                                                                    {hasMultiple && (
-                                                                        <IconButton size="small" onClick={() => toggleExpand(p.parameter_id)}>
-                                                                            {isExpanded ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
-                                                                        </IconButton>
-                                                                    )}
-                                                                    <Box>
-                                                                        <Typography sx={{ fontSize: '0.72rem', fontWeight: 600 }}>
-                                                                            {p.name}
-                                                                        </Typography>
-                                                                        <Typography sx={{ fontSize: '0.62rem', color: '#888' }}>
-                                                                            ID: {p.parameter_id} · Type: {p.data_type} {p.unit ? `· Unit: ${p.unit}` : ''}
-                                                                            {hasMultiple ? ` · [${p.num_instances} channels]` : ''}
-                                                                        </Typography>
-                                                                    </Box>
-                                                                </Stack>
-                                                            </TableCell>
-                                                            <TableCell sx={{ py: 1, minWidth: 140 }}>
-                                                                {hasMultiple ? (
-                                                                    <Typography sx={{ fontSize: '0.68rem', color: '#666', fontStyle: 'italic' }}>
-                                                                        Expand to configure channels
-                                                                    </Typography>
-                                                                ) : p.enums ? (
-                                                                    <Select
-                                                                        size="small"
-                                                                        value={val0}
-                                                                        onChange={e => setParamValues(prev => ({ ...prev, [`${p.parameter_id}_0`]: e.target.value }))}
-                                                                        sx={{ fontSize: '0.72rem', height: 28, width: '100%' }}
-                                                                        displayEmpty
-                                                                    >
-                                                                        <MenuItem value="" disabled sx={{ fontSize: '0.72rem' }}>
-                                                                            Select...
-                                                                        </MenuItem>
-                                                                        {p.enums.map(enumName => (
-                                                                            <MenuItem key={enumName} value={enumName} sx={{ fontSize: '0.72rem' }}>
-                                                                                {enumName}
-                                                                            </MenuItem>
-                                                                        ))}
-                                                                    </Select>
-                                                                ) : (
-                                                                    <TextField
-                                                                        size="small"
-                                                                        placeholder="Value..."
-                                                                        value={val0}
-                                                                        onChange={e => setParamValues(prev => ({ ...prev, [`${p.parameter_id}_0`]: e.target.value }))}
-                                                                        sx={{ '& input': { fontSize: '0.72rem', py: 0.5, px: 1 } }}
-                                                                        fullWidth
-                                                                    />
-                                                                )}
-                                                                {fb0 && (
-                                                                    <Typography sx={{
-                                                                        fontSize: '0.62rem', mt: 0.5,
-                                                                        color: fb0.severity === 'success' ? '#2e7d32' : '#d32f2f',
-                                                                        fontWeight: 600
-                                                                    }}>
-                                                                        {fb0.text}
-                                                                    </Typography>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell align="right" sx={{ py: 1, whiteSpace: 'nowrap' }}>
-                                                                {hasMultiple ? (
-                                                                    <TooltipButton
-                                                                        size="small"
-                                                                        variant="outlined"
-                                                                        onClick={() => handleReadParamAllInstances(p.parameter_id, p.num_instances)}
-                                                                        disabled={isReadingAllP || !ip}
-                                                                        tooltip="Read all channel instances in one call"
-                                                                        icon={isReadingAllP ? <CircularProgress size={12} /> : undefined}
-                                                                        sx={{ fontSize: '0.65rem', minWidth: 70, py: 0.4 }}
-                                                                    >
-                                                                        Read All
-                                                                    </TooltipButton>
-                                                                ) : (
-                                                                    <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                                                                        <TooltipButton
-                                                                            size="small"
-                                                                            variant="text"
-                                                                            onClick={() => handleReadParamInstance(p.parameter_id, 0)}
-                                                                            disabled={isReading0 || isWriting0 || !ip}
-                                                                            tooltip="Read parameter from device"
-                                                                            icon={isReading0 ? <CircularProgress size={12} /> : undefined}
-                                                                            sx={{ fontSize: '0.65rem', minWidth: 40, p: 0.5 }}
-                                                                        >
-                                                                            Read
-                                                                        </TooltipButton>
-                                                                        {p.is_writable && (
-                                                                            <TooltipButton
-                                                                                size="small"
-                                                                                variant="contained"
-                                                                                color="primary"
-                                                                                onClick={() => handleWriteParamInstance(p.parameter_id, 0)}
-                                                                                disabled={isReading0 || isWriting0 || !ip || val0 === ''}
-                                                                                tooltip="Write parameter to device"
-                                                                                icon={isWriting0 ? <CircularProgress size={12} color="inherit" /> : undefined}
-                                                                                sx={{ fontSize: '0.65rem', minWidth: 40, p: 0.5 }}
-                                                                            >
-                                                                                Write
-                                                                            </TooltipButton>
-                                                                        )}
-                                                                    </Stack>
-                                                                )}
-                                                            </TableCell>
-                                                        </TableRow>
-
-                                                        {/* Expanded Collapsible Channels Table */}
-                                                        {hasMultiple && (
-                                                            <TableRow>
-                                                                <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={3}>
-                                                                    <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                                                                        <Box sx={{ margin: 1, pl: 4, pb: 1, borderLeft: '2px dashed #e0e0e0' }}>
-                                                                            <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: 'block', color: '#666', fontSize: '0.65rem' }}>
-                                                                                Channel Parameters
-                                                                            </Typography>
-                                                                            <Table size="small">
-                                                                                <TableBody>
-                                                                                    {Array.from({ length: p.num_instances }, (_, idx) => {
-                                                                                        const instanceIdx = p.first_index + idx
-                                                                                        const instKey = `${p.parameter_id}_${idx}`
-                                                                                        const val = paramValues[instKey] ?? ''
-                                                                                        const isReading = readingParams[instKey] === true
-                                                                                        const isWriting = writingParams[instKey] === true
-                                                                                        const fb = paramFeedback[instKey]
-
-                                                                                        return (
-                                                                                            <TableRow key={instanceIdx} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                                                                                                <TableCell sx={{ py: 0.5, fontSize: '0.7rem', color: '#555' }}>
-                                                                                                    Channel {instanceIdx}
-                                                                                                </TableCell>
-                                                                                                <TableCell sx={{ py: 0.5, minWidth: 120 }}>
-                                                                                                    {p.enums ? (
-                                                                                                        <Select
-                                                                                                            size="small"
-                                                                                                            value={val}
-                                                                                                            onChange={e => setParamValues(prev => ({ ...prev, [instKey]: e.target.value }))}
-                                                                                                            sx={{ fontSize: '0.7rem', height: 26, width: '100%' }}
-                                                                                                            displayEmpty
-                                                                                                        >
-                                                                                                            <MenuItem value="" disabled sx={{ fontSize: '0.7rem' }}>
-                                                                                                                Select...
-                                                                                                            </MenuItem>
-                                                                                                            {p.enums.map(enumName => (
-                                                                                                                <MenuItem key={enumName} value={enumName} sx={{ fontSize: '0.7rem' }}>
-                                                                                                                    {enumName}
-                                                                                                                </MenuItem>
-                                                                                                            ))}
-                                                                                                        </Select>
-                                                                                                    ) : (
-                                                                                                        <TextField
-                                                                                                            size="small"
-                                                                                                            placeholder="Value..."
-                                                                                                            value={val}
-                                                                                                            onChange={e => setParamValues(prev => ({ ...prev, [instKey]: e.target.value }))}
-                                                                                                            sx={{ '& input': { fontSize: '0.7rem', py: 0.35, px: 0.8 } }}
-                                                                                                            fullWidth
-                                                                                                        />
-                                                                                                    )}
-                                                                                                    {fb && (
-                                                                                                        <Typography sx={{
-                                                                                                            fontSize: '0.62rem', mt: 0.25,
-                                                                                                            color: fb.severity === 'success' ? '#2e7d32' : '#d32f2f',
-                                                                                                            fontWeight: 600
-                                                                                                        }}>
-                                                                                                            {fb.text}
-                                                                                                        </Typography>
-                                                                                                    )}
-                                                                                                </TableCell>
-                                                                                                <TableCell align="right" sx={{ py: 0.5, whiteSpace: 'nowrap' }}>
-                                                                                                    <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                                                                                                        <TooltipButton
-                                                                                                            size="small"
-                                                                                                            variant="text"
-                                                                                                            onClick={() => handleReadParamInstance(p.parameter_id, idx)}
-                                                                                                            disabled={isReading || isWriting || !ip}
-                                                                                                            tooltip="Read this specific channel value"
-                                                                                                            icon={isReading ? <CircularProgress size={10} /> : undefined}
-                                                                                                            sx={{ fontSize: '0.62rem', minWidth: 32, p: 0.3 }}
-                                                                                                        >
-                                                                                                            Read
-                                                                                                        </TooltipButton>
-                                                                                                        {p.is_writable && (
-                                                                                                            <TooltipButton
-                                                                                                                size="small"
-                                                                                                                variant="contained"
-                                                                                                                color="primary"
-                                                                                                                onClick={() => handleWriteParamInstance(p.parameter_id, idx)}
-                                                                                                                disabled={isReading || isWriting || !ip || val === ''}
-                                                                                                                tooltip="Write this specific channel value"
-                                                                                                                icon={isWriting ? <CircularProgress size={10} color="inherit" /> : undefined}
-                                                                                                                sx={{ fontSize: '0.62rem', minWidth: 32, p: 0.3 }}
-                                                                                                            >
-                                                                                                                Write
-                                                                                                            </TooltipButton>
-                                                                                                        )}
-                                                                                                    </Stack>
-                                                                                                </TableCell>
-                                                                                            </TableRow>
-                                                                                        )
-                                                                                    })}
-                                                                                </TableBody>
-                                                                            </Table>
-                                                                        </Box>
-                                                                    </Collapse>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        )}
-                                                    </Fragment>
-                                                )
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
-                            )}
+                            <ParametersTable
+                                parameters={parameters}
+                                paramValues={paramValues}
+                                loadingParams={loadingParams}
+                                readingParams={readingParams}
+                                writingParams={writingParams}
+                                expandedParams={expandedParams}
+                                paramFeedback={paramFeedback}
+                                readingAll={readingAll}
+                                ip={ip}
+                                selectedModule={selectedModule}
+                                onReadParamInstance={handleReadParamInstance}
+                                onReadParamAllInstances={handleReadParamAllInstances}
+                                onWriteParamInstance={handleWriteParamInstance}
+                                onReadAll={handleReadAll}
+                                onToggleExpand={toggleExpand}
+                                onValueChange={onValueChange}
+                            />
                         </Paper>
                     </Box>
                 )}

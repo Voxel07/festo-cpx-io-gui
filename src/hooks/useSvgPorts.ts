@@ -44,7 +44,6 @@ function deriveKind(portIndex: number, svgKind: PortKind | null, counts: PortCou
 
     // Mixed: assign kinds by count, spread evenly across total connectors
     // Each M12-5P connector carries 2 channels; we assign by sorted port index.
-    const outFraction = numOut / total
     const inFraction  = numIn  / total
     // Ports are sorted X0…XN; outputs take the last slots (bottom connectors)
     const outStart = Math.round(inFraction * total)
@@ -56,53 +55,76 @@ function deriveKind(portIndex: number, svgKind: PortKind | null, counts: PortCou
 const geoCache   = new Map<string, Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }>>()
 const pending    = new Set<string>()
 
+async function fetchAndParseSvg(
+    svgUrl: string, 
+    onSuccess: (found: Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }>) => void,
+    onFinish: () => void
+) {
+    try {
+        const r = await fetch(svgUrl)
+        if (!r.ok) {
+            onFinish()
+            return
+        }
+        const text = await r.text()
+        if (!text) {
+            onFinish()
+            return
+        }
+        const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
+        const svgEl = doc.querySelector('svg')
+        if (!svgEl) {
+            onFinish()
+            return
+        }
+
+        const vb = (svgEl.getAttribute('viewBox') ?? '0 0 50 107')
+            .split(/[\s,]+/).map(Number)
+        const vbW = vb[2] || 50
+        const vbH = vb[3] || 107
+
+        const found: Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }> = []
+        doc.querySelectorAll('circle[id]').forEach(c => {
+            if (/^X\d+$/.test(c.id)) {
+                const cx = parseFloat(c.getAttribute('cx') ?? '0') / vbW
+                const cy = parseFloat(c.getAttribute('cy') ?? '0') / vbH
+                const raw = c.getAttribute('data-kind')
+                const svgKind: PortKind | null =
+                    raw === 'out' ? 'out' :
+                    raw === 'in'  ? 'in'  :
+                    raw === 'inout' ? 'inout' : null
+                found.push({ id: c.id, cx, cy, svgKind })
+            }
+        })
+        onSuccess(found)
+    } catch {
+        // keep empty
+    }
+    onFinish()
+}
+
 export function useSvgPorts(svgUrl: string, counts?: PortCounts): SvgPort[] {
-    const [raw, setRaw] = useState<Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }>>(
-        () => geoCache.get(svgUrl) ?? []
-    )
+    const [, setTick] = useState(0)
 
+    // Trigger async fetch on cache miss (only setState in the async callback)
     useEffect(() => {
-        if (!svgUrl || svgUrl.includes('Generic')) return
-        const cached = geoCache.get(svgUrl)
-        if (cached) { setRaw(cached); return }
-        if (pending.has(svgUrl)) return
-
+        if (!svgUrl || svgUrl.includes('Generic') || geoCache.has(svgUrl) || pending.has(svgUrl)) return
         pending.add(svgUrl)
-        fetch(svgUrl)
-            .then(r => (r.ok ? r.text() : ''))
-            .then(text => {
-                if (!text) return
-                const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
-                const svgEl = doc.querySelector('svg')
-                if (!svgEl) return
-
-                const vb = (svgEl.getAttribute('viewBox') ?? '0 0 50 107')
-                    .split(/[\s,]+/).map(Number)
-                const vbW = vb[2] || 50
-                const vbH = vb[3] || 107
-
-                const found: Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }> = []
-                doc.querySelectorAll('circle[id]').forEach(c => {
-                    if (/^X\d+$/.test(c.id)) {
-                        const cx = parseFloat(c.getAttribute('cx') ?? '0') / vbW
-                        const cy = parseFloat(c.getAttribute('cy') ?? '0') / vbH
-                        const raw = c.getAttribute('data-kind')
-                        const svgKind: PortKind | null =
-                            raw === 'out' ? 'out' :
-                            raw === 'in'  ? 'in'  :
-                            raw === 'inout' ? 'inout' : null
-                        found.push({ id: c.id, cx, cy, svgKind })
-                    }
-                })
-
+        fetchAndParseSvg(
+            svgUrl,
+            (found) => {
                 geoCache.set(svgUrl, found)
-                setRaw(found)
-            })
-            .catch(() => geoCache.set(svgUrl, []))
-            .finally(() => pending.delete(svgUrl))
+                setTick(t => t + 1)  // trigger re-render so cached geometry is picked up below
+            },
+            () => {
+                if (!geoCache.has(svgUrl)) geoCache.set(svgUrl, [])
+                pending.delete(svgUrl)
+            }
+        )
     }, [svgUrl])
 
-    // Combine geometry with derived kinds (recomputed on counts change, no extra fetch)
+    // Derive from cache during render — React Compiler can optimise this
+    const raw = svgUrl ? (geoCache.get(svgUrl) ?? []) : []
     const defaultCounts: PortCounts = counts ?? { numIn: 0, numOut: 0, numInOut: 0 }
     return raw.map((p, i) => ({
         id:   p.id,

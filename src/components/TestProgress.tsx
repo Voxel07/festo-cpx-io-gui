@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { Box, Paper, Stack, Typography, IconButton, Tooltip, LinearProgress, Chip } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import type { Checkpoint } from './TestRunTab'
@@ -28,14 +27,11 @@ export default function TestProgress({
 
     // Count unique tests that have reached a terminal status — not inflated
     // by per-module instances like progressDetail.total.
-    const completedCount = useMemo(() => {
-        let count = 0
-        for (const t of tests) {
-            const cp = cpMap.get(t)
-            if (cp && TERMINAL_STATUSES.has(cp.status)) count++
-        }
-        return count
-    }, [tests, cpMap])
+    let completedCount = 0
+    for (const t of tests) {
+        const cp = cpMap.get(t)
+        if (cp && TERMINAL_STATUSES.has(cp.status)) completedCount++
+    }
 
     // Test-level progress (not instance-inflated).
     const testProgress = tests.length > 0

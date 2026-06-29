@@ -17,26 +17,32 @@ function buildDataUrl(text: string, hiddenIds: string[]): string {
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(modified)}`
 }
 
+async function fetchSvgText(url: string): Promise<string> {
+    try {
+        const r = await fetch(url)
+        if (r.ok) return await r.text()
+    } catch { /* ignore */ }
+    return ''
+}
+
 export function useModifiedSvg(svgUrl: string, hiddenIds: string[]): string {
-    const [displayUrl, setDisplayUrl] = useState(svgUrl)
+    const [, setTick] = useState(0)
 
-    const key = svgUrl + '|' + hiddenIds.join(',')
-
+    // Trigger async fetch on cache miss (only setState in the async callback)
     useEffect(() => {
-        if (hiddenIds.length === 0) { setDisplayUrl(svgUrl); return }
+        if (hiddenIds.length === 0) return
+        if (textCache.has(svgUrl)) return
+        fetchSvgText(svgUrl).then(text => {
+            if (text) {
+                textCache.set(svgUrl, text)
+                setTick(t => t + 1)  // trigger re-render so cached text is picked up below
+            }
+        })
+    }, [svgUrl, hiddenIds])
 
-        const apply = (text: string) => setDisplayUrl(buildDataUrl(text, hiddenIds))
-
-        const cached = textCache.get(svgUrl)
-        if (cached) { apply(cached); return }
-
-        fetch(svgUrl)
-            .then(r => (r.ok ? r.text() : ''))
-            .then(text => {
-                if (text) { textCache.set(svgUrl, text); apply(text) }
-            })
-            .catch(() => {/* keep original URL */})
-    }, [key])   // eslint-disable-line react-hooks/exhaustive-deps
-
-    return displayUrl
+    // Derive display URL from cache during render — React Compiler can optimise this
+    if (hiddenIds.length === 0) return svgUrl
+    const text = textCache.get(svgUrl)
+    if (!text) return svgUrl
+    return buildDataUrl(text, hiddenIds)
 }

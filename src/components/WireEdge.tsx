@@ -8,7 +8,7 @@
  * Waypoints are stored in ``edge.data.waypoints`` and persisted to
  * connections.jsonc.
  */
-import { useCallback, useMemo, useRef, Fragment } from 'react'
+import { useRef, Fragment, useEffect } from 'react'
 import { BaseEdge, EdgeLabelRenderer, useReactFlow } from '@xyflow/react'
 import type { EdgeProps, Node } from '@xyflow/react'
 
@@ -16,6 +16,44 @@ const IO_COLOR = '#e65100'
 const SEL_COLOR = '#ff6d00'
 const WP_RADIUS = 6
 const WP_HIT = 12
+
+const LABEL_TEXT_BASE: React.CSSProperties = {
+    fontSize: 9,
+    whiteSpace: 'nowrap',
+    background: 'rgba(255,255,255,0.9)',
+    padding: '2px 6px',
+    borderRadius: 4,
+}
+
+const BUTTON_STYLE: React.CSSProperties = {
+    pointerEvents: 'all',
+    background: '#d84315',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '50%',
+    width: 18,
+    height: 18,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 10,
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+    transition: 'all 0.2s ease',
+    padding: 0,
+}
+
+const WP_BASE_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    width: WP_RADIUS * 2,
+    height: WP_RADIUS * 2,
+    borderRadius: '50%',
+    border: '2px solid #fff',
+    boxShadow: '0 0 0 1px rgba(0,0,0,0.3)',
+    pointerEvents: 'none',
+    zIndex: 2001,
+}
 
 export type WireData = {
     kind: 'io'
@@ -234,20 +272,21 @@ export function WireEdge({
     const isStraight = d?.straight ?? false
     const nodes = getNodes()
 
-    const { path, points } = useMemo(
-        () => buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraight),
-        [id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraight],
-    )
+    const { path, points } = buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraight)
 
-    cornersRef.current = points.slice(1, -1)
-    const corners = cornersRef.current
+    const corners = points.slice(1, -1)
+
+    // Update ref outside of render to satisfy React Compiler rules.
+    useEffect(() => {
+        cornersRef.current = corners
+    }, [corners])
 
     const color = selected ? SEL_COLOR
         : (d?.wireColor ?? (typeof style?.stroke === 'string' ? (style.stroke as string) : IO_COLOR))
     const strokeWidth = selected ? 3
         : (typeof style?.strokeWidth === 'number' ? style.strokeWidth : 2)
 
-    const onWaypointMD = useCallback((idx: number) => (e: React.MouseEvent) => {
+    const onWaypointMD = (idx: number) => (e: React.MouseEvent) => {
         e.stopPropagation(); e.preventDefault()
         const cur = cornersRef.current[idx]
         if (!cur) return
@@ -273,9 +312,9 @@ export function WireEdge({
         const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
         window.addEventListener('mousemove', onMove)
         window.addEventListener('mouseup', onUp)
-    }, [id, setEdges, getZoom])
+    }
 
-    const onWaypointCtx = useCallback((idx: number) => (e: React.MouseEvent) => {
+    const onWaypointCtx = (idx: number) => (e: React.MouseEvent) => {
         e.stopPropagation(); e.preventDefault()
         setEdges(prev => prev.map(edge => {
             if (edge.id !== id) return edge
@@ -285,9 +324,9 @@ export function WireEdge({
             wps.splice(idx, 1)
             return { ...edge, data: { ...edge.data, waypoints: wps } }
         }))
-    }, [id, setEdges])
+    }
 
-    const onSegmentClick = useCallback((segIdx: number) => () => {
+    const onSegmentClick = (segIdx: number) => () => {
         const p1 = points[segIdx], p2 = points[segIdx + 1]
         if (!p1 || !p2) return
         const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2
@@ -299,20 +338,18 @@ export function WireEdge({
             wps.splice(segIdx, 0, { x: mx, y: my })
             return { ...edge, data: { ...edge.data, waypoints: wps } }
         }))
-    }, [id, points, setEdges])
+    }
 
-    const onRemove = useCallback((e: React.MouseEvent) => {
+    const onRemove = (e: React.MouseEvent) => {
         e.stopPropagation()
         e.preventDefault()
         setEdges(prev => prev.filter(edge => edge.id !== id))
-    }, [id, setEdges])
+    }
 
-    const hitSegments = useMemo(() =>
-        points.slice(0, -1).map((p1, i) => {
-            const p2 = points[i + 1]
-            return { d: `M ${p1.x},${p1.y} L ${p2.x},${p2.y}`, index: i }
-        }),
-    [points])
+    const hitSegments = points.slice(0, -1).map((p1, i) => {
+        const p2 = points[i + 1]
+        return { d: `M ${p1.x},${p1.y} L ${p2.x},${p2.y}`, index: i }
+    })
 
     return (
         <>
@@ -339,13 +376,9 @@ export function WireEdge({
                     }}>
                         {label && (
                             <div style={{
-                                fontSize: 9,
+                                ...LABEL_TEXT_BASE,
                                 color: selected ? '#d84315' : '#888',
                                 fontWeight: selected ? 600 : 400,
-                                whiteSpace: 'nowrap',
-                                background: 'rgba(255,255,255,0.9)',
-                                padding: '2px 6px',
-                                borderRadius: 4,
                                 boxShadow: selected ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
                                 border: selected ? '1px solid #ffccbc' : 'none',
                             }}>
@@ -356,24 +389,7 @@ export function WireEdge({
                             <button
                                 onClick={onRemove}
                                 title="Remove connection"
-                                style={{
-                                    pointerEvents: 'all',
-                                    background: '#d84315',
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: '50%',
-                                    width: 18,
-                                    height: 18,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: 10,
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                    transition: 'all 0.2s ease',
-                                    padding: 0,
-                                }}
+                                style={BUTTON_STYLE}
                                 onMouseEnter={(e) => {
                                     e.currentTarget.style.background = '#bf360c'
                                     e.currentTarget.style.transform = 'scale(1.15)'
@@ -400,14 +416,9 @@ export function WireEdge({
                             }}
                         />
                         <div style={{
-                            position: 'absolute',
+                            ...WP_BASE_STYLE,
                             transform: `translate(-50%,-50%) translate(${wp.x}px,${wp.y}px)`,
-                            width: WP_RADIUS * 2, height: WP_RADIUS * 2,
-                            borderRadius: '50%',
                             background: selected ? SEL_COLOR : color,
-                            border: '2px solid #fff',
-                            boxShadow: '0 0 0 1px rgba(0,0,0,0.3)',
-                            pointerEvents: 'none', zIndex: 2001,
                         }} />
                     </Fragment>
                 ))}

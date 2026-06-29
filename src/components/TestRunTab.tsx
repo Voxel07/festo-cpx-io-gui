@@ -5,7 +5,7 @@
  * updates appear live, regardless of whether the run was started from the
  * web UI or CI.
  */
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useReducer, useEffect, useRef } from 'react'
 import { Box, Stack, Typography, Alert, Paper, CircularProgress, TextField, Tooltip } from '@mui/material'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import TestSelection from './TestSelection'
@@ -62,20 +62,74 @@ interface Props {
     ip: string
 }
 
+interface RunTabState {
+    selected: string[]
+    runState: TestRunState
+    sseLogs: LogEntry[]
+    busy: boolean
+    psComport: string
+}
+
+const initialRunTabState: RunTabState = {
+    selected: ['connection-validation', 'compare-topology'],
+    runState: { status: 'idle' },
+    sseLogs: [],
+    busy: false,
+    psComport: '',
+}
+
+type RunTabAction =
+    | { type: 'SET_SELECTED'; selected: string[] }
+    | { type: 'SET_RUN_STATE'; state: TestRunState }
+    | { type: 'SET_SSE_LOGS'; logs: LogEntry[] }
+    | { type: 'APPEND_SSE_LOG'; log: LogEntry }
+    | { type: 'SET_BUSY'; busy: boolean }
+    | { type: 'SET_PS_COMPORT'; comport: string }
+    | { type: 'START_RUN'; selected: string[] }
+    | { type: 'RUN_START_FAIL'; error: string }
+
+function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
+    switch (action.type) {
+        case 'SET_SELECTED':
+            return { ...state, selected: action.selected }
+        case 'SET_RUN_STATE':
+            return { ...state, runState: action.state }
+        case 'SET_SSE_LOGS':
+            return { ...state, sseLogs: action.logs }
+        case 'APPEND_SSE_LOG': {
+            const next = [...state.sseLogs, action.log]
+            return { ...state, sseLogs: next.length > 500 ? next.slice(-500) : next }
+        }
+        case 'SET_BUSY':
+            return { ...state, busy: action.busy }
+        case 'SET_PS_COMPORT':
+            return { ...state, psComport: action.comport }
+        case 'START_RUN':
+            return {
+                ...state,
+                sseLogs: [],
+                runState: { status: 'starting', tests: action.selected, checkpoints: [], logs: [] },
+                busy: true,
+            }
+        case 'RUN_START_FAIL':
+            return {
+                ...state,
+                runState: { ...state.runState, status: 'error', error: action.error },
+                busy: false,
+            }
+        default:
+            return state
+    }
+}
+
 export default function TestRunTab({ ip }: Props) {
-    const [selected, setSelected] = useState<string[]>(['connection-validation', 'compare-topology'])
-    const [runState, setRunState] = useState<TestRunState>({ status: 'idle' })
-    const [sseLogs, setSseLogs] = useState<LogEntry[]>([])
-    const [busy, setBusy] = useState(false)
-    const [psComport, setPsComport] = useState<string>('')
+    const [state, dispatch] = useReducer(runTabReducer, initialRunTabState)
+    const { selected, runState, sseLogs, busy, psComport } = state
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const esRef = useRef<EventSource | null>(null)
 
     /** True when at least one selected test benefits from a power supply. */
-    const needsPs = useMemo(
-        () => selected.some(id => POWER_CYCLE_TESTS.has(id)),
-        [selected],
-    )
+    const needsPs = selected.some(id => POWER_CYCLE_TESTS.has(id))
 
     const isRunning = runState.status === 'running'
     const isStarting = runState.status === 'starting'
@@ -84,22 +138,24 @@ export default function TestRunTab({ ip }: Props) {
         : 0
 
     // Display only the unique selected tests (backend may report per-module instances).
-    const displayTests = useMemo(() => {
+    const displayTests = (() => {
         const serverTests = runState.tests
         if (!serverTests || serverTests.length === 0) return selected
         // Deduplicate while preserving order.
         return [...new Set(serverTests)]
-    }, [runState.tests, selected])
+    })()
 
-    const fetchStatus = useCallback(async () => {
+    async function fetchStatus() {
         try {
             const r = await fetch('/test-run/status')
             if (!r.ok) return
             const d: TestRunState = await r.json()
-            setRunState(d)
-            if (d.status !== 'running' && d.status !== 'starting') setBusy(false)
+            dispatch({ type: 'SET_RUN_STATE', state: d })
+            if (d.status !== 'running' && d.status !== 'starting') {
+                dispatch({ type: 'SET_BUSY', busy: false })
+            }
         } catch { /* backend may be restarting */ }
-    }, [])
+    }
 
     useEffect(() => {
         if (isRunning || isStarting || busy) {
@@ -116,18 +172,17 @@ export default function TestRunTab({ ip }: Props) {
     useEffect(() => {
         const runId = runState.run_id
         if (!runId) return
-        setSseLogs([])   // clear previous run logs
+        dispatch({ type: 'SET_SSE_LOGS', logs: [] })   // clear previous run logs
         const es = new EventSource(`/test-run/${runId}/stream`)
         esRef.current = es
         es.onmessage = (e) => {
+            if (e.origin !== window.location.origin) return
             try {
                 const entry = JSON.parse(e.data) as LogEntry & { type?: string }
                 if (entry.type === 'done') { es.close(); esRef.current = null; return }
-                if (entry.level) setSseLogs(prev => {
-                    const next = [...prev, entry as LogEntry]
-                    // Cap at 500 entries to keep spread + render fast
-                    return next.length > 500 ? next.slice(-500) : next
-                })
+                if (entry.level) {
+                    dispatch({ type: 'APPEND_SSE_LOG', log: entry as LogEntry })
+                }
             } catch { /* ignore malformed frames */ }
         }
         es.onerror = () => { es.close(); esRef.current = null }
@@ -135,18 +190,12 @@ export default function TestRunTab({ ip }: Props) {
     }, [runState.run_id])
 
     // Merge SSE logs with any logs that arrived via polling (dedup by timestamp+msg)
-    const displayLogs = useMemo(() => {
-        if (sseLogs.length > 0) return sseLogs
-        return runState.logs ?? []
-    }, [sseLogs, runState.logs])
+    const displayLogs = sseLogs.length > 0 ? sseLogs : (runState.logs ?? [])
 
     async function doStart() {
         if (selected.length === 0) return
-        // Clear previous state
-        setSseLogs([])
         if (esRef.current) { esRef.current.close(); esRef.current = null }
-        setRunState({ status: 'starting', tests: selected, checkpoints: [], logs: [] })
-        setBusy(true)
+        dispatch({ type: 'START_RUN', selected })
 
         // Build per-test parameter overrides: inject power_supply_comport where needed.
         const testParameters: Record<string, Record<string, unknown>> = {}
@@ -172,21 +221,18 @@ export default function TestRunTab({ ip }: Props) {
             })
             if (!r.ok) {
                 const err = await r.json()
-                setRunState(prev => ({ ...prev, status: 'error', error: err.detail ?? 'Failed to start' }))
-                setBusy(false)
+                dispatch({ type: 'RUN_START_FAIL', error: err.detail ?? 'Failed to start' })
                 return
             }
             await fetchStatus()
         } catch (e) {
-            setRunState(prev => ({ ...prev, status: 'error', error: (e as Error).message }))
-            setBusy(false)
+            dispatch({ type: 'RUN_START_FAIL', error: (e as Error).message })
         }
     }
 
     function toggleTest(id: string) {
-        setSelected(prev =>
-            prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id],
-        )
+        const nextSelected = selected.includes(id) ? selected.filter(t => t !== id) : [...selected, id]
+        dispatch({ type: 'SET_SELECTED', selected: nextSelected })
     }
 
     return (
@@ -220,7 +266,7 @@ export default function TestRunTab({ ip }: Props) {
                             size="small"
                             label="Comport (e.g. COM3)"
                             value={psComport}
-                            onChange={e => setPsComport(e.target.value)}
+                            onChange={e => dispatch({ type: 'SET_PS_COMPORT', comport: e.target.value })}
                             disabled={isRunning || isStarting}
                             placeholder="COM3"
                             fullWidth
@@ -231,7 +277,7 @@ export default function TestRunTab({ ip }: Props) {
 
                 {/* ── Error ── */}
                 {runState.status === 'error' && runState.error && (
-                    <Alert severity="error" onClose={() => setRunState({ status: 'idle' })}>
+                    <Alert severity="error" onClose={() => dispatch({ type: 'SET_RUN_STATE', state: { status: 'idle' } })}>
                         {runState.error}
                     </Alert>
                 )}

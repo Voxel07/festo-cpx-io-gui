@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 // Icon file mapping bundled at build time — no network fetch needed.
 import iconMapping from '../assets/IconFileMapping.json'
 
@@ -34,7 +34,7 @@ const _builtinMaps = buildMaps()
 // ── Hook: returns the pre-built maps (no fetch, no state, instant) ──────────
 
 export function useSvgMap(): { byName: SvgMap; byCode: SvgMap } {
-    return useMemo(() => _builtinMaps, [])
+    return _builtinMaps
 }
 
 /** Resolve the SVG URL for a module by order-code name, with ModuleCode fallback. */

@@ -76,6 +76,102 @@ function pct(i: number, total: number) {
     return `${((i + 1) / (total + 1)) * 100}%`
 }
 
+function getGenericOutStyle(index: number, total: number, editMode: boolean): React.CSSProperties {
+    return {
+        left: pct(index, total),
+        background: editMode ? PORT_COLOR.out : 'transparent',
+        width: 9,
+        height: 9,
+        border: editMode ? '2px solid #fff' : 'none',
+        borderRadius: '50%',
+        top: -5,
+        opacity: editMode ? 1 : 0,
+        pointerEvents: editMode ? undefined : 'none',
+    }
+}
+
+function getGenericInStyle(index: number, total: number, editMode: boolean): React.CSSProperties {
+    return {
+        left: pct(index, total),
+        background: editMode ? PORT_COLOR.in : 'transparent',
+        width: 9,
+        height: 9,
+        border: editMode ? '2px solid #fff' : 'none',
+        borderRadius: '50%',
+        bottom: -5,
+        opacity: editMode ? 1 : 0,
+        pointerEvents: editMode ? undefined : 'none',
+    }
+}
+
+function getApInStyle(left?: string, top?: string): React.CSSProperties {
+    return {
+        position: 'absolute',
+        left: left ?? '50%',
+        top: top ?? '37.85%',
+        transform: 'translate(-50%,-50%)',
+        width: 10,
+        height: 10,
+        background: '#1565c0',
+        border: '2.5px solid #fff',
+        borderRadius: '50%',
+        boxShadow: '0 0 0 2px #1565c0',
+        zIndex: 10,
+    }
+}
+
+function getApOutStyle(left?: string, top?: string): React.CSSProperties {
+    return {
+        position: 'absolute',
+        left: left ?? '50%',
+        top: top ?? '52.8%',
+        transform: 'translate(-50%,-50%)',
+        width: 10,
+        height: 10,
+        background: '#2e7d32',
+        border: '2.5px solid #fff',
+        borderRadius: '50%',
+        boxShadow: '0 0 0 2px #2e7d32',
+        zIndex: 10,
+        cursor: 'crosshair',
+    }
+}
+
+function getPortSrcStyle(cx: number, cy: number, portColor: string, editMode: boolean): React.CSSProperties {
+    return {
+        position: 'absolute',
+        left: `${cx * 100}%`,
+        top: `${cy * 100}%`,
+        transform: 'translate(-50%,-50%)',
+        width: PORT_D,
+        height: PORT_D,
+        background: editMode ? portColor : 'transparent',
+        border: editMode ? '2.5px solid #fff' : 'none',
+        borderRadius: '50%',
+        boxShadow: editMode ? `0 0 0 2px ${portColor}` : 'none',
+        zIndex: 10,
+        cursor: editMode ? 'crosshair' : 'default',
+        opacity: editMode ? 1 : 0,
+        pointerEvents: editMode ? undefined : 'none',
+    }
+}
+
+function getPortTgtStyle(cx: number, cy: number, editMode: boolean): React.CSSProperties {
+    return {
+        position: 'absolute',
+        left: `${cx * 100}%`,
+        top: `${cy * 100}%`,
+        transform: 'translate(-50%,-50%)',
+        width: PORT_HIT_D,
+        height: PORT_HIT_D,
+        background: 'transparent',
+        border: 'none',
+        borderRadius: '50%',
+        opacity: 0,
+        pointerEvents: editMode ? undefined : 'none',
+    }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
@@ -111,7 +207,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
     // Notify React Flow when SVG port handles mount/dismount so edges can resolve
     useEffect(() => {
-        if (nodeId) updateNodeInternals(nodeId)
+        updateNodeInternals(nodeId)
     }, [ports, nodeId, updateNodeInternals])
 
     // When valveGroups are loaded and mod.MountedValves is known, derive hiddenValves.
@@ -145,10 +241,10 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 ? [...cur.filter(v => v !== valveId), valveId]
                 : cur.filter(v => v !== valveId)
             // Compute 0-based mounted indices and propagate to topology
-            const mounted = valveGroups
-                .map((gid, idx) => ({ gid, idx }))
-                .filter(({ gid }) => !next.includes(gid))
-                .map(({ idx }) => idx)
+            const mounted: number[] = valveGroups.reduce<number[]>((acc, gid, idx) => {
+                if (!next.includes(gid)) acc.push(idx)
+                return acc
+            }, [])
             onValveChange?.(mod.Adress, mounted)
             return { ...n, data: { ...n.data, hiddenValves: next } }
         }))
@@ -186,27 +282,11 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
             {/* ── Generic fallback IO handles (always rendered, invisible when not editing) ── */}
             {!suppressIoHandles && !hasPorts && Array.from({ length: topCount }, (_, i) => (
                 <Handle key={`fo-${i}`} id={`src-out-out${i}`} type="source" position={Position.Top}
-                    style={{
-                        left: pct(i, topCount),
-                        background: editMode ? PORT_COLOR.out : 'transparent',
-                        width: 9, height: 9,
-                        border: editMode ? '2px solid #fff' : 'none',
-                        borderRadius: '50%', top: -5,
-                        opacity: editMode ? 1 : 0,
-                        pointerEvents: editMode ? undefined : 'none',
-                    }} />
+                    style={getGenericOutStyle(i, topCount, editMode)} />
             ))}
             {!suppressIoHandles && !hasPorts && Array.from({ length: botCount }, (_, i) => (
                 <Handle key={`fi-${i}`} id={`tgt-in-in${i}`} type="target" position={Position.Bottom}
-                    style={{
-                        left: pct(i, botCount),
-                        background: editMode ? PORT_COLOR.in : 'transparent',
-                        width: 9, height: 9,
-                        border: editMode ? '2px solid #fff' : 'none',
-                        borderRadius: '50%', bottom: -5,
-                        opacity: editMode ? 1 : 0,
-                        pointerEvents: editMode ? undefined : 'none',
-                    }} />
+                    style={getGenericInStyle(i, botCount, editMode)} />
             ))}
 
             {/* ── Address badge (above image) ── */}
@@ -243,35 +323,12 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                      VABX-EL-API SVG 46×109: XF10 at cy=23.5 (21.6%), XF20 at cy=44.5 (40.8%) */}
                 {showApIn && (
                     <Handle id="ap-in" type="target" position={Position.Left}
-                        style={{
-                            position: 'absolute',
-                            left: apInPos?.left ?? '50%',
-                            top: apInPos?.top ?? '37.85%',
-                            transform: 'translate(-50%,-50%)',
-                            width: 10, height: 10,
-                            background: '#1565c0',
-                            border: '2.5px solid #fff',
-                            borderRadius: '50%',
-                            boxShadow: '0 0 0 2px #1565c0',
-                            zIndex: 10,
-                        }}
+                        style={getApInStyle(apInPos?.left, apInPos?.top)}
                     />
                 )}
                 {showApOut && (
                     <Handle id="ap-out" type="source" position={Position.Right}
-                        style={{
-                            position: 'absolute',
-                            left: apOutPos?.left ?? '50%',
-                            top: apOutPos?.top ?? '52.8%',
-                            transform: 'translate(-50%,-50%)',
-                            width: 10, height: 10,
-                            background: '#2e7d32',
-                            border: '2.5px solid #fff',
-                            borderRadius: '50%',
-                            boxShadow: '0 0 0 2px #2e7d32',
-                            zIndex: 10,
-                            cursor: 'crosshair',
-                        }}
+                        style={getApOutStyle(apOutPos?.left, apOutPos?.top)}
                     />
                 )}
 
@@ -286,39 +343,14 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                             id={`src-${port.kind}-${port.id}`}
                             type="source"
                             position={port.side}
-                            style={{
-                                position: 'absolute',
-                                left: `${port.cx * 100}%`,
-                                top: `${port.cy * 100}%`,
-                                transform: 'translate(-50%,-50%)',
-                                width: PORT_D, height: PORT_D,
-                                background: editMode ? portColor : 'transparent',
-                                border: editMode ? '2.5px solid #fff' : 'none',
-                                borderRadius: '50%',
-                                boxShadow: editMode ? `0 0 0 2px ${portColor}` : 'none',
-                                zIndex: 10,
-                                cursor: editMode ? 'crosshair' : 'default',
-                                opacity: editMode ? 1 : 0,
-                                pointerEvents: editMode ? undefined : 'none',
-                            }}
+                            style={getPortSrcStyle(port.cx, port.cy, portColor, editMode)}
                         />
                         {/* Transparent target hit-area – kind also encoded */}
                         <Handle
                             id={`tgt-${port.kind}-${port.id}`}
                             type="target"
                             position={port.side}
-                            style={{
-                                position: 'absolute',
-                                left: `${port.cx * 100}%`,
-                                top: `${port.cy * 100}%`,
-                                transform: 'translate(-50%,-50%)',
-                                width: PORT_HIT_D, height: PORT_HIT_D,
-                                background: 'transparent',
-                                border: 'none',
-                                borderRadius: '50%',
-                                opacity: 0,
-                                pointerEvents: editMode ? undefined : 'none',
-                            }}
+                            style={getPortTgtStyle(port.cx, port.cy, editMode)}
                         />
                         </Fragment>
                     )
@@ -355,8 +387,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     mt: 0.5, pt: 0.25, borderTop: '1px solid rgba(0,0,0,0.1)',
                     textAlign: 'left',
                 }}>
-                    {connections.map((c, idx) => (
-                        <Typography key={idx} sx={{
+                    {connections.map((c) => (
+                        <Typography key={`${c.dir}-${c.portId}-${c.peerAddr}-${c.peerPort}`} sx={{
                             fontSize: '0.42rem', lineHeight: 1.4,
                             color: c.dir === 'src' ? PORT_COLOR.out : PORT_COLOR.in,
                             fontFamily: 'monospace',

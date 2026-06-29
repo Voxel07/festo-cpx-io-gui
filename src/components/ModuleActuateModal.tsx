@@ -27,6 +27,7 @@ export default function ModuleActuateModal({ open, module, ip, mountedValves, on
 
             <DialogContent dividers>
                 <ModuleActuatePanel
+                    key={module.Adress}
                     module={module}
                     ip={ip}
                     mountedValves={mountedValves}

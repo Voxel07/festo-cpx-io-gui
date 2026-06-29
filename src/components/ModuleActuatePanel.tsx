@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
     Button, Typography, Box, Divider, Chip, CircularProgress,
     Stack, FormControlLabel, Checkbox, Alert, Switch,
@@ -110,11 +110,7 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
     // Single source of truth: which hardware channels are selected.
     const [selectedChannels, setSelectedChannels] = useState<Set<number> | null>(null)
 
-    // Reset selected channels when module changes
-    useEffect(() => {
-        setSelectedChannels(null)
-        setStatusMsg(null)
-    }, [mod])
+
 
     const channels = mod ? buildChannels(mod, mountedValves, includeUnmounted) : []
     const isValve = mod ? isValveBody(mod.Name) : false
@@ -122,7 +118,13 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
     const allChannelIndices = channels.map(c => c.index)
 
     // Unique valve slots present in the current channel list
-    const valveSlots = [...new Set(channels.filter(c => c.valveIndex >= 0).map(c => c.valveIndex))].sort((a, b) => a - b)
+    const valveSlots = (() => {
+        const slotsSet = new Set<number>()
+        for (const c of channels) {
+            if (c.valveIndex >= 0) slotsSet.add(c.valveIndex)
+        }
+        return Array.from(slotsSet).sort((a, b) => a - b)
+    })()
 
     // ── Derived: active channel set ──
     const activeChannels: Set<number> = selectedChannels ?? new Set(allChannelIndices)
@@ -133,7 +135,11 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
 
     // For valve modules: derive per-slot state from activeChannels
     function slotChannelIndices(slotIdx: number): number[] {
-        return channels.filter(c => c.valveIndex === slotIdx).map(c => c.index)
+        const indices: number[] = []
+        for (const c of channels) {
+            if (c.valveIndex === slotIdx) indices.push(c.index)
+        }
+        return indices
     }
     function isSlotFullySelected(slotIdx: number): boolean {
         const sc = slotChannelIndices(slotIdx)
@@ -145,11 +151,15 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
     }
 
     // ── Select / deselect all ──
-    const selectAll = useCallback(() => setSelectedChannels(new Set(allChannelIndices)), [allChannelIndices])
-    const deselectAll = useCallback(() => setSelectedChannels(new Set()), [])
+    function selectAll() {
+        setSelectedChannels(new Set(allChannelIndices))
+    }
+    function deselectAll() {
+        setSelectedChannels(new Set())
+    }
 
     // Toggle a single channel
-    const toggleChannel = useCallback((ch: number) => {
+    function toggleChannel(ch: number) {
         setSelectedChannels(prev => {
             const base = prev ?? new Set(allChannelIndices)
             const next = new Set(base)
@@ -160,10 +170,10 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
             }
             return next
         })
-    }, [allChannelIndices])
+    }
 
     // Toggle all channels for a valve slot
-    const toggleValveSlot = useCallback((slotIdx: number) => {
+    function toggleValveSlot(slotIdx: number) {
         setSelectedChannels(prev => {
             const base = prev ?? new Set(allChannelIndices)
             const next = new Set(base)
@@ -178,8 +188,7 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
             }
             return next
         })
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [allChannelIndices, channels])
+    }
 
     async function setOutputs(value: boolean) {
         if (!mod || !ip) return
@@ -212,6 +221,7 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
             const d = await r.json()
             if (!r.ok) {
                 setStatusMsg({ text: `Error: ${d.detail ?? `HTTP ${r.status}`}`, severity: 'error' })
+                setBusy(false)
                 return
             }
             const count = (d.channels_written as unknown[] ?? []).length
@@ -222,9 +232,9 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
                     : `✓ ${allWord}${count} channel(s) set LOW`,
                 severity: 'success',
             })
+            setBusy(false)
         } catch (e) {
             setStatusMsg({ text: `Error: ${(e as Error).message}`, severity: 'error' })
-        } finally {
             setBusy(false)
         }
     }
@@ -350,26 +360,31 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
                                             />
                                             {/* Per-coil sub-checkboxes — always enabled, independent */}
                                             <Box sx={{ ml: 4, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-                                                {channels.filter(c => c.valveIndex === slotIdx).map(ch => (
-                                                    <FormControlLabel
-                                                        key={ch.index}
-                                                        control={
-                                                            <Checkbox
-                                                                size="small"
-                                                                checked={activeChannels.has(ch.index)}
-                                                                onChange={() => toggleChannel(ch.index)}
-                                                                sx={{ p: 0.25 }}
+                                                {channels.reduce<React.ReactNode[]>((acc, ch) => {
+                                                    if (ch.valveIndex === slotIdx) {
+                                                        acc.push(
+                                                            <FormControlLabel
+                                                                key={ch.index}
+                                                                control={
+                                                                    <Checkbox
+                                                                        size="small"
+                                                                        checked={activeChannels.has(ch.index)}
+                                                                        onChange={() => toggleChannel(ch.index)}
+                                                                        sx={{ p: 0.25 }}
+                                                                    />
+                                                                }
+                                                                label={
+                                                                    <Typography variant="caption" sx={{ fontSize: '0.62rem' }}>
+                                                                        {ch.label}
+                                                                        <span style={{ color: '#bbb', marginLeft: 2 }}>[{ch.index}]</span>
+                                                                    </Typography>
+                                                                }
+                                                                sx={{ display: 'flex', ml: 0, mr: 0 }}
                                                             />
-                                                        }
-                                                        label={
-                                                            <Typography variant="caption" sx={{ fontSize: '0.62rem' }}>
-                                                                {ch.label}
-                                                                <span style={{ color: '#bbb', marginLeft: 2 }}>[{ch.index}]</span>
-                                                            </Typography>
-                                                        }
-                                                        sx={{ display: 'flex', ml: 0, mr: 0 }}
-                                                    />
-                                                ))}
+                                                        )
+                                                    }
+                                                    return acc
+                                                }, [])}
                                             </Box>
                                         </Box>
                                     )

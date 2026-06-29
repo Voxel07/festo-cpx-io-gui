@@ -1,4 +1,3 @@
-import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import type { NodeProps, Node } from '@xyflow/react'
 import { Box, Typography } from '@mui/material'
@@ -81,4 +80,4 @@ function BackplaneGroupNode({ data }: NodeProps<BackplaneGroupNodeType>) {
     )
 }
 
-export default memo(BackplaneGroupNode)
+export default BackplaneGroupNode

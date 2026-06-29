@@ -52,7 +52,7 @@ export default function TestLiveLog({ displayLogs, sseLogsActive, hasLogs }: Tes
                         </Box>
                     )}
                     {displayLogs.map((entry, i) => (
-                        <div key={i} style={{
+                        <div key={`${entry.timestamp}-${i}`} style={{
                             color: entry.level === 'error' ? '#f44747' :
                                 entry.level === 'warning' ? '#cca700' : '#d4d4d4',
                         }}>

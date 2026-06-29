@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button,
     Typography, Box, CircularProgress, Alert, Stack, Table,
@@ -31,7 +31,7 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
     const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
     // Fetch active diagnoses from API
-    const fetchDiagnoses = useCallback(async () => {
+    async function fetchDiagnoses() {
         if (!ip) return
         setLoading(true)
         setErrorMsg(null)
@@ -44,25 +44,25 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
             } else {
                 setDiagnoses(d)
             }
+            setLoading(false)
         } catch (e) {
             setErrorMsg((e as Error).message)
             setDiagnoses([])
-        } finally {
             setLoading(false)
         }
-    }, [ip])
+    }
 
-    // Load diagnostics on mount/open
+    // Load diagnostics on mount
     useEffect(() => {
-        if (open) {
+        const timer = setTimeout(() => {
             fetchDiagnoses()
-            setSecondsLeft(5)
-        }
-    }, [open, fetchDiagnoses])
+        }, 0)
+        return () => clearTimeout(timer)
+    }, [fetchDiagnoses])
 
     // Countdown and auto-refresh timer (5 seconds)
     useEffect(() => {
-        if (!open || !ip) return
+        if (!ip) return
 
         const timer = setInterval(() => {
             setSecondsLeft(prev => {
@@ -75,7 +75,7 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
         }, 1000)
 
         return () => clearInterval(timer)
-    }, [open, ip, fetchDiagnoses])
+    }, [ip, fetchDiagnoses])
 
     const handleManualRefresh = () => {
         fetchDiagnoses()
@@ -155,8 +155,8 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {diagnoses.map((diag, idx) => (
-                                        <TableRow key={idx} sx={{ background: '#fff' }}>
+                                    {diagnoses.map((diag) => (
+                                        <TableRow key={`${diag.address}-${diag.diagnosis_id}`} sx={{ background: '#fff' }}>
                                             <TableCell>
                                                 <Typography sx={{ fontSize: '0.72rem', fontWeight: 700 }}>
                                                     {diag.module_name}

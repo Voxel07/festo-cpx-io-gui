@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { Box, Typography, Divider, Alert } from '@mui/material'
 import CableIcon from '@mui/icons-material/Cable'
 import LinkIcon from '@mui/icons-material/Link'
@@ -24,6 +24,18 @@ import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnectio
 const NODE_TYPES: NodeTypes = {
     mod: ModuleNode as NodeTypes[string],
     backplane: BackplaneNode as NodeTypes[string],
+}
+
+const LABEL_BASE_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#1565c0',
+    background: '#e3f2fd',
+    padding: '1px 6px',
+    borderRadius: 3,
+    border: '1px solid #bbdefb',
+    pointerEvents: 'none',
 }
 
 // ── Custom cable edge: 6-segment orthogonal route with stubs ───────────────
@@ -53,12 +65,8 @@ function CableEdge({ sourceX, sourceY, targetX, targetY, label, style, markerEnd
                     <div
                         className="nodrag nopan"
                         style={{
-                            position: 'absolute',
+                            ...LABEL_BASE_STYLE,
                             transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)`,
-                            fontSize: 10, fontWeight: 700, color: '#1565c0',
-                            background: '#e3f2fd', padding: '1px 6px',
-                            borderRadius: 3, border: '1px solid #bbdefb',
-                            pointerEvents: 'none',
                         }}
                     >
                         {String(label)}
@@ -124,6 +132,19 @@ interface Props {
     onSelectModuleAddr?: (addr: number | null) => void
 }
 
+async function fetchBenchConfig(onSuccess: (config: BenchConfig) => void, onFailure: () => void) {
+    try {
+        const r = await fetch('/config?file_path=bench_config.json')
+        if (r.ok) {
+            onSuccess(await r.json())
+        } else {
+            onFailure()
+        }
+    } catch {
+        onFailure()
+    }
+}
+
 export default function TopologyFlow({
     topology, diffStatus, removedModules = [], fullscreen, onToggleFullscreen,
     activeModuleAddr = null, selectedModuleAddr = null, onSelectModuleAddr
@@ -134,29 +155,25 @@ export default function TopologyFlow({
     const [showIoCables, setShowIoCables] = useState(true)
     const [configWarning, setConfigWarning] = useState<string | null>(null)
     const [ioEdges, setIoEdges] = useState<Edge[]>([])
-    const ioEdgesRef = useRef<Edge[]>([])
 
     // ── Auto-load bench_config.json on mount ────────────────────────────
     useEffect(() => {
         let cancelled = false
-        fetch('/config?file_path=bench_config.json')
-            .then(async r => {
-                if (!r.ok || cancelled) return
-                const config: BenchConfig = await r.json()
+        fetchBenchConfig(
+            (config) => {
+                if (cancelled) return
                 const wiring = config.wiring ?? []
                 const edges = wiringToEdges(wiring, config.module_instances ?? [])
-                if (!cancelled) {
-                    setIoEdges(edges)
-                    if (wiring.length === 0) setConfigWarning('bench_config.json loaded but contains no wiring.')
-                }
-            })
-            .catch(() => {
-                if (!cancelled) setConfigWarning('bench_config.json not found. Save a configuration in the Connections tab to see I/O wiring here.')
-            })
+                setIoEdges(edges)
+                if (wiring.length === 0) setConfigWarning('bench_config.json loaded but contains no wiring.')
+            },
+            () => {
+                if (cancelled) return
+                setConfigWarning('bench_config.json not found. Save a configuration in the Connections tab to see I/O wiring here.')
+            }
+        )
         return () => { cancelled = true }
     }, [])
-
-    useEffect(() => { ioEdgesRef.current = ioEdges }, [ioEdges])
 
     // When ioEdges load (possibly after topology is already set), merge them in
     useEffect(() => {
@@ -166,8 +183,13 @@ export default function TopologyFlow({
         })
     }, [ioEdges, setEdges])
 
+    // ── Rebuild layout when topology / diff / modules change ────────────
     useEffect(() => {
-        if (!topology?.Topology?.length) { setNodes([]); setEdges([]); return }
+        if (!topology?.Topology?.length) {
+            setNodes([])
+            setEdges([])
+            return
+        }
         // Append removed modules (from stored file but absent in live) so they
         // appear in the canvas with a red border, placed after the live modules.
         const allMods = [...topology.Topology]
@@ -177,39 +199,38 @@ export default function TopologyFlow({
         const mergedStatus: DiffStatus = { ...(diffStatus ?? {}) }
         for (const rm of removedModules) mergedStatus[rm.Adress] = 'removed'
         const { nodes: newNodes, edges: chainEdges } = buildLayout(allMods, mergedStatus, false)
-        // Preserve hiddenValves from previous render so valve visibility
-        // doesn't reset when topology is rebuilt (e.g. during valve editing).
-        const prevNodeMap = new Map(nodes.map(n => [n.id, n]))
-        // Enrich nodes: highlight active module + show valves on valve bodies
-        const enriched = (newNodes as Node[]).map(n => {
-            const data = n.data as Record<string, unknown>
-            const mod = data.mod as TopologyModule | undefined
-            // Valve bodies always get showValves so the ModuleNode effect can
-            // derive the correct hidden set — even when MountedValves is empty
-            // (all unmounted) or full (all mounted).
-            const isValveBody = mod?.Type === 'Valve' || (mod?.MountedValves?.length ?? 0) > 0
-            const active = (activeModuleAddr != null && n.id === String(activeModuleAddr) && n.type === 'mod')
-                || (selectedModuleAddr != null && n.id === String(selectedModuleAddr) && n.type === 'mod')
-            const prev = prevNodeMap.get(n.id)
-            const prevHidden = prev ? (prev.data as Record<string, unknown>).hiddenValves : undefined
-            return {
-                ...n,
-                data: {
-                    ...data,
-                    ...(isValveBody ? { showValves: true } : {}),
-                    // Preserve hiddenValves across rebuilds only for valve bodies
-                    ...(prevHidden != null && isValveBody ? { hiddenValves: prevHidden } : {}),
-                    active,
-                },
-            }
-        })
-        setNodes(enriched)
-        setEdges([...chainEdges, ...ioEdgesRef.current])
-    }, [topology, diffStatus, removedModules, activeModuleAddr, selectedModuleAddr, setNodes, setEdges])
 
-    const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+        setNodes(prevNodes => {
+            const prevNodeMap = new Map(prevNodes.map(n => [n.id, n]))
+            return (newNodes as Node[]).map(n => {
+                const data = n.data as Record<string, unknown>
+                const mod = data.mod as TopologyModule | undefined
+                // Valve bodies always get showValves so the ModuleNode effect can
+                // derive the correct hidden set — even when MountedValves is empty
+                // (all unmounted) or full (all mounted).
+                const isValveBody = mod?.Type === 'Valve' || (mod?.MountedValves?.length ?? 0) > 0
+                const active = (activeModuleAddr != null && n.id === String(activeModuleAddr) && n.type === 'mod')
+                    || (selectedModuleAddr != null && n.id === String(selectedModuleAddr) && n.type === 'mod')
+                const prev = prevNodeMap.get(n.id)
+                const prevHidden = prev ? (prev.data as Record<string, unknown>).hiddenValves : undefined
+                return {
+                    ...n,
+                    data: {
+                        ...data,
+                        ...(isValveBody ? { showValves: true } : {}),
+                        // Preserve hiddenValves across rebuilds only for valve bodies
+                        ...(prevHidden != null && isValveBody ? { hiddenValves: prevHidden } : {}),
+                        active,
+                    },
+                }
+            })
+        })
+        setEdges([...chainEdges, ...ioEdges])
+    }, [topology, diffStatus, removedModules, activeModuleAddr, selectedModuleAddr, ioEdges, setNodes, setEdges])
+
+    const onEdgesChange = (changes: EdgeChange[]) => {
         _onEdgesChange(changes.filter(c => c.type !== 'remove'))
-    }, [_onEdgesChange])
+    }
 
     // ── Visible edges based on toggles ──────────────────────────────────
     const visibleEdges = edges.filter(e => {
@@ -219,14 +240,14 @@ export default function TopologyFlow({
         return true
     })
 
-    const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
         if (onSelectModuleAddr && node.type === 'mod') {
             const mod = (node.data as any).mod as TopologyModule
             if (mod) {
                 onSelectModuleAddr(mod.Adress)
             }
         }
-    }, [onSelectModuleAddr])
+    }
 
     if (!topology) {
         return (

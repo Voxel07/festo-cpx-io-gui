@@ -106,11 +106,16 @@ export default function TestResults({ status, results = [], currentModule }: Tes
                                                                 </Typography>
                                                             )}
                                                             {/* Per-channel errors */}
-                                                            {channels && channels.filter(c => !c.passed).map((c, ci) => (
-                                                                <Typography key={ci} variant="caption" sx={{ display: 'block', color: '#d32f2f', fontSize: '0.58rem', pl: 2 }}>
-                                                                    ch {String(c.channel as string | number)}: {String((c.error as string) ?? 'readback LOW')} · {String(c.duration_ms as string | number)}ms
-                                                                </Typography>
-                                                            ))}
+                                                            {channels && channels.reduce<React.ReactNode[]>((acc, c, ci) => {
+                                                                if (!c.passed) {
+                                                                    acc.push(
+                                                                        <Typography key={`${c.channel}-${ci}`} variant="caption" sx={{ display: 'block', color: '#d32f2f', fontSize: '0.58rem', pl: 2 }}>
+                                                                            ch {String(c.channel as string | number)}: {String((c.error as string) ?? 'readback LOW')} · {String(c.duration_ms as string | number)}ms
+                                                                        </Typography>
+                                                                    )
+                                                                }
+                                                                return acc
+                                                            }, [])}
                                                         </Box>
                                     )
                                 })}

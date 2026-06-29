@@ -55,7 +55,7 @@ function DiffPane({ rows, side, myRef, peerRef }: DiffPaneProps) {
                 const cell = side === 'left' ? row.l : row.r
                 const s = KIND[cell.kind]
                 return (
-                    <Box key={i} sx={{ display: 'flex', minHeight: 20, background: s.bg }}>
+                    <Box key={`${row.l.no ?? 'L'}-${row.r.no ?? 'R'}-${i}`} sx={{ display: 'flex', minHeight: 20, background: s.bg }}>
                         <Box sx={{
                             minWidth: 40, px: 0.5, textAlign: 'right',
                             background: s.gutterBg, color: s.gfg,

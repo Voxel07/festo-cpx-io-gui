@@ -6,36 +6,36 @@ import type { Node } from '@xyflow/react'
 
 // ─── Module classification ────────────────────────────────────────────────────
 
-export function isApA(name: string, series?: string): boolean {
+function isApA(name: string, series?: string): boolean {
     return series === 'CPX-AP-A' || name.includes('CPX-AP-A')
 }
 
 /** EPLI interface module — AP-bus connectors are on top (AP-in) and bottom (AP-out)
  *  rather than left/right like regular AP-I modules. */
-export function isEpli(name: string): boolean {
+function isEpli(name: string): boolean {
     return name.includes('EPLI')
 }
 
 /** VABX valve interface with AP pass-through connectors (e.g. VABX-A-S-EL-E12-API).
  *  XF10 (top) = AP-in, XF20 (bottom) = AP-out — positioned on left side of SVG. */
-export function isVabxApInterface(name: string): boolean {
+function isVabxApInterface(name: string): boolean {
     return /^VABX-A-(?:S-)?EL-\w+-API/.test(name)
 }
 
-export function isApIM12orM8(name: string): boolean {
+function isApIM12orM8(name: string): boolean {
     const upperName = name.toUpperCase()
     return (upperName.includes('CPX-AP-I') || upperName.includes('AP-I')) && (upperName.includes('M12') || upperName.includes('M8'))
 }
 
 /** AP-chain interface — module that has explicit ap-in / ap-out handles instead of
  *  the standard left/right cable handles. */
-export function isApChainInterface(name: string): boolean {
+function isApChainInterface(name: string): boolean {
     return isEpli(name) || isVabxApInterface(name) || isApIM12orM8(name)
 }
 
 /** Handle position percentages within the SVG image container box (60 × 128 px).
  *  Derived from connector circle centres in each module's SVG. */
-export function getApHandlePos(name: string): {
+function getApHandlePos(name: string): {
     apInTop: string; apInLeft: string
     apOutTop: string; apOutLeft: string
 } {
@@ -57,12 +57,12 @@ export function getApHandlePos(name: string): {
 
 /** Valve bank body – physically snapped directly to its interface, no cable.
  *  Matches both: VABX-A-BV-* and VABX-A-S-BV-* (with 'S-' infix). */
-export function isValveBody(name: string): boolean {
+function isValveBody(name: string): boolean {
     return /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(name)
 }
 
 /** Valve bank interface – connects to the AP bus via cable (VABX-A-EL/EP in any variant) */
-export function isValveInterface(name: string): boolean {
+function isValveInterface(name: string): boolean {
     // Matches: VABX-A-EL-*, VABX-A-EP-*, VABX-A-S-EL-*, VABX-A-S-EP-*
     return name.startsWith('VABX-A') && /-E[LP][-_]/.test(name)
 }
@@ -84,7 +84,7 @@ export interface Segment {
  * - 'valve' – VABX-A-EL/EP interface + directly-snapped VABX valve bodies
  * - 'api'   – all other standalone AP-I bus modules
  */
-export function segmentModules(mods: TopologyModule[]): Segment[] {
+function segmentModules(mods: TopologyModule[]): Segment[] {
     const segs: Segment[] = []
     let i = 0
     while (i < mods.length) {
@@ -111,19 +111,19 @@ export function segmentModules(mods: TopologyModule[]): Segment[] {
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
-export const NODE_W      = 75   // width of a module card
-export const NODE_H      = 152  // approximate height of a module card (for group sizing)
-export const INLINE_G    = 0    // gap between modules on same backplane/rail (none – tight fit)
-export const CABLE_G     = 160  // gap between cable-connected segments
-export const NODE_Y      = 70   // canvas Y for all module nodes
-const        BP_PAD_TOP  = 10   // space above modules in group box
-const        BP_PAD_BOT  = 18   // space below modules (name/chips extend further down)
-const        BP_PAD_SIDE = 8    // horizontal padding in group box
+const NODE_W = 75   // width of a module card
+const NODE_H = 152  // approximate height of a module card (for group sizing)
+const INLINE_G = 0    // gap between modules on same backplane/rail (none – tight fit)
+const CABLE_G = 160  // gap between cable-connected segments
+const NODE_Y = 70   // canvas Y for all module nodes
+const BP_PAD_TOP = 10   // space above modules in group box
+const BP_PAD_BOT = 18   // space below modules (name/chips extend further down)
+const BP_PAD_SIDE = 8    // horizontal padding in group box
 
 // ─── Layout builder ───────────────────────────────────────────────────────────
 
 type ModNode = Node<ModuleNodeData, 'mod'>
-type BpNode  = Node<BackplaneNodeData, 'backplane'>
+type BpNode = Node<BackplaneNodeData, 'backplane'>
 
 export function buildLayout(
     mods: TopologyModule[],
@@ -131,7 +131,7 @@ export function buildLayout(
     editMode: boolean,
 ): { nodes: (ModNode | BpNode)[]; edges: Edge[] } {
     const segments = segmentModules(mods)
-    const bgNodes:  BpNode[]  = []   // pushed first → renders behind module nodes
+    const bgNodes: BpNode[] = []   // pushed first → renders behind module nodes
     const modNodes: ModNode[] = []
     const edges: Edge[] = []
 
@@ -155,7 +155,7 @@ export function buildLayout(
                 type: 'backplane' as const,
                 position: { x: curX - BP_PAD_SIDE, y: NODE_Y - BP_PAD_TOP },
                 style: {
-                    width:  segW + BP_PAD_SIDE * 2,
+                    width: segW + BP_PAD_SIDE * 2,
                     height: BP_PAD_TOP + NODE_H + BP_PAD_BOT,
                 },
                 data: {
@@ -169,10 +169,10 @@ export function buildLayout(
         }
 
         seg.mods.forEach((m, i) => {
-            const id      = String(m.Adress)
+            const id = String(m.Adress)
             const isFirst = i === 0
-            const isLast  = i === seg.mods.length - 1
-            const stride  = NODE_W + INLINE_G
+            const isLast = i === seg.mods.length - 1
+            const stride = NODE_W + INLINE_G
             const isDirectValveBody = seg.kind === 'apa' && isValveBody(m.Name)
             const modIsEpli = isEpli(m.Name)
             const modIsApChain = isApChainInterface(m.Name)
@@ -191,15 +191,15 @@ export function buildLayout(
                     status: diffStatus?.[m.Adress] ?? 'unchanged',
                     editMode,
                     isBackplane: seg.kind === 'apa' || (seg.kind === 'valve' && !isFirst),
-                    showLeftHandle:    isFirst && !modIsApChain,
-                    showRightHandle:   isLast  && !modIsApChain,
-                    showApIn:          modIsApChain,
-                    showApOut:         modIsApChain,
+                    showLeftHandle: isFirst && !modIsApChain,
+                    showRightHandle: isLast && !modIsApChain,
+                    showApIn: modIsApChain,
+                    showApOut: modIsApChain,
                     ...(apPos ? {
-                        apInPos:  { top: apPos.apInTop,  left: apPos.apInLeft  },
+                        apInPos: { top: apPos.apInTop, left: apPos.apInLeft },
                         apOutPos: { top: apPos.apOutTop, left: apPos.apOutLeft },
                     } : {}),
-                    showValveEditor:   editMode && ((seg.kind === 'valve' && !isFirst) || isDirectValveBody),
+                    showValveEditor: editMode && ((seg.kind === 'valve' && !isFirst) || isDirectValveBody),
                     suppressIoHandles: (seg.kind === 'valve' && !isFirst) || isDirectValveBody,
                 },
             })
@@ -222,10 +222,10 @@ export function buildLayout(
         const nextFirstId = String(next.seg.mods[0].Adress)
 
         // Route FROM EPLI's ap-out (if segment has EPLI), else from last module's right
-        const srcNode   = epliId ?? lastId
+        const srcNode = epliId ?? lastId
         const srcHandle = epliId ? 'ap-out' : 'right'
         // Route TO next segment's EPLI ap-in (if it has one), else to first module's left
-        const tgtNode   = next.epliId ?? nextFirstId
+        const tgtNode = next.epliId ?? nextFirstId
         const tgtHandle = next.epliId ? 'ap-in' : 'left'
 
         const srcMod = mods.find(m => String(m.Adress) === srcNode)

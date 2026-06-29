@@ -8,12 +8,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
     Box, Stack, Typography, Paper, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, Chip, Drawer, Divider, CircularProgress,
+    TableContainer, TableHead, TableRow, Chip, CircularProgress,
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
-import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { TooltipButton, TooltipIconButton } from './TooltipButton'
+import HistoryDetailDrawer from './HistoryDetailDrawer'
 
 interface LogEntry {
     level: string
@@ -41,24 +41,54 @@ interface RunRecord {
     logs?: LogEntry[]
 }
 
+function parseTests(raw: string | string[] | null | undefined): string[] {
+    if (raw == null) return []
+    if (Array.isArray(raw)) return raw
+    try { return JSON.parse(raw) ?? [] } catch { return [] }
+}
+
+function parseResults(raw: string | unknown[] | null | undefined): Array<{ test_id?: string; passed?: boolean; error?: string }> {
+    if (raw == null) return []
+    if (Array.isArray(raw)) return raw as Array<{ test_id?: string; passed?: boolean; error?: string }>
+    try { return JSON.parse(raw as string) ?? [] } catch { return [] }
+}
+
+function formatTime(iso: string): string {
+    if (!iso) return '-'
+    try {
+        return new Date(iso).toLocaleString()
+    } catch {
+        return iso
+    }
+}
+
+function statusChipColor(s: string): "success" | "error" | "info" | "default" {
+    return s === 'completed' ? 'success' : s === 'error' ? 'error' : s === 'running' ? 'info' : 'default'
+}
+
 export default function HistoryTab() {
     const [runs, setRuns] = useState<RunRecord[]>([])
     const [loading, setLoading] = useState(false)
     const [selectedRun, setSelectedRun] = useState<RunRecord | null>(null)
 
-    const fetchHistory = useCallback(async () => {
+    async function fetchHistory() {
         setLoading(true)
         try {
             const r = await fetch('/test-run/history?limit=100')
             if (r.ok) setRuns(await r.json())
+            setLoading(false)
         } catch {
             // PocketBase may not be running
-        } finally {
             setLoading(false)
         }
-    }, [])
+    }
 
-    useEffect(() => { fetchHistory() }, [fetchHistory])
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchHistory()
+        }, 0)
+        return () => clearTimeout(timer)
+    }, [])
 
     async function openDetail(run: RunRecord) {
         try {
@@ -71,31 +101,6 @@ export default function HistoryTab() {
         } catch {
             setSelectedRun(run)
         }
-    }
-
-    function parseTests(raw: string | string[] | null | undefined): string[] {
-        if (raw == null) return []
-        if (Array.isArray(raw)) return raw
-        try { return JSON.parse(raw) ?? [] } catch { return [] }
-    }
-
-    function parseResults(raw: string | unknown[] | null | undefined): Array<{ test_id?: string; passed?: boolean; error?: string }> {
-        if (raw == null) return []
-        if (Array.isArray(raw)) return raw as Array<{ test_id?: string; passed?: boolean; error?: string }>
-        try { return JSON.parse(raw as string) ?? [] } catch { return [] }
-    }
-
-    function formatTime(iso: string): string {
-        if (!iso) return '-'
-        try {
-            return new Date(iso).toLocaleString()
-        } catch {
-            return iso
-        }
-    }
-
-    function statusChipColor(s: string) {
-        return s === 'completed' ? 'success' : s === 'error' ? 'error' : s === 'running' ? 'info' : 'default'
     }
 
     return (
@@ -235,118 +240,13 @@ export default function HistoryTab() {
                 </TableContainer>
             )}
 
-            {/* ── Detail Drawer ── */}
-            <Drawer
-                anchor="right"
-                open={!!selectedRun}
+            <HistoryDetailDrawer
+                selectedRun={selectedRun}
                 onClose={() => setSelectedRun(null)}
-                slotProps={{ paper: { sx: { width: 480, p: 2 } } }}
-            >
-                {selectedRun && (
-                    <Stack spacing={2}>
-                        <Stack direction="row" sx={{ alignItems: 'center' }}>
-                            <Typography variant="h6" sx={{ flex: 1, fontWeight: 600 }}>
-                                {selectedRun.run_id}
-                            </Typography>
-                            <TooltipIconButton
-                                onClick={() => setSelectedRun(null)}
-                                size="small"
-                                tooltip="Close detail drawer"
-                                icon={<CloseIcon />}
-                            />
-                        </Stack>
-
-                        <Stack direction="row" spacing={2}>
-                            <Chip label={`Source: ${selectedRun.source}`} size="small" variant="outlined" />
-                            <Chip
-                                label={selectedRun.status}
-                                size="small"
-                                color={statusChipColor(selectedRun.status)}
-                            />
-                        </Stack>
-
-                        <Typography variant="caption" color="text.secondary">
-                            IP: {selectedRun.ip_address} ·
-                            Started: {formatTime(selectedRun.started_at)} ·
-                            Completed: {formatTime(selectedRun.completed_at)}
-                        </Typography>
-
-                        <Divider />
-
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                            Tests ({parseTests(selectedRun.tests).length})
-                        </Typography>
-                        {parseTests(selectedRun.tests).map(testId => {
-                            const cp = (selectedRun.checkpoints ?? []).find(c => c.test === testId)
-                            const color =
-                                cp?.status === 'passed' ? 'success' :
-                                    cp?.status === 'failed' ? 'error' :
-                                        cp?.status === 'running' ? 'info' : 'default'
-                            return (
-                                <Stack key={testId} direction="row" sx={{ alignItems: 'center' }} spacing={1}>
-                                    <Chip label={testId} size="small" color={color} />
-                                    {cp?.error && (
-                                        <Typography variant="caption" color="error">
-                                            {cp.error}
-                                        </Typography>
-                                    )}
-                                </Stack>
-                            )
-                        })}
-
-                        <Divider />
-
-                        {/* ── Log output (in-memory runs have full logs) ── */}
-                        {selectedRun.logs && selectedRun.logs.length > 0 && (
-                            <>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                                    Log ({selectedRun.logs.length} entries)
-                                </Typography>
-                                <Box sx={{
-                                    background: '#1e1e1e', color: '#d4d4d4',
-                                    borderRadius: 1, p: 1,
-                                    maxHeight: 300, overflow: 'auto',
-                                    fontFamily: 'monospace', fontSize: '0.72rem', lineHeight: 1.6,
-                                }}>
-                                    {selectedRun.logs.map((entry, i) => (
-                                        <div key={i} style={{
-                                            color: entry.level === 'error' ? '#f44747'
-                                                : entry.level === 'warning' ? '#cca700'
-                                                    : '#d4d4d4',
-                                        }}>
-                                            <span style={{ color: '#608b4e', userSelect: 'none' }}>
-                                                [{entry.timestamp?.slice(11, 19) ?? '--:--:--'}]
-                                            </span>{' '}
-                                            {entry.message}
-                                        </div>
-                                    ))}
-                                </Box>
-                                <Divider />
-                            </>
-                        )}
-
-                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                            Raw Results
-                        </Typography>
-                        <Box sx={{
-                            background: '#f5f5f5', borderRadius: 1, p: 1.5,
-                            maxHeight: 300, overflow: 'auto', fontSize: '0.7rem',
-                            fontFamily: 'monospace', whiteSpace: 'pre-wrap',
-                        }}>
-                            {(() => {
-                                try {
-                                    const raw = selectedRun.results
-                                    if (raw == null) return 'null'
-                                    if (Array.isArray(raw)) return JSON.stringify(raw, null, 2)
-                                    const parsed = JSON.parse(raw as string)
-                                    return JSON.stringify(parsed ?? raw, null, 2)
-                                }
-                                catch { return String(selectedRun.results ?? 'null') }
-                            })()}
-                        </Box>
-                    </Stack>
-                )}
-            </Drawer>
+                statusChipColor={statusChipColor}
+                formatTime={formatTime}
+                parseTests={parseTests}
+            />
         </Stack>
     )
 }

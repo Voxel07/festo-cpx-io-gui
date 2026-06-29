@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useReducer } from 'react'
 import {
     Stack, Button, Alert, CircularProgress, TextField,
     Typography, Box, Divider, Chip,
@@ -134,27 +134,94 @@ interface Props {
     onResult: (topo: Topology | null, status: DiffStatus | null, removed?: TopologyModule[], rawConfig?: BenchConfig) => void
 }
 
+interface TabState {
+    filePath: string
+    liveConfig: BenchConfig | null
+    liveTopology: Topology | null
+    readBusy: boolean
+    readError: string | null
+    cmpData: CompareResult | null
+    cmpBusy: boolean
+    cmpError: string | null
+    writeBusy: boolean
+    writeError: string | null
+    savedTo: string | null
+}
+
+const initialTabState: TabState = {
+    filePath: 'bench_config.json',
+    liveConfig: null,
+    liveTopology: null,
+    readBusy: false,
+    readError: null,
+    cmpData: null,
+    cmpBusy: false,
+    cmpError: null,
+    writeBusy: false,
+    writeError: null,
+    savedTo: null,
+}
+
+type TabAction =
+    | { type: 'SET_FILE_PATH'; path: string }
+    | { type: 'READ_START' }
+    | { type: 'READ_SUCCESS'; config: BenchConfig; topology: Topology }
+    | { type: 'READ_FAIL'; error: string }
+    | { type: 'COMPARE_START' }
+    | { type: 'COMPARE_SUCCESS'; data: CompareResult }
+    | { type: 'COMPARE_FAIL'; error: string }
+    | { type: 'WRITE_START' }
+    | { type: 'WRITE_SUCCESS'; savedTo: string }
+    | { type: 'WRITE_FAIL'; error: string }
+    | { type: 'RESET_SAVED' }
+
+function tabReducer(state: TabState, action: TabAction): TabState {
+    switch (action.type) {
+        case 'SET_FILE_PATH':
+            return { ...state, filePath: action.path }
+        case 'READ_START':
+            return { ...state, readBusy: true, readError: null, cmpData: null, savedTo: null }
+        case 'READ_SUCCESS':
+            return { ...state, readBusy: false, liveConfig: action.config, liveTopology: action.topology }
+        case 'READ_FAIL':
+            return { ...state, readBusy: false, readError: action.error }
+        case 'COMPARE_START':
+            return { ...state, cmpBusy: true, cmpError: null }
+        case 'COMPARE_SUCCESS':
+            return { ...state, cmpBusy: false, cmpData: action.data }
+        case 'COMPARE_FAIL':
+            return { ...state, cmpBusy: false, cmpError: action.error }
+        case 'WRITE_START':
+            return { ...state, writeBusy: true, writeError: null, savedTo: null }
+        case 'WRITE_SUCCESS':
+            return { ...state, writeBusy: false, savedTo: action.savedTo }
+        case 'WRITE_FAIL':
+            return { ...state, writeBusy: false, writeError: action.error }
+        case 'RESET_SAVED':
+            return { ...state, savedTo: null }
+        default:
+            return state
+    }
+}
+
 export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
-    const [filePath, setFilePath] = useState('bench_config.json')
-
-    // Stage 1 – Read live
-    const [liveConfig, setLiveConfig] = useState<BenchConfig | null>(null)
-    const [liveTopology, setLiveTopology] = useState<Topology | null>(null)
-    const [readBusy, setReadBusy] = useState(false)
-    const [readError, setReadError] = useState<string | null>(null)
-
-    // Stage 2 – Compare
-    const [cmpData, setCmpData] = useState<CompareResult | null>(null)
-    const [cmpBusy, setCmpBusy] = useState(false)
-    const [cmpError, setCmpError] = useState<string | null>(null)
-
-    // Stage 3 – Write
-    const [writeBusy, setWriteBusy] = useState(false)
-    const [writeError, setWriteError] = useState<string | null>(null)
-    const [savedTo, setSavedTo] = useState<string | null>(null)
+    const [state, dispatch] = useReducer(tabReducer, initialTabState)
+    const {
+        filePath,
+        liveConfig,
+        liveTopology,
+        readBusy,
+        readError,
+        cmpData,
+        cmpBusy,
+        cmpError,
+        writeBusy,
+        writeError,
+        savedTo,
+    } = state
 
     async function readLive() {
-        setReadBusy(true); setReadError(null); setCmpData(null); setSavedTo(null)
+        dispatch({ type: 'READ_START' })
         try {
             const r = await fetch('/config/generate', {
                 method: 'POST',
@@ -162,22 +229,22 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
                 body: JSON.stringify({ ip_address: ip, timeout, save_path: filePath }),
             })
             const d = await r.json()
-            if (!r.ok) throw new Error(d.detail ?? 'Unknown error')
+            if (!r.ok) {
+                dispatch({ type: 'READ_FAIL', error: d.detail ?? 'Unknown error' })
+                return
+            }
             const config: BenchConfig = d.config
             const topo = configToTopology(config)
-            setLiveConfig(config)
-            setLiveTopology(topo)
+            dispatch({ type: 'READ_SUCCESS', config, topology: topo })
             onResult(topo, null, [], config)
         } catch (e) {
-            setReadError((e as Error).message)
-        } finally {
-            setReadBusy(false)
+            dispatch({ type: 'READ_FAIL', error: (e as Error).message })
         }
     }
 
     async function compare() {
-        if (!filePath) { setCmpError('Enter a configuration file path.'); return }
-        setCmpBusy(true); setCmpError(null)
+        if (!filePath) { dispatch({ type: 'COMPARE_FAIL', error: 'Enter a configuration file path.' }); return }
+        dispatch({ type: 'COMPARE_START' })
         try {
             const r = await fetch('/config/compare', {
                 method: 'POST',
@@ -185,8 +252,11 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
                 body: JSON.stringify({ ip_address: ip, timeout, config_path: filePath }),
             })
             const d: CompareResult & { detail?: string } = await r.json()
-            if (!r.ok) throw new Error(d.detail ?? 'Unknown error')
-            setCmpData(d)
+            if (!r.ok) {
+                dispatch({ type: 'COMPARE_FAIL', error: d.detail ?? 'Unknown error' })
+                return
+            }
+            dispatch({ type: 'COMPARE_SUCCESS', data: d })
             const ds: DiffStatus = {}
             for (const m of (d.live?.Topology ?? [])) ds[m.Adress] = 'unchanged'
             for (const c of d.changes) ds[c.address] = 'changed'
@@ -194,15 +264,13 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
             for (const m of d.removed) ds[m.Adress] = 'removed'
             onResult(d.live, ds, d.removed)
         } catch (e) {
-            setCmpError((e as Error).message)
-        } finally {
-            setCmpBusy(false)
+            dispatch({ type: 'COMPARE_FAIL', error: (e as Error).message })
         }
     }
 
     async function writeToFile() {
-        if (!liveConfig) { setWriteError('Read live config first.'); return }
-        setWriteBusy(true); setWriteError(null); setSavedTo(null)
+        if (!liveConfig) { dispatch({ type: 'WRITE_FAIL', error: 'Read live config first.' }); return }
+        dispatch({ type: 'WRITE_START' })
         try {
             const r = await fetch('/config', {
                 method: 'POST',
@@ -210,12 +278,13 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
                 body: JSON.stringify({ config: liveConfig, save_path: filePath }),
             })
             const d: { saved_to?: string; detail?: string } = await r.json()
-            if (!r.ok) throw new Error(d.detail ?? 'Unknown error')
-            setSavedTo(d.saved_to ?? filePath)
+            if (!r.ok) {
+                dispatch({ type: 'WRITE_FAIL', error: d.detail ?? 'Unknown error' })
+                return
+            }
+            dispatch({ type: 'WRITE_SUCCESS', savedTo: d.saved_to ?? filePath })
         } catch (e) {
-            setWriteError((e as Error).message)
-        } finally {
-            setWriteBusy(false)
+            dispatch({ type: 'WRITE_FAIL', error: (e as Error).message })
         }
     }
 
@@ -236,7 +305,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
                 flexWrap: 'wrap',
                 flexShrink: 0,
             }}>
-                <ConfigFileInput value={filePath} onChange={setFilePath} />
+                <ConfigFileInput value={filePath} onChange={path => dispatch({ type: 'SET_FILE_PATH', path })} />
 
                 <Divider orientation="vertical" flexItem sx={{ my: 0.25 }} />
                 <ReadLiveStep busy={readBusy} result={liveTopology} onRead={readLive} />
