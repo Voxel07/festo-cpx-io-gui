@@ -10,6 +10,8 @@ export interface TopologyModule {
     NumOfInOuts: number
     /** Indices (0-based) of valve slots with a valve physically mounted (VABX only) */
     MountedValves?: number[]
+    /** Number of physical slots on the block (VMPAL only) */
+    ValveSlots?: number
 }
 
 export interface Topology {
@@ -117,6 +119,7 @@ export interface ModuleInstance {
     category: 'input' | 'output' | 'inout' | 'bus' | 'valve'
     module_type_ref: string
     mounted_valves?: number[]
+    valve_slots?: number
 }
 
 export interface WiringConnection {

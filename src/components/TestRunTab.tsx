@@ -5,7 +5,7 @@
  * updates appear live, regardless of whether the run was started from the
  * web UI or CI.
  */
-import { useReducer, useEffect, useRef } from 'react'
+import { useReducer, useEffect, useRef, useCallback } from 'react'
 import { Box, Stack, Typography, Alert, Paper, CircularProgress, TextField, Tooltip } from '@mui/material'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import TestSelection from './TestSelection'
@@ -145,7 +145,7 @@ export default function TestRunTab({ ip }: Props) {
         return [...new Set(serverTests)]
     })()
 
-    async function fetchStatus() {
+    const fetchStatus = useCallback(async () => {
         try {
             const r = await fetch('/test-run/status')
             if (!r.ok) return
@@ -155,7 +155,7 @@ export default function TestRunTab({ ip }: Props) {
                 dispatch({ type: 'SET_BUSY', busy: false })
             }
         } catch { /* backend may be restarting */ }
-    }
+    }, [])
 
     useEffect(() => {
         if (isRunning || isStarting || busy) {

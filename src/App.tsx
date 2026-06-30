@@ -76,7 +76,7 @@ type AppAction =
     | { type: 'SET_RAW_CONFIG'; config: BenchConfig | null }
     | { type: 'SET_RESULT'; topo: Topology | null; status: DiffStatus | null; removed: TopologyModule[]; config?: BenchConfig }
     | { type: 'CONFIG_LOAD'; config: BenchConfig }
-    | { type: 'MODULE_VALVE_CHANGE'; addr: number; mountedValves: number[] }
+    | { type: 'MODULE_VALVE_CHANGE'; addr: number; mountedValves: number[]; valveSlots?: number }
 
 function appReducer(state: AppState, action: AppAction): AppState {
     switch (action.type) {
@@ -116,14 +116,29 @@ function appReducer(state: AppState, action: AppAction): AppState {
             return { ...state, diagOpen: action.open }
         case 'SET_RAW_CONFIG':
             return { ...state, rawConfig: action.config }
-        case 'SET_RESULT':
+        case 'SET_RESULT': {
+            const newRaw = action.config !== undefined ? action.config : state.rawConfig
+            let mergedTopo = action.topo
+            if (mergedTopo && newRaw?.module_instances) {
+                mergedTopo = {
+                    ...mergedTopo,
+                    Topology: mergedTopo.Topology.map(m => {
+                        const inst = newRaw.module_instances.find(i => i.address === m.Adress)
+                        if (inst && inst.mounted_valves) {
+                            return { ...m, MountedValves: inst.mounted_valves }
+                        }
+                        return m
+                    })
+                }
+            }
             return {
                 ...state,
-                topology: action.topo,
+                topology: mergedTopo,
                 diffStatus: action.status,
                 removedModules: action.removed,
-                rawConfig: action.config !== undefined ? action.config : state.rawConfig,
+                rawConfig: newRaw,
             }
+        }
         case 'CONFIG_LOAD':
             return {
                 ...state,
@@ -134,13 +149,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
             const nextTopo = state.topology ? {
                 ...state.topology,
                 Topology: state.topology.Topology.map(m =>
-                    m.Adress === action.addr ? { ...m, MountedValves: action.mountedValves } : m
+                    m.Adress === action.addr ? { ...m, MountedValves: action.mountedValves, ValveSlots: action.valveSlots } : m
                 ),
             } : null
             const nextRaw = state.rawConfig ? {
                 ...state.rawConfig,
                 module_instances: (state.rawConfig.module_instances || []).map(inst =>
-                    inst.address === action.addr ? { ...inst, mounted_valves: action.mountedValves } : inst
+                    inst.address === action.addr ? { ...inst, mounted_valves: action.mountedValves, valve_slots: action.valveSlots } : inst
                 )
             } : null
             return {
@@ -270,8 +285,8 @@ export default function App() {
     }
 
     /** Patch MountedValves on a module entry when user configures valves in ConnectionsFlow */
-    function onModuleValveChange(addr: number, mountedValves: number[]) {
-        dispatch({ type: 'MODULE_VALVE_CHANGE', addr, mountedValves })
+    function onModuleValveChange(addr: number, mountedValves: number[], valveSlots?: number) {
+        dispatch({ type: 'MODULE_VALVE_CHANGE', addr, mountedValves, valveSlots })
     }
 
     return (

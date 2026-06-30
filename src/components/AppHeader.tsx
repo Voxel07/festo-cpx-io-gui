@@ -1,4 +1,5 @@
-import { AppBar, Toolbar, Typography, TextField, Stack } from '@mui/material'
+import { useState, useEffect } from 'react'
+import { AppBar, Toolbar, Typography, TextField, Stack, Badge } from '@mui/material'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import CloudIcon from '@mui/icons-material/Cloud'
@@ -45,6 +46,44 @@ export default function AppHeader({
     onCheckPocketBase,
     onOpenDiagnostics,
 }: AppHeaderProps) {
+    const [diagCount, setDiagCount] = useState(0)
+    const [diagSeverity, setDiagSeverity] = useState<'error' | 'warning' | 'info' | 'none'>('none')
+
+    useEffect(() => {
+        if (!ip) {
+            setDiagCount(0)
+            setDiagSeverity('none')
+            return
+        }
+        const fetchDiags = async () => {
+            try {
+                const r = await fetch(`/io/diagnoses?ip_address=${encodeURIComponent(ip)}`)
+                if (r.ok) {
+                    const d = await r.json()
+                    setDiagCount(d.length)
+                    if (d.length === 0) {
+                        setDiagSeverity('none')
+                    } else if (d.some((x: any) => x.name.toLowerCase().includes('error') || x.description.toLowerCase().includes('error'))) {
+                        setDiagSeverity('error')
+                    } else if (d.some((x: any) => x.name.toLowerCase().includes('warning') || x.description.toLowerCase().includes('warning'))) {
+                        setDiagSeverity('warning')
+                    } else {
+                        setDiagSeverity('info')
+                    }
+                }
+            } catch {
+                // ignore
+            }
+        }
+        fetchDiags()
+        const timer = setInterval(fetchDiags, 5000)
+        return () => clearInterval(timer)
+    }, [ip])
+
+    const iconColor = diagSeverity === 'error' ? '#d32f2f' :
+                      diagSeverity === 'warning' ? '#ed6c02' :
+                      diagSeverity === 'info' ? '#0288d1' : 'inherit'
+
     return (
         <AppBar position="static" sx={{ background: '#003366', flexShrink: 0, pt: 1, pb: 1 }}>
             <Toolbar variant="dense" sx={{ gap: 2, flexWrap: 'wrap' }}>
@@ -90,22 +129,24 @@ export default function AppHeader({
                     >
                         {pbChecking ? 'Checking...' : 'PocketBase'}
                     </TooltipButton>
-                    <TooltipButton
-                        size="small"
-                        variant="outlined"
-                        onClick={onOpenDiagnostics}
-                        tooltip="Show live system diagnostics raised"
-                        icon={<ReportProblemIcon sx={{ fontSize: '1rem' }} />}
-                        sx={{
-                            fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap',
-                            borderColor: 'rgba(255,255,255,0.5)',
-                            color: '#fff',
-                            '&:hover': { borderColor: '#fff', color: '#fff' },
-                            '& .MuiButton-startIcon': { mr: 0.5 }
-                        }}
-                    >
-                        Diagnostics
-                    </TooltipButton>
+                    <Badge badgeContent={diagCount} color="error" sx={{ '& .MuiBadge-badge': { fontSize: '0.55rem', height: 16, minWidth: 16, top: 4, right: 4 } }}>
+                        <TooltipButton
+                            size="small"
+                            variant="outlined"
+                            onClick={onOpenDiagnostics}
+                            tooltip="Show live system diagnostics raised"
+                            icon={<ReportProblemIcon sx={{ fontSize: '1rem', color: iconColor }} />}
+                            sx={{
+                                fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap',
+                                borderColor: 'rgba(255,255,255,0.5)',
+                                color: '#fff',
+                                '&:hover': { borderColor: '#fff', color: '#fff' },
+                                '& .MuiButton-startIcon': { mr: 0.5 }
+                            }}
+                        >
+                            Diagnostics
+                        </TooltipButton>
+                    </Badge>
                 </Stack>
             </Toolbar>
         </AppBar>

@@ -10,13 +10,16 @@ interface Props {
     open: boolean
     svgUrl: string
     hiddenValves: string[]
+    numValves?: number
+    maxValves?: number
     onToggle: (id: string, hide: boolean) => void
+    onNumValvesChange?: (num: number) => void
     onClose: () => void
 }
 
-export default function ValveEditorDialog({ open, svgUrl, hiddenValves, onToggle, onClose }: Props) {
-    const valveGroups = useValveGroups(open ? svgUrl : '')
-    const displayUrl = useModifiedSvg(svgUrl, hiddenValves)
+export default function ValveEditorDialog({ open, svgUrl, hiddenValves, numValves, maxValves = 16, onToggle, onNumValvesChange, onClose }: Props) {
+    const valveGroups = useValveGroups(open ? svgUrl : '', numValves)
+    const displayUrl = useModifiedSvg(svgUrl, hiddenValves, numValves)
     const hiddenSet = new Set(hiddenValves)
 
     return (
@@ -43,6 +46,21 @@ export default function ValveEditorDialog({ open, svgUrl, hiddenValves, onToggle
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
                             Uncheck valve slots that have <strong>no valve physically mounted</strong>.
                         </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                Physical Slots:
+                            </Typography>
+                            <input
+                                type="number"
+                                min={1}
+                                max={maxValves}
+                                value={numValves || valveGroups.length}
+                                onChange={e => {
+                                    if (onNumValvesChange) onNumValvesChange(Number(e.target.value))
+                                }}
+                                style={{ width: 60, padding: '4px' }}
+                            />
+                        </Box>
                         <Divider sx={{ mb: 1 }} />
                         {valveGroups.length === 0 && (
                             <Typography variant="caption" sx={{ color: '#aaa' }}>

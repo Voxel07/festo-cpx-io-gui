@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button,
     Typography, Box, CircularProgress, Alert, Stack, Table,
@@ -31,7 +31,7 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
     const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
     // Fetch active diagnoses from API
-    async function fetchDiagnoses() {
+    const fetchDiagnoses = useCallback(async () => {
         if (!ip) return
         setLoading(true)
         setErrorMsg(null)
@@ -50,7 +50,7 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
             setDiagnoses([])
             setLoading(false)
         }
-    }
+    }, [ip])
 
     // Load diagnostics on mount
     useEffect(() => {
@@ -85,7 +85,11 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1, borderBottom: '1px solid #e0e0e0' }}>
-                <ReportProblemIcon color={diagnoses.length > 0 ? 'error' : 'action'} />
+                <ReportProblemIcon sx={{
+                    color: diagnoses.some(d => d.name.toLowerCase().includes('error') || d.description.toLowerCase().includes('error')) ? '#d32f2f' :
+                        diagnoses.some(d => d.name.toLowerCase().includes('warning') || d.description.toLowerCase().includes('warning')) ? '#ed6c02' :
+                            diagnoses.length > 0 ? '#0288d1' : 'action'
+                }} />
                 <Box sx={{ flex: 1 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
                         System Diagnostics

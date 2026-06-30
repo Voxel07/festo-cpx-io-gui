@@ -16,6 +16,7 @@ import type { Node, Edge, NodeTypes, EdgeTypes, EdgeChange, EdgeProps } from '@x
 import TopologyCanvas from './TopologyCanvas'
 import ModuleNode from './ModuleNode'
 import BackplaneNode from './BackplaneNode'
+import { CableEdge } from './CableEdge'
 import { buildLayout } from '../utils/layoutBuilder'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnection, ModuleInstance } from '../types'
 
@@ -26,56 +27,7 @@ const NODE_TYPES: NodeTypes = {
     backplane: BackplaneNode as NodeTypes[string],
 }
 
-const LABEL_BASE_STYLE: React.CSSProperties = {
-    position: 'absolute',
-    fontSize: 10,
-    fontWeight: 700,
-    color: '#1565c0',
-    background: '#e3f2fd',
-    padding: '1px 6px',
-    borderRadius: 3,
-    border: '1px solid #bbdefb',
-    pointerEvents: 'none',
-}
 
-// ── Custom cable edge: 6-segment orthogonal route with stubs ───────────────
-// Path: exit source LEFT → go up → run horizontal → approach target from LEFT → enter target
-function CableEdge({ sourceX, sourceY, targetX, targetY, label, style, markerEnd, data }: EdgeProps) {
-    const isExitRight = (data as Record<string, unknown>)?.exitRight === true
-    const STUB = 50   // horizontal stub before going vertical
-    const aboveY = Math.min(sourceY, targetY) - 80
-    const x1 = isExitRight ? sourceX + STUB : sourceX - STUB   // exit source going left/right
-    const x2 = targetX - STUB   // approach target from the left
-    const path = [
-        `M ${sourceX},${sourceY}`,
-        `L ${x1},${sourceY}`,     // go left/right from source
-        `L ${x1},${aboveY}`,      // go up
-        `L ${x2},${aboveY}`,      // run horizontal
-        `L ${x2},${targetY}`,     // go down to target level
-        `L ${targetX},${targetY}`,// connect to target
-    ].join(' ')
-    const labelX = (x1 + x2) / 2
-    const labelY = aboveY - 8
-
-    return (
-        <>
-            <BaseEdge path={path} style={style} markerEnd={markerEnd} />
-            {label && (
-                <EdgeLabelRenderer>
-                    <div
-                        className="nodrag nopan"
-                        style={{
-                            ...LABEL_BASE_STYLE,
-                            transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)`,
-                        }}
-                    >
-                        {String(label)}
-                    </div>
-                </EdgeLabelRenderer>
-            )}
-        </>
-    )
-}
 
 const EDGE_TYPES: EdgeTypes = {
     cable: CableEdge as EdgeTypes[string],
@@ -113,7 +65,6 @@ function wiringToEdges(wiring: WiringConnection[], instances: ModuleInstance[]):
             animated: true,
             zIndex: 1000,
             style: { stroke: '#e65100', strokeWidth: 2.5 },
-            label: c.label ?? `#${srcAddr}:${c.source_channel} → #${tgtAddr}:${c.target_channel}`,
             data: { kind: 'io', portSrc: c.source_channel, portTgt: c.target_channel },
         }
     })

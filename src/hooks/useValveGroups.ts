@@ -33,7 +33,7 @@ async function fetchAndParseValveGroups(
     }
 }
 
-export function useValveGroups(svgUrl: string): string[] {
+export function useValveGroups(svgUrl: string, overrideCount?: number): string[] {
     const [, setTick] = useState(0)
 
     // Trigger async fetch on cache miss (only setState in the async callback)
@@ -44,6 +44,10 @@ export function useValveGroups(svgUrl: string): string[] {
             setTick(t => t + 1)  // trigger re-render so cached groups are picked up below
         })
     }, [svgUrl])
+
+    if (overrideCount !== undefined) {
+        return Array.from({ length: overrideCount }, (_, i) => i === 0 ? 'Valve' : `Valve-${i + 1}`)
+    }
 
     // Derive from cache during render — React Compiler can optimise this
     return svgUrl ? (cache.get(svgUrl) ?? []) : []

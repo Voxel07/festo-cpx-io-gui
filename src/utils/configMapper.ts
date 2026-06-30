@@ -13,7 +13,8 @@ export function configToTopology(config: BenchConfig): Topology {
             const series = typeDef?.product_family ?? ''
 
             let m_type = 'Input'
-            if (inst.category === 'valve') m_type = 'Valve'
+            const upName = inst.display_name.toUpperCase()
+            if (inst.category === 'valve' || upName.includes('VABX') || upName.includes('VMPAL') || upName.includes('VAEM')) m_type = 'Valve'
             else if (inst.category === 'inout') m_type = 'In/Out'
             else if (inst.category === 'output') m_type = 'Output'
             else if (inst.category === 'bus') m_type = 'Bus'
@@ -29,6 +30,7 @@ export function configToTopology(config: BenchConfig): Topology {
                 NumOfOutputs: num_out,
                 NumOfInOuts: num_io,
                 MountedValves: inst.mounted_valves ?? undefined,
+                ValveSlots: inst.valve_slots ?? typeDef?.valve_count ?? undefined,
             }
         })
     }

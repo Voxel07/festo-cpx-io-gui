@@ -5,7 +5,7 @@
  * Drag from a port to another to create a wired I/O connection.
  * Save/load connections (including valve-mount info) via /connections.
  */
-import { useEffect, useRef, useReducer, useCallback } from 'react'
+import { useEffect, useRef, useReducer, useCallback, useState } from 'react'
 import { Box, Typography } from '@mui/material'
 import {
     useNodesState,
@@ -18,6 +18,7 @@ import ModuleNode from './ModuleNode'
 import type { ModuleNodeData } from './ModuleNode'
 import BackplaneNode from './BackplaneNode'
 import { WireEdge } from './WireEdge'
+import { CableEdge } from './CableEdge'
 import ModuleActuateModal from './ModuleActuateModal'
 import { buildLayout } from '../utils/layoutBuilder'
 import type { Topology, DiffStatus, ConnectionEntry, BenchConfig, WiringConnection, TopologyModule } from '../types'
@@ -30,7 +31,7 @@ const NODE_TYPES: NodeTypes = {
     mod: ModuleNode as NodeTypes[string],
     backplane: BackplaneNode as NodeTypes[string],
 }
-const EDGE_TYPES: EdgeTypes = { wire: WireEdge as EdgeTypes[string] }
+const EDGE_TYPES: EdgeTypes = { wire: WireEdge as EdgeTypes[string], cable: CableEdge as EdgeTypes[string] }
 
 // Colour for IO wiring edges
 const IO_COLOR = '#e65100'
@@ -87,7 +88,7 @@ interface Props {
     /** IP address of the CPX-AP gateway (from App toolbar) */
     ip?: string
     /** Called when a valve body's mounted valves change (indices 0-based) */
-    onModuleValveChange?: (addr: number, mountedValves: number[]) => void
+    onModuleValveChange?: (addr: number, mountedValves: number[], valveSlots?: number) => void
     /** Called when a BenchConfig is loaded — allows parent to sync topology state */
     onConfigLoad?: (config: BenchConfig) => void
 }
@@ -260,6 +261,25 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         ioEdgesRef.current = edges.filter(e => (e.data as Record<string, unknown>)?.kind === 'io')
     }, [edges])
 
+    // Fetch param 20201 for VABX modules
+    const [vabxInputs, setVabxInputs] = useState<Record<number, boolean>>({})
+    useEffect(() => {
+        if (!topology?.Topology?.length || !ip) return
+        topology.Topology.forEach(async (mod) => {
+            if (mod.Name.startsWith('VABX')) {
+                try {
+                    const r = await fetch(`/io/module/${mod.Adress}/parameter/20201?ip_address=${encodeURIComponent(ip)}`)
+                    if (r.ok) {
+                        const d = await r.json()
+                        setVabxInputs(prev => ({ ...prev, [mod.Adress]: true }))
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            }
+        })
+    }, [topology, ip])
+
     // ── Build nodes when topology changes ─────────────────────
     useEffect(() => {
         if (!topology?.Topology?.length) { setNodes([]); setEdges([]); return }
@@ -276,13 +296,13 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 const d = n.data as ModuleNodeData
                 const prev = prevNodeMap.get(n.id)
                 const prevHidden = prev ? (prev.data as ModuleNodeData).hiddenValves : undefined
-                if (!d.showValveEditor && prevHidden === undefined) return n
                 return {
                     ...n,
                     data: {
                         ...d,
                         hiddenValves: prevHidden ?? d.hiddenValves ?? [],
                         onValveChange: d.showValveEditor ? onModuleValveChange : d.onValveChange,
+                        hasVabxInputs: vabxInputs[d.mod.Adress] ?? false,
                     },
                 }
             })
@@ -298,7 +318,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             e => validIds.has(e.source) && validIds.has(e.target),
         )
         setEdges([...chainEdges, ...validIo])
-    }, [topology, diffStatus, onModuleValveChange, setNodes, setEdges])
+    }, [topology, diffStatus, onModuleValveChange, setNodes, setEdges, vabxInputs])
 
     // ── Propagate IO edges → node connection lists ─────────────────
     useEffect(() => {
@@ -454,21 +474,26 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
             // 3. Update mounted valves in module_instances
             const mountedValvesMap: Record<string, number[]> = {}
+            const valveSlotsMap: Record<string, number> = {}
             nodes.forEach(n => {
                 if (n.type !== 'mod') return
                 const d = n.data as ModuleNodeData
                 if (d.mod.MountedValves && d.mod.MountedValves.length >= 0) {
                     mountedValvesMap[String(d.mod.Adress)] = d.mod.MountedValves
                 }
+                if (d.mod.ValveSlots !== undefined) {
+                    valveSlotsMap[String(d.mod.Adress)] = d.mod.ValveSlots
+                }
             })
 
             config.wiring = wiring
             config.module_instances = (config.module_instances || []).map(inst => {
                 const mv = mountedValvesMap[String(inst.address)]
-                if (mv !== undefined) {
-                    return { ...inst, mounted_valves: mv }
-                }
-                return inst
+                const vs = valveSlotsMap[String(inst.address)]
+                let next = inst
+                if (mv !== undefined) next = { ...next, mounted_valves: mv }
+                if (vs !== undefined) next = { ...next, valve_slots: vs }
+                return next
             })
 
             config.power_supply = {
@@ -523,9 +548,9 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
             // Build an address → category map so we can derive correct handle kind
             const catByAddr: Record<number, string> = {}
-            ;(d.module_instances ?? []).forEach(inst => {
-                catByAddr[inst.address] = inst.category
-            })
+                ; (d.module_instances ?? []).forEach(inst => {
+                    catByAddr[inst.address] = inst.category
+                })
 
             // Derive the ReactFlow handle kind from the module category:
             //   output/inout module on the source side → 'out'
@@ -590,7 +615,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             if (d.module_instances) {
                 d.module_instances.forEach(inst => {
                     if (inst.mounted_valves && inst.mounted_valves.length >= 0) {
-                        onModuleValveChange?.(inst.address, inst.mounted_valves)
+                        onModuleValveChange?.(inst.address, inst.mounted_valves ?? [], inst.valve_slots)
                     }
                 })
             }

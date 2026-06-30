@@ -56,10 +56,12 @@ export type ModuleNodeData = {
     connections?: ConnectionEntry[]
     /** Suppress all IO port handles (valve bodies have no external M12 connectors) */
     suppressIoHandles?: boolean
-    /** Called when the user changes which valves are mounted; indices are 0-based */
-    onValveChange?: (addr: number, mountedValves: number[]) => void
+    /** Called when the user changes which valves are mounted or total slots; indices are 0-based */
+    onValveChange?: (addr: number, mountedValves: number[], valveSlots?: number) => void
     /** True when this module is currently being tested (pulse highlight) */
     active?: boolean
+    /** Show VABX module inputs based on parameter 20201 */
+    hasVabxInputs?: boolean
 }
 
 export type ModuleNodeType = Node<ModuleNodeData, 'mod'>
@@ -188,6 +190,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         connections = [],
         onValveChange,
         active = false,
+        hasVabxInputs = false,
     } = data
 
     const svgMaps = useSvgMap()
@@ -197,9 +200,12 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         numOut: mod.NumOfOutputs,
         numInOut: mod.NumOfInOuts,
     })
+    const isVmpal = mod.Name.startsWith('VMPAL')
+    const numValves = isVmpal ? (mod.ValveSlots || 16) : undefined
+
     const wantsValves = showValveEditor || showValves
-    const valveGroups = useValveGroups(wantsValves ? svgUrl : '')
-    const displayUrl = useModifiedSvg(svgUrl, hiddenValves)
+    const valveGroups = useValveGroups(wantsValves ? svgUrl : '', numValves)
+    const displayUrl = useModifiedSvg(svgUrl, hiddenValves, numValves)
 
     const [valveEditorOpen, setValveEditorOpen] = useState(false)
     const { setNodes } = useReactFlow()
@@ -245,9 +251,19 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 if (!next.includes(gid)) acc.push(idx)
                 return acc
             }, [])
-            onValveChange?.(mod.Adress, mounted)
+            // Call onValveChange (which will hit App dispatch)
+            if (onValveChange) onValveChange(mod.Adress, mounted, numValves)
             return { ...n, data: { ...n.data, hiddenValves: next } }
         }))
+    }
+
+    function onValveSlotsChange(slots: number) {
+        if (onValveChange) {
+            const mounted = mod.MountedValves ?? []
+            // filter out mounted indices >= slots
+            const validMounted = mounted.filter(idx => idx < slots)
+            onValveChange(mod.Adress, validMounted, slots)
+        }
     }
 
     return (
@@ -278,6 +294,30 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 <Handle id="right" type="source" position={Position.Right}
                     style={{ background: '#546e7a', width: 10, height: 10, border: '2px solid #fff' }} />
             )}
+
+            {/* ── VABX Extra Inputs ── */}
+            {hasVabxInputs && Array.from({ length: 8 }).map((_, i) => {
+                const row = Math.floor(i / 4)
+                const col = i % 4
+                return (
+                    <Handle
+                        key={`vabx-in-${i}`}
+                        id={`tgt-in-vabxin${i}`}
+                        type="target"
+                        position={Position.Top}
+                        style={{
+                            left: `${20 + col * 20}%`,
+                            top: `${-6 - row * 12}px`,
+                            background: editMode ? PORT_COLOR.in : 'transparent',
+                            width: 9, height: 9,
+                            border: editMode ? '2px solid #fff' : 'none',
+                            borderRadius: '50%',
+                            opacity: editMode ? 1 : 0,
+                            pointerEvents: editMode ? undefined : 'none'
+                        }}
+                    />
+                )
+            })}
 
             {/* ── Generic fallback IO handles (always rendered, invisible when not editing) ── */}
             {!suppressIoHandles && !hasPorts && Array.from({ length: topCount }, (_, i) => (
@@ -422,7 +462,9 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                             open={valveEditorOpen}
                             svgUrl={svgUrl}
                             hiddenValves={hiddenValves}
+                            numValves={numValves}
                             onToggle={onToggleValve}
+                            onNumValvesChange={onValveSlotsChange}
                             onClose={() => setValveEditorOpen(false)}
                         />
                     )}

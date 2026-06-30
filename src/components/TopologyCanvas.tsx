@@ -3,11 +3,13 @@
  * TopologyFlow (overview tab) and the interactive ConnectionsFlow (editor tab).
  */
 import type { ReactNode } from 'react'
+import { useEffect } from 'react'
 import {
     ReactFlow,
     Background,
     BackgroundVariant,
     Controls,
+    useReactFlow,
 } from '@xyflow/react'
 import type { Node, Edge, NodeTypes, EdgeTypes, EdgeChange, OnNodesChange, OnEdgesChange, OnConnect, OnReconnect, IsValidConnection, NodeMouseHandler } from '@xyflow/react'
 
@@ -31,6 +33,21 @@ interface Props {
     onNodeClick?: NodeMouseHandler<Node>
     elementsSelectable?: boolean
     children?: ReactNode
+}
+
+function FitViewTrigger({ nodesStr, padding }: { nodesStr: string, padding: number }) {
+    const { fitView } = useReactFlow()
+    useEffect(() => {
+        if (nodesStr) {
+            const timer = setTimeout(() => {
+                window.requestAnimationFrame(() => {
+                    fitView({ padding, duration: 400 })
+                })
+            }, 50)
+            return () => clearTimeout(timer)
+        }
+    }, [nodesStr, fitView, padding])
+    return null
 }
 
 export default function TopologyCanvas({
@@ -69,6 +86,7 @@ export default function TopologyCanvas({
         >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
             <Controls />
+            {fitView && <FitViewTrigger nodesStr={nodes.map(n => n.id).join(',')} padding={fitViewPadding} />}
             {children}
         </ReactFlow>
     )

@@ -67,6 +67,11 @@ function isValveInterface(name: string): boolean {
     return name.startsWith('VABX-A') && /-E[LP][-_]/.test(name)
 }
 
+/** Standalone valve modules on the AP bus (VAEM, VMPAL) */
+function isStandaloneValve(name: string): boolean {
+    return name.startsWith('VAEM') || name.startsWith('VMPAL')
+}
+
 // ─── Segmentation ─────────────────────────────────────────────────────────────
 
 export type SegmentKind = 'apa' | 'valve' | 'api'
@@ -199,8 +204,8 @@ export function buildLayout(
                         apInPos: { top: apPos.apInTop, left: apPos.apInLeft },
                         apOutPos: { top: apPos.apOutTop, left: apPos.apOutLeft },
                     } : {}),
-                    showValveEditor: editMode && ((seg.kind === 'valve' && !isFirst) || isDirectValveBody),
-                    suppressIoHandles: (seg.kind === 'valve' && !isFirst) || isDirectValveBody,
+                    showValveEditor: editMode && ((seg.kind === 'valve' && !isFirst) || isDirectValveBody || isStandaloneValve(m.Name)),
+                    suppressIoHandles: (seg.kind === 'valve' && !isFirst) || isDirectValveBody || isStandaloneValve(m.Name),
                 },
             })
             lastId = id
@@ -218,6 +223,7 @@ export function buildLayout(
     const cableStyle = { strokeDasharray: '6 4', strokeWidth: 2, stroke: '#1565c0' }
 
     placed.slice(0, -1).forEach(({ lastId, epliId }, si) => {
+        const seg = placed[si].seg
         const next = placed[si + 1]
         const nextFirstId = String(next.seg.mods[0].Adress)
 
@@ -230,6 +236,7 @@ export function buildLayout(
 
         const srcMod = mods.find(m => String(m.Adress) === srcNode)
         const exitRight = srcMod ? isApIM12orM8(srcMod.Name) : false
+        const straight = seg.kind === 'api' && next.seg.kind === 'api'
 
         edges.push({
             id: `cable-${si}`,
@@ -243,7 +250,7 @@ export function buildLayout(
             labelBgStyle: { fill: '#e3f2fd', fillOpacity: 0.9 },
             style: cableStyle,
             zIndex: 2,
-            data: { kind: 'cable', exitRight },
+            data: { kind: 'cable', exitRight, straight },
         })
     })
 
