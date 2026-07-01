@@ -1,9 +1,10 @@
-import { useReducer, useState } from 'react'
+import { useReducer, useState, useContext } from 'react'
 import { Box, Typography, Alert, Stack, Paper } from '@mui/material'
 import SettingsIcon from '@mui/icons-material/Settings'
 import ModuleActuatePanel from './ModuleActuatePanel'
 import type { Topology, TopologyModule } from '../types'
 import ParametersTable from './ParametersTable'
+import { AlertsContext } from '../utils/AlertsManager'
 
 interface ParameterMetadata {
     parameter_id: number
@@ -30,7 +31,6 @@ interface RawModeState {
     readingParams: Record<string, boolean>
     writingParams: Record<string, boolean>
     expandedParams: Record<number, boolean>
-    paramFeedback: Record<string, { severity: 'success' | 'error'; text: string }>
     readingAll: boolean
     tabError: string | null
 }
@@ -42,7 +42,6 @@ const initialRawModeState: RawModeState = {
     readingParams: {},
     writingParams: {},
     expandedParams: {},
-    paramFeedback: {},
     readingAll: false,
     tabError: null,
 }
@@ -57,7 +56,6 @@ type RawModeAction =
     | { type: 'SET_PARAM_VALUE'; key: string; value: string }
     | { type: 'SET_PARAM_VALUES'; values: Record<string, string> }
     | { type: 'TOGGLE_EXPAND'; paramId: number }
-    | { type: 'SET_FEEDBACK'; key: string; feedback: { severity: 'success' | 'error'; text: string } | undefined }
     | { type: 'SET_READING_ALL'; reading: boolean }
     | { type: 'SET_TAB_ERROR'; error: string | null }
 
@@ -69,7 +67,6 @@ function rawModeReducer(state: RawModeState, action: RawModeAction): RawModeStat
                 parameters: [],
                 paramValues: {},
                 expandedParams: {},
-                paramFeedback: {},
                 tabError: null,
             }
         case 'FETCH_PARAMS_START':
@@ -85,7 +82,6 @@ function rawModeReducer(state: RawModeState, action: RawModeAction): RawModeStat
                 parameters: action.parameters,
                 paramValues: {},
                 expandedParams: {},
-                paramFeedback: {},
             }
         case 'FETCH_PARAMS_FAIL':
             return {
@@ -122,15 +118,6 @@ function rawModeReducer(state: RawModeState, action: RawModeAction): RawModeStat
                     [action.paramId]: !state.expandedParams[action.paramId],
                 },
             }
-        case 'SET_FEEDBACK': {
-            const next = { ...state.paramFeedback }
-            if (action.feedback === undefined) {
-                delete next[action.key]
-            } else {
-                next[action.key] = action.feedback
-            }
-            return { ...state, paramFeedback: next }
-        }
         case 'SET_READING_ALL':
             return {
                 ...state,
@@ -155,10 +142,10 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
         readingParams,
         writingParams,
         expandedParams,
-        paramFeedback,
         readingAll,
         tabError,
     } = state
+    const alerts = useContext(AlertsContext)
 
     // Lookup selected module
     const selectedModule = topology?.Topology?.find(m => m.Adress === selectedModuleAddr) || null
@@ -189,15 +176,7 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
         }
     }
 
-    // Helper to trigger and clear feedback
-    const setFeedback = (key: string, severity: 'success' | 'error', text: string) => {
-        dispatch({ type: 'SET_FEEDBACK', key, feedback: { severity, text } })
-        if (severity === 'success') {
-            setTimeout(() => {
-                dispatch({ type: 'SET_FEEDBACK', key, feedback: undefined })
-            }, 4000)
-        }
-    }
+    // Helper to trigger and clear feedback (now unused, handled by global alerts)
 
     const toggleExpand = (paramId: number) => {
         dispatch({ type: 'TOGGLE_EXPAND', paramId })
@@ -218,16 +197,16 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
             const d = await r.json()
             if (!r.ok) {
                 const errText = d.detail ?? `Failed to read parameter ${paramId} instance ${instanceIdx}.`
-                setFeedback(key, 'error', errText)
+                alerts?.showAlert('error', `Param ${paramId}: ${errText}`)
                 dispatch({ type: 'SET_TAB_ERROR', error: errText })
             } else {
                 dispatch({ type: 'SET_PARAM_VALUE', key, value: String(d.value) })
-                setFeedback(key, 'success', '✓ Read')
+                alerts?.showAlert('success', `Parameter ${paramId} read successfully.`)
             }
             dispatch({ type: 'SET_READING_PARAM', key, reading: false })
         } catch (err) {
             const errText = (err as Error).message
-            setFeedback(key, 'error', errText)
+            alerts?.showAlert('error', `Param ${paramId}: ${errText}`)
             dispatch({ type: 'SET_TAB_ERROR', error: errText })
             dispatch({ type: 'SET_READING_PARAM', key, reading: false })
         }
@@ -245,29 +224,24 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
             if (!r.ok) {
                 const errText = d.detail ?? `Failed to read parameter ${paramId}.`
                 dispatch({ type: 'SET_TAB_ERROR', error: errText })
-                for (let i = 0; i < numInstances; i++) {
-                    setFeedback(`${paramId}_${i}`, 'error', errText)
-                }
+                alerts?.showAlert('error', `Param ${paramId}: ${errText}`)
             } else {
                 const nextVals: Record<string, string> = {}
                 if (Array.isArray(d.value)) {
                     for (let i = 0; i < numInstances; i++) {
                         nextVals[`${paramId}_${i}`] = d.value[i] !== undefined ? String(d.value[i]) : ''
-                        setFeedback(`${paramId}_${i}`, 'success', '✓ Read')
                     }
                 } else {
                     nextVals[`${paramId}_0`] = String(d.value)
-                    setFeedback(`${paramId}_0`, 'success', '✓ Read')
                 }
+                alerts?.showAlert('success', `Parameter ${paramId} (all instances) read successfully.`)
                 dispatch({ type: 'SET_PARAM_VALUES', values: nextVals })
             }
             dispatch({ type: 'SET_READING_PARAM', key: readKey, reading: false })
         } catch (err) {
             const errText = (err as Error).message
             dispatch({ type: 'SET_TAB_ERROR', error: errText })
-            for (let i = 0; i < numInstances; i++) {
-                setFeedback(`${paramId}_${i}`, 'error', errText)
-            }
+            alerts?.showAlert('error', `Param ${paramId}: ${errText}`)
             dispatch({ type: 'SET_READING_PARAM', key: readKey, reading: false })
         }
     }
@@ -288,31 +262,26 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
                     if (Array.isArray(d.value)) {
                         for (let i = 0; i < p.num_instances; i++) {
                             nextVals[`${p.parameter_id}_${i}`] = d.value[i] !== undefined ? String(d.value[i]) : ''
-                            setFeedback(`${p.parameter_id}_${i}`, 'success', '✓ Read')
                         }
                     } else {
                         nextVals[`${p.parameter_id}_0`] = String(d.value)
-                        setFeedback(`${p.parameter_id}_0`, 'success', '✓ Read')
                     }
                 } else {
                     const errText = d.detail ?? 'error'
                     errors.push(`${p.name}: ${errText}`)
-                    for (let i = 0; i < p.num_instances; i++) {
-                        setFeedback(`${p.parameter_id}_${i}`, 'error', errText)
-                    }
                 }
             } catch (err) {
                 const errText = (err as Error).message
                 errors.push(`${p.name}: ${errText}`)
-                for (let i = 0; i < p.num_instances; i++) {
-                    setFeedback(`${p.parameter_id}_${i}`, 'error', errText)
-                }
             }
         }
 
         dispatch({ type: 'SET_PARAM_VALUES', values: nextVals })
         if (errors.length > 0) {
+            alerts?.showAlert('error', 'Some parameters failed to read. Check the tab error.')
             dispatch({ type: 'SET_TAB_ERROR', error: `Some parameters failed to read:\n${errors.join('\n')}` })
+        } else {
+            alerts?.showAlert('success', 'All parameters read successfully.')
         }
         dispatch({ type: 'SET_READING_ALL', reading: false })
     }
@@ -342,16 +311,16 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
             const d = await r.json()
             if (!r.ok) {
                 const errText = d.detail ?? `Failed to write parameter ${paramId} instance ${instanceIdx}.`
-                setFeedback(key, 'error', errText)
+                alerts?.showAlert('error', `Param ${paramId}: ${errText}`)
                 dispatch({ type: 'SET_TAB_ERROR', error: errText })
             } else {
                 dispatch({ type: 'SET_PARAM_VALUE', key, value: String(d.value) })
-                setFeedback(key, 'success', '✓ Written')
+                alerts?.showAlert('success', `Parameter ${paramId} written successfully.`)
             }
             dispatch({ type: 'SET_WRITING_PARAM', key, writing: false })
         } catch (err) {
             const errText = (err as Error).message
-            setFeedback(key, 'error', errText)
+            alerts?.showAlert('error', `Param ${paramId}: ${errText}`)
             dispatch({ type: 'SET_TAB_ERROR', error: errText })
             dispatch({ type: 'SET_WRITING_PARAM', key, writing: false })
         }
@@ -417,7 +386,6 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
                                 readingParams={readingParams}
                                 writingParams={writingParams}
                                 expandedParams={expandedParams}
-                                paramFeedback={paramFeedback}
                                 readingAll={readingAll}
                                 ip={ip}
                                 selectedModule={selectedModule}

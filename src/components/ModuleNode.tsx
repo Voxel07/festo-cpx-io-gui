@@ -204,6 +204,12 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const isVmpal = mod.Name.startsWith('VMPAL')
     const numValves = isVmpal ? (mod.ValveSlots || 16) : undefined
 
+    let dispW = DISP_W
+    if (isVmpal && numValves !== undefined) {
+        const svgW = 33 + numValves * 10
+        dispW = Math.round(svgW * (DISP_H / 109))
+    }
+
     const wantsValves = showValveEditor || showValves
     const valveGroups = useValveGroups(wantsValves ? svgUrl : '', numValves)
     const displayUrl = useModifiedSvg(svgUrl, hiddenValves, numValves)
@@ -276,7 +282,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 : '0 2px 6px rgba(0,0,0,0.14)',
             borderRadius: 1.5,
             p: isBackplane ? '2px 0' : '4px 4px 6px',
-            width: DISP_W + (isBackplane ? 0 : 8),
+            width: dispW + (isBackplane ? 0 : 8),
             textAlign: 'center',
             position: 'relative',
             animation: active ? 'pulse 1.2s ease-in-out infinite' : 'none',
@@ -339,7 +345,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
             </Typography>
 
             {/* ── SVG image container ── */}
-            <Box sx={{ position: 'relative', width: DISP_W, height: DISP_H, margin: '0 auto' }}>
+            <Box sx={{ position: 'relative', width: dispW, height: DISP_H, margin: '0 auto' }}>
                 <Tooltip title={mod.Name} placement="top" arrow>
                     <img
                         src={displayUrl}

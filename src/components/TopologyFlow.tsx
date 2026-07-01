@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Box, Typography, Divider, Alert } from '@mui/material'
+import { useEffect, useState, useContext } from 'react'
+import { Box, Typography, Divider } from '@mui/material'
 import CableIcon from '@mui/icons-material/Cable'
 import LinkIcon from '@mui/icons-material/Link'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
@@ -19,6 +19,7 @@ import BackplaneNode from './BackplaneNode'
 import { CableEdge } from './CableEdge'
 import { buildLayout } from '../utils/layoutBuilder'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnection, ModuleInstance } from '../types'
+import { AlertsContext } from '../utils/AlertsManager'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -104,8 +105,8 @@ export default function TopologyFlow({
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
     const [showApCables, setShowApCables] = useState(true)
     const [showIoCables, setShowIoCables] = useState(true)
-    const [configWarning, setConfigWarning] = useState<string | null>(null)
     const [ioEdges, setIoEdges] = useState<Edge[]>([])
+    const alerts = useContext(AlertsContext)
 
     // ── Auto-load bench_config.json on mount ────────────────────────────
     useEffect(() => {
@@ -116,15 +117,15 @@ export default function TopologyFlow({
                 const wiring = config.wiring ?? []
                 const edges = wiringToEdges(wiring, config.module_instances ?? [])
                 setIoEdges(edges)
-                if (wiring.length === 0) setConfigWarning('bench_config.json loaded but contains no wiring.')
+                if (wiring.length === 0) alerts?.showAlert('warning', 'bench_config.json loaded but contains no wiring.')
             },
             () => {
                 if (cancelled) return
-                setConfigWarning('bench_config.json not found. Save a configuration in the Connections tab to see I/O wiring here.')
+                alerts?.showAlert('warning', 'bench_config.json not found. Save a configuration in the Connections tab to see I/O wiring here.')
             }
         )
         return () => { cancelled = true }
-    }, [])
+    }, [alerts])
 
     // When ioEdges load (possibly after topology is already set), merge them in
     useEffect(() => {
@@ -212,21 +213,6 @@ export default function TopologyFlow({
 
     return (
         <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
-            {/* ── Config warning banner ── */}
-            {configWarning && (
-                <Alert
-                    severity="warning"
-                    onClose={() => setConfigWarning(null)}
-                    sx={{
-                        position: 'absolute', top: 8, left: '50%',
-                        transform: 'translateX(-50%)', zIndex: 20,
-                        fontSize: '0.75rem', py: 0, maxWidth: '90%',
-                    }}
-                >
-                    {configWarning}
-                </Alert>
-            )}
-
             <TopologyCanvas
                 nodes={nodes}
                 edges={visibleEdges}

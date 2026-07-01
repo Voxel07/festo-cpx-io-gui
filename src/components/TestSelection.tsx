@@ -15,6 +15,7 @@ interface TestSelectionProps {
     runSource?: string
     onToggleTest: (id: string) => void
     onStart: () => void
+    onAbort: () => void
 }
 
 export default function TestSelection({
@@ -26,6 +27,7 @@ export default function TestSelection({
     runSource,
     onToggleTest,
     onStart,
+    onAbort,
 }: TestSelectionProps) {
     return (
         <Paper variant="outlined" sx={{ p: 2 }}>
@@ -60,6 +62,16 @@ export default function TestSelection({
                 >
                     {isStarting ? 'Starting…' : isRunning ? 'Running…' : busy ? 'Waiting…' : 'Start Test Run'}
                 </Button>
+                {isRunning && (
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        onClick={onAbort}
+                        size="small"
+                    >
+                        Abort
+                    </Button>
+                )}
                 {runSource && runSource !== 'web' && (
                     <Chip label={`By: ${runSource}`} size="small" color="info" />
                 )}

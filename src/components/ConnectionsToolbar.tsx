@@ -13,10 +13,8 @@ interface ConnectionsToolbarProps {
     ioCount: number
     showCables: boolean
     onToggleCables: () => void
-    wiringDisplay: 'all' | 'selected' | 'none'
-    onWiringDisplayChange: (display: 'all' | 'selected' | 'none') => void
-    straightWires: boolean
-    onToggleStraightWires: () => void
+    showWires: boolean
+    onToggleWires: () => void
     showPsConfig: boolean
     onTogglePsConfig: () => void
     savePath: string
@@ -28,8 +26,6 @@ interface ConnectionsToolbarProps {
     onClear: () => void
     showTestPanel: boolean
     onToggleTestPanel: () => void
-    statusMsg: { text: string; severity: 'success' | 'error' } | null
-    onStatusMsgClose: () => void
     psComPort: string
     onPsComPortChange: (v: string) => void
     psIpAddr: string
@@ -44,10 +40,8 @@ export default function ConnectionsToolbar({
     ioCount,
     showCables,
     onToggleCables,
-    wiringDisplay,
-    onWiringDisplayChange,
-    straightWires,
-    onToggleStraightWires,
+    showWires,
+    onToggleWires,
     showPsConfig,
     onTogglePsConfig,
     savePath,
@@ -59,8 +53,6 @@ export default function ConnectionsToolbar({
     onClear,
     showTestPanel,
     onToggleTestPanel,
-    statusMsg,
-    onStatusMsgClose,
     psComPort,
     onPsComPortChange,
     psIpAddr,
@@ -120,53 +112,22 @@ export default function ConnectionsToolbar({
                 <Divider orientation="vertical" flexItem />
 
                 {/* Wiring display mode selection */}
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                    <Typography sx={{ fontSize: '0.72rem', fontWeight: 600, color: '#333', whiteSpace: 'nowrap' }}>
-                        Wiring View:
-                    </Typography>
-                    <TooltipButton
-                        size="small"
-                        variant={wiringDisplay === 'all' ? 'contained' : 'outlined'}
-                        onClick={() => onWiringDisplayChange('all')}
-                        tooltip="Show all I/O wiring lines"
-                        sx={{ fontSize: '0.68rem', py: 0.2, px: 1, minWidth: 40 }}
-                    >
-                        All
-                    </TooltipButton>
-                    <TooltipButton
-                        size="small"
-                        variant={wiringDisplay === 'selected' ? 'contained' : 'outlined'}
-                        color="warning"
-                        onClick={() => onWiringDisplayChange('selected')}
-                        tooltip="Only show wiring connected to the currently selected module"
-                        sx={{ fontSize: '0.68rem', py: 0.2, px: 1, minWidth: 80 }}
-                    >
-                        Selected Only
-                    </TooltipButton>
-                    <TooltipButton
-                        size="small"
-                        variant={wiringDisplay === 'none' ? 'contained' : 'outlined'}
-                        onClick={() => onWiringDisplayChange('none')}
-                        tooltip="Hide all I/O wiring lines"
-                        sx={{ fontSize: '0.68rem', py: 0.2, px: 1, minWidth: 50 }}
-                    >
-                        Hidden
-                    </TooltipButton>
-                </Stack>
-
-                <Divider orientation="vertical" flexItem />
-
-                {/* Wire routing style */}
                 <TooltipButton
                     size="small"
-                    variant={straightWires ? 'contained' : 'outlined'}
-                    color="primary"
-                    onClick={onToggleStraightWires}
-                    tooltip={straightWires ? 'Use smart right-angle routing' : 'Use point-to-point straight line routing'}
+                    variant={showWires ? 'contained' : 'outlined'}
+                    color="inherit"
+                    onClick={onToggleWires}
+                    tooltip={showWires ? 'Hide I/O wiring lines' : 'Show I/O wiring lines'}
                     icon={<TimelineIcon />}
-                    sx={{ fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap' }}
+                    sx={{
+                        fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
+                        color: showWires ? '#fff' : '#546e7a',
+                        background: showWires ? '#546e7a' : 'transparent',
+                        borderColor: '#546e7a',
+                        '&:hover': { borderColor: '#455a64', background: showWires ? '#455a64' : 'rgba(84,110,122,0.08)' },
+                    }}
                 >
-                    {straightWires ? 'Straight Wires' : 'Smart Stepped Wires'}
+                    {showWires ? 'Hide I/O Wires' : 'Show I/O Wires'}
                 </TooltipButton>
 
                 <Divider orientation="vertical" flexItem />
@@ -277,16 +238,7 @@ export default function ConnectionsToolbar({
                     </>
                 )}
 
-                {/* Status message */}
-                {statusMsg && (
-                    <Alert
-                        severity={statusMsg.severity}
-                        onClose={onStatusMsgClose}
-                        sx={{ py: 0, fontSize: '0.72rem', '& .MuiAlert-message': { wordBreak: 'break-all' } }}
-                    >
-                        {statusMsg.text}
-                    </Alert>
-                )}
+                {/* Status message component removed, centralized through AlertsManager */}
             </Box>
 
             {showPsConfig && (
@@ -310,7 +262,6 @@ export default function ConnectionsToolbar({
                         onChange={e => onPsComPortChange(e.target.value)}
                         placeholder="e.g. COM3"
                         sx={{ width: 120, background: '#fff' }}
-                        slotProps={{ htmlInput: { style: { fontSize: '0.75rem', padding: '6px 10px' } } }}
                         InputLabelProps={{ style: { fontSize: '0.75rem' } }}
                     />
                     <TextField
@@ -320,7 +271,6 @@ export default function ConnectionsToolbar({
                         onChange={e => onPsIpAddrChange(e.target.value)}
                         placeholder="e.g. 192.168.0.20"
                         sx={{ width: 150, background: '#fff' }}
-                        slotProps={{ htmlInput: { style: { fontSize: '0.75rem', padding: '6px 10px' } } }}
                         InputLabelProps={{ style: { fontSize: '0.75rem' } }}
                     />
                     <TextField
@@ -331,7 +281,6 @@ export default function ConnectionsToolbar({
                         onChange={e => onPsPlChannelChange(e.target.value)}
                         placeholder="1"
                         sx={{ width: 100, background: '#fff' }}
-                        slotProps={{ htmlInput: { style: { fontSize: '0.75rem', padding: '6px 10px' } } }}
                         InputLabelProps={{ style: { fontSize: '0.75rem' } }}
                     />
                     <TextField
@@ -342,7 +291,6 @@ export default function ConnectionsToolbar({
                         onChange={e => onPsPsChannelChange(e.target.value)}
                         placeholder="2"
                         sx={{ width: 100, background: '#fff' }}
-                        slotProps={{ htmlInput: { style: { fontSize: '0.75rem', padding: '6px 10px' } } }}
                         InputLabelProps={{ style: { fontSize: '0.75rem' } }}
                     />
                     <Typography variant="caption" color="text.secondary">
@@ -367,13 +315,13 @@ export default function ConnectionsToolbar({
                     Ports:
                 </Typography>
                 <Typography sx={{ fontSize: '0.78rem', color: '#1565c0', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    ● Input (blue)
+                    ● Input
                 </Typography>
                 <Typography sx={{ fontSize: '0.78rem', color: '#2e7d32', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    ● Output (green)
+                    ● Output
                 </Typography>
                 <Typography sx={{ fontSize: '0.78rem', color: '#ff9800', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    ● Bidirectional (orange)
+                    ● Bidirectional
                 </Typography>
                 <Divider orientation="vertical" flexItem sx={{ my: 0.25 }} />
                 <Typography sx={{ fontSize: '0.75rem', color: '#888', whiteSpace: 'nowrap' }}>

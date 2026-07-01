@@ -11,6 +11,8 @@ import RawModeTab from './components/RawModeTab'
 import DiagnosticsModal from './components/DiagnosticsModal'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig } from './types'
 import { configToTopology } from './utils/configMapper'
+import { AlertsManager, AlertsContext } from './utils/AlertsManager'
+import type { AlertsManagerRef } from './utils/AlertsManager'
 
 const MIN_CANVAS_H = 140
 const MAX_CANVAS_H = 800
@@ -204,6 +206,8 @@ export default function App() {
         rawConfig,
     } = state
 
+    const alertsRef = useRef<AlertsManagerRef>(null)
+
     async function checkPocketBase() {
         dispatch({ type: 'SET_PB_CHECKING', checking: true })
         try {
@@ -290,21 +294,23 @@ export default function App() {
     }
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-            <AppHeader
-                ip={ip}
-                onIpChange={v => dispatch({ type: 'SET_IP', ip: v })}
-                timeout={timeout}
-                onTimeoutChange={v => dispatch({ type: 'SET_TIMEOUT', timeout: v })}
-                showTopology={showTopology}
-                onToggleTopology={() => dispatch({ type: 'TOGGLE_TOPOLOGY' })}
-                pbChecking={pbChecking}
-                pbStatus={pbStatus}
-                onCheckPocketBase={checkPocketBase}
-                onOpenDiagnostics={() => dispatch({ type: 'SET_DIAG_OPEN', open: true })}
-            />
+        <AlertsContext.Provider value={{ showAlert: (sev: any, msg: any) => alertsRef.current?.showAlert(sev, msg) }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+                <AlertsManager ref={alertsRef} />
+                <AppHeader
+                    ip={ip}
+                    onIpChange={v => dispatch({ type: 'SET_IP', ip: v })}
+                    timeout={timeout}
+                    onTimeoutChange={v => dispatch({ type: 'SET_TIMEOUT', timeout: v })}
+                    showTopology={showTopology}
+                    onToggleTopology={() => dispatch({ type: 'TOGGLE_TOPOLOGY' })}
+                    pbChecking={pbChecking}
+                    pbStatus={pbStatus}
+                    onCheckPocketBase={checkPocketBase}
+                    onOpenDiagnostics={() => dispatch({ type: 'SET_DIAG_OPEN', open: true })}
+                />
 
-            {/* ── Topology canvas (collapsible) ── */}
+                {/* ── Topology canvas (collapsible) ── */}
             {showTopology && (
                 <Box sx={fullscreen
                     ? { position: 'fixed', inset: 0, zIndex: 1300, background: '#fafafa' }
@@ -411,5 +417,6 @@ export default function App() {
                 <DiagnosticsModal open={diagOpen} onClose={() => dispatch({ type: 'SET_DIAG_OPEN', open: false })} ip={ip} />
             )}
         </Box>
+        </AlertsContext.Provider>
     )
 }

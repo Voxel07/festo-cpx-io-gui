@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
     Box, Stack, Typography, Paper, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, Chip, CircularProgress,
+    TableContainer, TableHead, TableRow, Chip, CircularProgress, TablePagination
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -71,16 +71,39 @@ export default function HistoryTab() {
     const [loading, setLoading] = useState(false)
     const [selectedRun, setSelectedRun] = useState<RunRecord | null>(null)
 
+    const [page, setPage] = useState(0)
+    const [rowsPerPage, setRowsPerPage] = useState(10)
+
     async function fetchHistory() {
         setLoading(true)
         try {
-            const r = await fetch('/test-run/history?limit=100')
-            if (r.ok) setRuns(await r.json())
+            // Blocking fetch for the last 10 runs
+            const r = await fetch('/test-run/history?limit=10')
+            if (r.ok) {
+                const initialRuns = await r.json()
+                setRuns(initialRuns)
+            }
             setLoading(false)
+
+            // Background fetch for the rest if needed (up to 1000)
+            fetch('/test-run/history?limit=1000')
+                .then(res => res.ok ? res.json() : null)
+                .then(allRuns => {
+                    if (allRuns) setRuns(allRuns)
+                })
+                .catch(() => { })
         } catch {
-            // PocketBase may not be running
             setLoading(false)
         }
+    }
+
+    const handleChangePage = (event: unknown, newPage: number) => {
+        setPage(newPage)
+    }
+
+    const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setRowsPerPage(parseInt(event.target.value, 10))
+        setPage(0)
     }
 
     useEffect(() => {
@@ -163,7 +186,7 @@ export default function HistoryTab() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {runs.map(run => {
+                            {runs.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(run => {
                                 const tests = parseTests(run.tests)
                                 const results = parseResults(run.results)
                                 const passed = results.filter(r => r.passed).length
@@ -237,6 +260,16 @@ export default function HistoryTab() {
                             })}
                         </TableBody>
                     </Table>
+                    <TablePagination
+                        component="div"
+                        count={runs.length}
+                        page={page}
+                        onPageChange={handleChangePage}
+                        rowsPerPage={rowsPerPage}
+                        onRowsPerPageChange={handleChangeRowsPerPage}
+                        rowsPerPageOptions={[10, 20, 50, 100]}
+                        size="small"
+                    />
                 </TableContainer>
             )}
 

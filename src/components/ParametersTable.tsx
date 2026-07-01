@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import {
     TableContainer, Table, TableHead, TableRow, TableCell, TableBody,
-    Stack, Box, Typography, Select, MenuItem, TextField, Collapse, IconButton, CircularProgress
+    Stack, Box, Typography, Select, MenuItem, TextField, Collapse, IconButton, CircularProgress, Checkbox
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
@@ -38,7 +38,6 @@ interface ParametersTableProps {
     readingParams: Record<string, boolean>
     writingParams: Record<string, boolean>
     expandedParams: Record<number, boolean>
-    paramFeedback: Record<string, { severity: 'success' | 'error'; text: string }>
     readingAll: boolean
     ip: string
     selectedModule: TopologyModule
@@ -57,7 +56,6 @@ export default function ParametersTable({
     readingParams,
     writingParams,
     expandedParams,
-    paramFeedback,
     readingAll,
     ip,
     selectedModule,
@@ -115,7 +113,6 @@ export default function ParametersTable({
                                 const isReading0 = readingParams[`${p.parameter_id}_0`] === true
                                 const isWriting0 = writingParams[`${p.parameter_id}_0`] === true
                                 const isReadingAllP = readingParams[`${p.parameter_id}_all`] === true
-                                const fb0 = paramFeedback[`${p.parameter_id}_0`]
 
                                 return (
                                     <Fragment key={p.parameter_id}>
@@ -161,6 +158,13 @@ export default function ParametersTable({
                                                             </MenuItem>
                                                         ))}
                                                     </Select>
+                                                ) : p.data_type === 'BOOL' ? (
+                                                    <Checkbox
+                                                        size="small"
+                                                        checked={val0 === 'true' || val0 === '1'}
+                                                        onChange={e => onValueChange(`${p.parameter_id}_0`, e.target.checked ? 'true' : 'false')}
+                                                        sx={{ p: 0 }}
+                                                    />
                                                 ) : (
                                                     <TextField
                                                         size="small"
@@ -170,15 +174,6 @@ export default function ParametersTable({
                                                         sx={{ '& input': { fontSize: '0.72rem', py: 0.5, px: 1 } }}
                                                         fullWidth
                                                     />
-                                                )}
-                                                {fb0 && (
-                                                    <Typography sx={{
-                                                        fontSize: '0.62rem', mt: 0.5,
-                                                        color: fb0.severity === 'success' ? '#2e7d32' : '#d32f2f',
-                                                        fontWeight: 600
-                                                    }}>
-                                                        {fb0.text}
-                                                    </Typography>
                                                 )}
                                             </TableCell>
                                             <TableCell align="right" sx={{ py: 1, whiteSpace: 'nowrap' }}>
@@ -243,7 +238,6 @@ export default function ParametersTable({
                                                                         const val = paramValues[instKey] ?? ''
                                                                         const isReading = readingParams[instKey] === true
                                                                         const isWriting = writingParams[instKey] === true
-                                                                        const fb = paramFeedback[instKey]
 
                                                                         return (
                                                                             <TableRow key={instanceIdx} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
@@ -268,6 +262,13 @@ export default function ParametersTable({
                                                                                                 </MenuItem>
                                                                                             ))}
                                                                                         </Select>
+                                                                                    ) : p.data_type === 'BOOL' ? (
+                                                                                        <Checkbox
+                                                                                            size="small"
+                                                                                            checked={val === 'true' || val === '1'}
+                                                                                            onChange={e => onValueChange(instKey, e.target.checked ? 'true' : 'false')}
+                                                                                            sx={{ p: 0 }}
+                                                                                        />
                                                                                     ) : (
                                                                                         <TextField
                                                                                             size="small"
@@ -277,15 +278,6 @@ export default function ParametersTable({
                                                                                             sx={{ '& input': { fontSize: '0.7rem', py: 0.35, px: 0.8 } }}
                                                                                             fullWidth
                                                                                         />
-                                                                                    )}
-                                                                                    {fb && (
-                                                                                        <Typography sx={{
-                                                                                            fontSize: '0.62rem', mt: 0.25,
-                                                                                            color: fb.severity === 'success' ? '#2e7d32' : '#d32f2f',
-                                                                                            fontWeight: 600
-                                                                                        }}>
-                                                                                            {fb.text}
-                                                                                        </Typography>
                                                                                     )}
                                                                                 </TableCell>
                                                                                 <TableCell align="right" sx={{ py: 0.5, whiteSpace: 'nowrap' }}>

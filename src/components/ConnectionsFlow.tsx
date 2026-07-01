@@ -5,7 +5,7 @@
  * Drag from a port to another to create a wired I/O connection.
  * Save/load connections (including valve-mount info) via /connections.
  */
-import { useEffect, useRef, useReducer, useCallback, useState } from 'react'
+import { useEffect, useRef, useReducer, useCallback, useState, useContext } from 'react'
 import { Box, Typography } from '@mui/material'
 import {
     useNodesState,
@@ -24,6 +24,7 @@ import { buildLayout } from '../utils/layoutBuilder'
 import type { Topology, DiffStatus, ConnectionEntry, BenchConfig, WiringConnection, TopologyModule } from '../types'
 import ConnectionsToolbar from './ConnectionsToolbar'
 import WiringTestPanel from './WiringTestPanel'
+import { AlertsContext } from '../utils/AlertsManager'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -91,7 +92,6 @@ interface ConnectionsFlowState {
     loadPath: string
     statusMsg: { text: string; severity: 'success' | 'error' } | null
     wiringDisplay: 'all' | 'selected' | 'none'
-    straightWires: boolean
     showPsConfig: boolean
     psComPort: string
     psIpAddr: string
@@ -110,9 +110,7 @@ const initialConnectionsFlowState: ConnectionsFlowState = {
     showCables: false,
     savePath: 'bench_config.json',
     loadPath: 'bench_config.json',
-    statusMsg: null,
-    wiringDisplay: 'all',
-    straightWires: false,
+    showWires: true,
     showPsConfig: false,
     psComPort: '',
     psIpAddr: '',
@@ -131,9 +129,7 @@ type ConnectionsFlowAction =
     | { type: 'TOGGLE_CABLES' }
     | { type: 'SET_SAVE_PATH'; path: string }
     | { type: 'SET_LOAD_PATH'; path: string }
-    | { type: 'SET_STATUS_MSG'; msg: { text: string; severity: 'success' | 'error' } | null }
-    | { type: 'SET_WIRING_DISPLAY'; display: 'all' | 'selected' | 'none' }
-    | { type: 'TOGGLE_STRAIGHT_WIRES' }
+    | { type: 'TOGGLE_WIRES' }
     | { type: 'TOGGLE_PS_CONFIG' }
     | { type: 'SET_PS_COMPORT'; port: string }
     | { type: 'SET_PS_IPADDR'; ip: string }
@@ -158,12 +154,8 @@ function connectionsFlowReducer(state: ConnectionsFlowState, action: Connections
             return { ...state, savePath: action.path }
         case 'SET_LOAD_PATH':
             return { ...state, loadPath: action.path }
-        case 'SET_STATUS_MSG':
-            return { ...state, statusMsg: action.msg }
-        case 'SET_WIRING_DISPLAY':
-            return { ...state, wiringDisplay: action.display }
-        case 'TOGGLE_STRAIGHT_WIRES':
-            return { ...state, straightWires: !state.straightWires }
+        case 'TOGGLE_WIRES':
+            return { ...state, showWires: !state.showWires }
         case 'TOGGLE_PS_CONFIG':
             return { ...state, showPsConfig: !state.showPsConfig }
         case 'SET_PS_COMPORT':
@@ -225,9 +217,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         showCables,
         savePath,
         loadPath,
-        statusMsg,
-        wiringDisplay,
-        straightWires,
+        showWires,
         showPsConfig,
         psComPort,
         psIpAddr,
@@ -247,6 +237,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
      *  rather than wiping them when onConfigLoad triggers a topology change. */
     const pendingIoRef = useRef<Edge[]>([])
     const topologyName = useRef('')
+
+    const alerts = useContext(AlertsContext)
 
     // Keep ioEdgesRef current
     useEffect(() => {
@@ -393,12 +385,12 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             zIndex: 1000,
             style: { stroke: wireColor, strokeWidth: 2 },
             label: `#${srcNode}:${pSrc} \u2192 #${tgtNode}:${pTgt}`,
-            data: { kind: 'io', portSrc: pSrc, portTgt: pTgt, wireColor, straight: straightWires },
+            data: { kind: 'io', portSrc: pSrc, portTgt: pTgt, wireColor, straight: false },
         }
         // Only deduplicate by edge ID — allow fan-out (one output → many inputs)
         // and fan-in (many outputs → one input). Exact duplicate = same ID.
         setEdges(prev => prev.some(e => e.id === edgeId) ? prev : [...prev, newEdge])
-    }, [straightWires, setEdges])
+    }, [setEdges])
 
     // ── Reconnect: drag an existing IO edge endpoint to a new port ──
     const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
@@ -435,10 +427,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             // 1. Fetch current config
             const getRes = await fetch(`/config?file_path=${encodeURIComponent(savePath)}`)
             if (!getRes.ok) {
-                dispatch({
-                    type: 'SET_STATUS_MSG',
-                    msg: { text: 'Error: Could not read existing configuration to update. Make sure you generate/save a configuration first.', severity: 'error' }
-                })
+                alerts?.showAlert('error', 'Could not read existing configuration to update. Make sure you generate/save a configuration first.')
                 return
             }
             const config: BenchConfig = await getRes.json()
@@ -495,7 +484,6 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 ps_channel: psPsChannel.trim() ? parseInt(psPsChannel) : null,
             }
 
-            // 4. Save entire BenchConfig
             const saveRes = await fetch('/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -505,14 +493,13 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 }),
             })
             const d = await saveRes.json()
-            dispatch({
-                type: 'SET_STATUS_MSG',
-                msg: saveRes.ok
-                    ? { text: `Saved \u2192 ${d.saved_to}`, severity: 'success' }
-                    : { text: `Error: ${d.detail}`, severity: 'error' }
-            })
+            if (saveRes.ok) {
+                alerts?.showAlert('success', `Saved \u2192 ${d.saved_to}`)
+            } else {
+                alerts?.showAlert('error', `Error: ${d.detail}`)
+            }
         } catch (e) {
-            dispatch({ type: 'SET_STATUS_MSG', msg: { text: `Error: ${(e as Error).message}`, severity: 'error' } })
+            alerts?.showAlert('error', `Error: ${(e as Error).message}`)
         }
     }
 
@@ -522,7 +509,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             const r = await fetch(`/config?file_path=${encodeURIComponent(loadPath)}`)
             const d: BenchConfig = await r.json()
             if (!r.ok) {
-                dispatch({ type: 'SET_STATUS_MSG', msg: { text: `Error: ${(d as any).detail ?? 'Unknown error'}`, severity: 'error' } })
+                alerts?.showAlert('error', `Error: ${(d as any).detail ?? 'Unknown error'}`)
                 return
             }
 
@@ -612,16 +599,15 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 })
             }
 
-            dispatch({ type: 'SET_STATUS_MSG', msg: { text: `Loaded ${loaded.length} connection(s)`, severity: 'success' } })
+            alerts?.showAlert('success', `Loaded ${loaded.length} connection(s)`)
         } catch (e) {
-            dispatch({ type: 'SET_STATUS_MSG', msg: { text: `Error: ${(e as Error).message}`, severity: 'error' } })
+            alerts?.showAlert('error', `Error: ${(e as Error).message}`)
         }
     }
 
     // ── Clear all IO edges ────────────────────────────────
     function doClear() {
         setEdges(prev => prev.filter(e => (e.data as Record<string, unknown>)?.kind !== 'io'))
-        dispatch({ type: 'SET_STATUS_MSG', msg: null })
     }
 
     // ── Wire Test: connections derived from current IO edges ──────
@@ -764,13 +750,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     const visibleEdges = edges.filter(e => {
         const isCable = (e.data as Record<string, unknown>)?.kind === 'cable'
         if (isCable) return showCables
-        if (wiringDisplay === 'none') return false
-        if (wiringDisplay === 'selected') {
-            const srcNode = nodes.find(n => n.id === e.source)
-            const tgtNode = nodes.find(n => n.id === e.target)
-            return e.selected || srcNode?.selected || tgtNode?.selected
-        }
-        return true
+        return showWires
     })
 
     // Compute ioCount directly from edges state (not from the ref) so the
@@ -794,10 +774,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 ioCount={ioCount}
                 showCables={showCables}
                 onToggleCables={() => dispatch({ type: 'TOGGLE_CABLES' })}
-                wiringDisplay={wiringDisplay}
-                onWiringDisplayChange={display => dispatch({ type: 'SET_WIRING_DISPLAY', display })}
-                straightWires={straightWires}
-                onToggleStraightWires={() => dispatch({ type: 'TOGGLE_STRAIGHT_WIRES' })}
+                showWires={showWires}
+                onToggleWires={() => dispatch({ type: 'TOGGLE_WIRES' })}
                 showPsConfig={showPsConfig}
                 onTogglePsConfig={() => dispatch({ type: 'TOGGLE_PS_CONFIG' })}
                 savePath={savePath}
@@ -809,8 +787,6 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 onClear={doClear}
                 showTestPanel={showTestPanel}
                 onToggleTestPanel={() => dispatch({ type: 'TOGGLE_TEST_PANEL' })}
-                statusMsg={statusMsg}
-                onStatusMsgClose={() => dispatch({ type: 'SET_STATUS_MSG', msg: null })}
                 psComPort={psComPort}
                 onPsComPortChange={port => dispatch({ type: 'SET_PS_COMPORT', port })}
                 psIpAddr={psIpAddr}

@@ -67,7 +67,6 @@ interface RunTabState {
     runState: TestRunState
     sseLogs: LogEntry[]
     busy: boolean
-    psComport: string
 }
 
 const initialRunTabState: RunTabState = {
@@ -75,7 +74,6 @@ const initialRunTabState: RunTabState = {
     runState: { status: 'idle' },
     sseLogs: [],
     busy: false,
-    psComport: '',
 }
 
 type RunTabAction =
@@ -84,7 +82,6 @@ type RunTabAction =
     | { type: 'SET_SSE_LOGS'; logs: LogEntry[] }
     | { type: 'APPEND_SSE_LOG'; log: LogEntry }
     | { type: 'SET_BUSY'; busy: boolean }
-    | { type: 'SET_PS_COMPORT'; comport: string }
     | { type: 'START_RUN'; selected: string[] }
     | { type: 'RUN_START_FAIL'; error: string }
 
@@ -102,8 +99,6 @@ function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
         }
         case 'SET_BUSY':
             return { ...state, busy: action.busy }
-        case 'SET_PS_COMPORT':
-            return { ...state, psComport: action.comport }
         case 'START_RUN':
             return {
                 ...state,
@@ -124,12 +119,9 @@ function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
 
 export default function TestRunTab({ ip }: Props) {
     const [state, dispatch] = useReducer(runTabReducer, initialRunTabState)
-    const { selected, runState, sseLogs, busy, psComport } = state
+    const { selected, runState, sseLogs, busy } = state
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const esRef = useRef<EventSource | null>(null)
-
-    /** True when at least one selected test benefits from a power supply. */
-    const needsPs = selected.some(id => POWER_CYCLE_TESTS.has(id))
 
     const isRunning = runState.status === 'running'
     const isStarting = runState.status === 'starting'
@@ -197,16 +189,6 @@ export default function TestRunTab({ ip }: Props) {
         if (esRef.current) { esRef.current.close(); esRef.current = null }
         dispatch({ type: 'START_RUN', selected })
 
-        // Build per-test parameter overrides: inject power_supply_comport where needed.
-        const testParameters: Record<string, Record<string, unknown>> = {}
-        if (psComport.trim()) {
-            for (const id of selected) {
-                if (POWER_CYCLE_TESTS.has(id)) {
-                    testParameters[id] = { power_supply_comport: psComport.trim() }
-                }
-            }
-        }
-
         try {
             const r = await fetch('/test-run/start', {
                 method: 'POST',
@@ -216,7 +198,6 @@ export default function TestRunTab({ ip }: Props) {
                     config_path: CONFIG_PATH,
                     tests: selected,
                     source: 'web',
-                    test_parameters: testParameters,
                 }),
             })
             if (!r.ok) {
@@ -235,6 +216,12 @@ export default function TestRunTab({ ip }: Props) {
         dispatch({ type: 'SET_SELECTED', selected: nextSelected })
     }
 
+    async function doAbort() {
+        try {
+            await fetch('/test-run/abort', { method: 'POST' })
+        } catch { /* ignore */ }
+    }
+
     return (
         <Box sx={{ p: 2, display: 'flex', gap: 2, alignItems: 'stretch', flex: 1, overflow: 'hidden', minHeight: 0 }}>
 
@@ -249,31 +236,8 @@ export default function TestRunTab({ ip }: Props) {
                     runSource={runState.source}
                     onToggleTest={toggleTest}
                     onStart={doStart}
+                    onAbort={doAbort}
                 />
-
-                {/* ── Power-supply comport (shown when a power-cycle test is selected) ── */}
-                {needsPs && (
-                    <Paper variant="outlined" sx={{ p: 1.5 }}>
-                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                            <Typography variant="caption" fontWeight={600}>
-                                Power Supply
-                            </Typography>
-                            <Tooltip title="Serial port of the HMP40x0 power supply used for power-cycle tests (e.g. COM3 or /dev/ttyUSB0). Leave empty to skip the power-cycle phase.">
-                                <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.secondary', cursor: 'help' }} />
-                            </Tooltip>
-                        </Stack>
-                        <TextField
-                            size="small"
-                            label="Comport (e.g. COM3)"
-                            value={psComport}
-                            onChange={e => dispatch({ type: 'SET_PS_COMPORT', comport: e.target.value })}
-                            disabled={isRunning || isStarting}
-                            placeholder="COM3"
-                            fullWidth
-                            inputProps={{ spellCheck: false }}
-                        />
-                    </Paper>
-                )}
 
                 {/* ── Error ── */}
                 {runState.status === 'error' && runState.error && (
