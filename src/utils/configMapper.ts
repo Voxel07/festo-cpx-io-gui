@@ -6,10 +6,10 @@ export function configToTopology(config: BenchConfig): Topology {
         Description: config.test_bench.description || '',
         Version: config.test_bench.version || '1.0',
         Topology: (config.module_instances || []).map(inst => {
-            const typeDef = config.module_types[inst.module_type_ref]
-            const num_in = typeDef?.num_inputs ?? 0
-            const num_out = typeDef?.num_outputs ?? 0
-            const num_io = typeDef?.num_configurable ?? 0
+            const typeDef = config.module_types?.[inst.module_type_ref]
+            const num_in = inst.num_inputs ?? typeDef?.num_inputs ?? 0
+            const num_out = inst.num_outputs ?? typeDef?.num_outputs ?? 0
+            const num_io = inst.num_inouts ?? typeDef?.num_configurable ?? 0
             const series = typeDef?.product_family ?? ''
 
             let m_type = 'Input'

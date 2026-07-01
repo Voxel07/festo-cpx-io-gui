@@ -120,6 +120,9 @@ export interface ModuleInstance {
     module_type_ref: string
     mounted_valves?: number[]
     valve_slots?: number
+    num_inputs?: number
+    num_outputs?: number
+    num_inouts?: number
 }
 
 export interface WiringConnection {

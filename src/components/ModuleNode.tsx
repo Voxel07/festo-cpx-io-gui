@@ -82,8 +82,8 @@ function getGenericOutStyle(index: number, total: number, editMode: boolean): Re
     return {
         left: pct(index, total),
         background: editMode ? PORT_COLOR.out : 'transparent',
-        width: 9,
-        height: 9,
+        width: PORT_D,
+        height: PORT_D,
         border: editMode ? '2px solid #fff' : 'none',
         borderRadius: '50%',
         top: -5,
@@ -96,8 +96,8 @@ function getGenericInStyle(index: number, total: number, editMode: boolean): Rea
     return {
         left: pct(index, total),
         background: editMode ? PORT_COLOR.in : 'transparent',
-        width: 9,
-        height: 9,
+        width: PORT_D,
+        height: PORT_D,
         border: editMode ? '2px solid #fff' : 'none',
         borderRadius: '50%',
         bottom: -5,
@@ -195,6 +195,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
     const svgMaps = useSvgMap()
     const svgUrl = resolveIcon(mod.Name, svgMaps, mod.Modulecode)
+    // Port positions come from SVG; port counts/kinds come from bench_config (mod.NumOf*)
     const ports = useSvgPorts(svgUrl, {
         numIn: mod.NumOfInputs,
         numOut: mod.NumOfOutputs,
@@ -374,24 +375,24 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
                 {/* ── SVG-port handles (always rendered so edges can resolve handle IDs;
                      invisible when not in edit mode per React Flow best-practice) ── */}
-            {!suppressIoHandles && hasPorts && ports.map(port => {
-                const portColor = PORT_COLOR[port.kind]
-                return (
-                    <Fragment key={port.id}>
-                        {/* Coloured source handle – kind encoded in ID for validation */}
-                        <Handle
-                            id={`src-${port.kind}-${port.id}`}
-                            type="source"
-                            position={port.side}
-                            style={getPortSrcStyle(port.cx, port.cy, portColor, editMode)}
-                        />
-                        {/* Transparent target hit-area – kind also encoded */}
-                        <Handle
-                            id={`tgt-${port.kind}-${port.id}`}
-                            type="target"
-                            position={port.side}
-                            style={getPortTgtStyle(port.cx, port.cy, editMode)}
-                        />
+                {!suppressIoHandles && hasPorts && ports.map(port => {
+                    const portColor = PORT_COLOR[port.kind]
+                    return (
+                        <Fragment key={port.id}>
+                            {/* Coloured source handle – kind encoded in ID for validation */}
+                            <Handle
+                                id={`src-${port.kind}-${port.id}`}
+                                type="source"
+                                position={port.side}
+                                style={getPortSrcStyle(port.cx, port.cy, portColor, editMode)}
+                            />
+                            {/* Transparent target hit-area – kind also encoded */}
+                            <Handle
+                                id={`tgt-${port.kind}-${port.id}`}
+                                type="target"
+                                position={port.side}
+                                style={getPortTgtStyle(port.cx, port.cy, editMode)}
+                            />
                         </Fragment>
                     )
                 })}

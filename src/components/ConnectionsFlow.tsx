@@ -54,14 +54,6 @@ function portId(handleId: string): string {
     return (known.has(parts[1]) ? parts.slice(2) : parts.slice(1)).join('-')
 }
 
-const POWER_CYCLE_TESTS = new Set([
-    'voltage-limits-valves',
-    'voltage-limits-outputs',
-    'power-cycle-stress',
-])
-
-const POLL_MS = 2000
-
 /** Extract a human-readable error string from a non-ok Response.
  *  Tries JSON → detail field first, then falls back to raw text, then to "HTTP <status>". */
 async function extractErrMsg(r: Response): Promise<string> {
