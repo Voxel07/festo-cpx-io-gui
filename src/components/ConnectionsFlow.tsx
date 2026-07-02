@@ -451,22 +451,20 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         let wireColor = outKind === 'out' ? '#2e7d32' : outKind === 'in' ? '#1565c0' : IO_COLOR
 
         // Multi-color logic for multiple edges to same device
-        if (subSrc !== undefined || subTgt !== undefined) {
-            // Count existing edges between these two nodes
-            const existingEdges = edges.filter(e => e.source === srcNode && e.target === tgtNode)
-            const colorPalette = [
-                wireColor,
-                '#d81b60', // Pink/Red
-                '#00897b', // Teal
-                '#f57c00', // Orange
-                '#8e24aa', // Purple
-                '#1e88e5', // Blue
-                '#c0ca33', // Lime
-                '#546e7a', // Blue Grey
-            ]
-            if (existingEdges.length > 0) {
-                wireColor = colorPalette[existingEdges.length % colorPalette.length]
-            }
+        // Count existing edges between these two nodes
+        const existingEdges = edges.filter(e => e.source === srcNode && e.target === tgtNode)
+        const colorPalette = [
+            wireColor,
+            '#d81b60', // Pink/Red
+            '#00897b', // Teal
+            '#f57c00', // Orange
+            '#8e24aa', // Purple
+            '#1e88e5', // Blue
+            '#c0ca33', // Lime
+            '#546e7a', // Blue Grey
+        ]
+        if (existingEdges.length > 0) {
+            wireColor = colorPalette[existingEdges.length % colorPalette.length]
         }
 
         const newEdge: Edge = {

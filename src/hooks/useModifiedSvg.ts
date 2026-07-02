@@ -3,7 +3,7 @@
  * When hiddenIds is empty the original URL is returned unchanged.
  * Uses DOMParser + XMLSerializer to produce a data URL so the img tag refreshes.
  */
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 
 const textCache = new Map<string, string>()
 const dataUrlCache = new Map<string, string>()
@@ -68,33 +68,53 @@ async function fetchSvgText(url: string): Promise<string> {
 }
 
 export function useModifiedSvg(svgUrl: string, hiddenIds: string[], numValves?: number): string {
-    const [tick, setTick] = useState(0)
+    const [displayUrl, setDisplayUrl] = useState(svgUrl)
     const hiddenKey = hiddenIds.join('\u0000')
 
-    // Trigger async fetch on cache miss (only setState in the async callback)
     useEffect(() => {
-        if (hiddenIds.length === 0 && numValves === undefined) return
-        if (textCache.has(svgUrl)) return
-        fetchSvgText(svgUrl).then(text => {
-            if (text) {
-                textCache.set(svgUrl, text)
-                setTick(t => t + 1)  // trigger re-render so cached text is picked up below
-            }
-        })
-    }, [svgUrl, hiddenKey, hiddenIds.length, numValves])
+        if (hiddenIds.length === 0 && numValves === undefined) {
+            setDisplayUrl(svgUrl)
+            return
+        }
 
-    return useMemo(() => {
-        // Derive display URL from cache during render — React Compiler can optimise this
-        if (hiddenIds.length === 0 && numValves === undefined) return svgUrl
-        const text = textCache.get(svgUrl)
-        if (!text) return svgUrl
-
+        let cancelled = false
         const cacheKey = `${svgUrl}|${numValves ?? ''}|${hiddenKey}`
         const cached = dataUrlCache.get(cacheKey)
-        if (cached) return cached
+        if (cached) {
+            setDisplayUrl(cached)
+            return
+        }
 
-        const next = buildDataUrl(text, hiddenIds, numValves)
-        dataUrlCache.set(cacheKey, next)
-        return next
-    }, [svgUrl, hiddenKey, hiddenIds, hiddenIds.length, numValves, tick])
+        const text = textCache.get(svgUrl)
+        if (!text) {
+            fetchSvgText(svgUrl).then(fetchedText => {
+                if (fetchedText && !cancelled) {
+                    textCache.set(svgUrl, fetchedText)
+                    // Trigger next effect run by setting displayUrl to fallback, 
+                    // or just let a re-render handle it if it was tied to state.
+                    // Actually, setting displayUrl to fallback is fine, but we can also manually call the builder here.
+                    const timer = setTimeout(() => {
+                        const next = buildDataUrl(fetchedText, hiddenIds, numValves)
+                        dataUrlCache.set(cacheKey, next)
+                        if (!cancelled) setDisplayUrl(next)
+                    }, 0)
+                }
+            })
+            return
+        }
+
+        // We have text, build async so we don't block the UI thread during React render
+        const timer = setTimeout(() => {
+            const next = buildDataUrl(text, hiddenIds, numValves)
+            dataUrlCache.set(cacheKey, next)
+            if (!cancelled) setDisplayUrl(next)
+        }, 0)
+
+        return () => {
+            cancelled = true
+            clearTimeout(timer)
+        }
+    }, [svgUrl, hiddenKey, hiddenIds.length, numValves])
+
+    return displayUrl
 }

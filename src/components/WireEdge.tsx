@@ -9,6 +9,7 @@
  * connections.jsonc.
  */
 import { useRef, Fragment, useEffect } from 'react'
+import { findSmartPath } from '../utils/routing'
 import { BaseEdge, EdgeLabelRenderer, useReactFlow } from '@xyflow/react'
 import type { EdgeProps, Node } from '@xyflow/react'
 
@@ -74,88 +75,6 @@ function getDeterministicOffset(id: string): number {
     return (Math.abs(hash) % 7) * 6 - 18
 }
 
-function mergeIntervals(intervals: Array<{ left: number; right: number }>) {
-    if (intervals.length === 0) return []
-    const sorted = [...intervals].sort((a, b) => a.left - b.left)
-    const merged = [sorted[0]]
-    for (let i = 1; i < sorted.length; i++) {
-        const cur = sorted[i]
-        const last = merged[merged.length - 1]
-        if (cur.left <= last.right + 2) {
-            last.right = Math.max(last.right, cur.right)
-        } else {
-            merged.push(cur)
-        }
-    }
-    return merged
-}
-
-function getObstacles(nodes: Node[]) {
-    const obstacles: Array<{ left: number; right: number }> = []
-
-    for (const node of nodes) {
-        if (node.type === 'backplane') {
-            const left = node.position.x
-            const width = typeof node.style?.width === 'number'
-                ? node.style.width
-                : parseFloat(String(node.style?.width || 0)) || node.measured?.width || 0
-            if (width > 0) {
-                obstacles.push({ left, right: left + width })
-            }
-        } else if (node.type === 'mod' && !node.parentId) {
-            const left = node.position.x
-            const width = node.measured?.width || 75
-            obstacles.push({ left, right: left + width })
-        }
-    }
-
-    return mergeIntervals(obstacles)
-}
-
-function buildOrthPath(
-    sx: number, sy: number,
-    tx: number, ty: number,
-    mx: number,
-    Y_UP: number,
-    Y_DOWN: number,
-): { path: string; points: Array<{ x: number; y: number }> } {
-    const pts: Array<{ x: number; y: number }> = [{ x: sx, y: sy }]
-
-    if (sy < 150 && ty < 150) {
-        pts.push({ x: sx, y: Y_UP })
-        pts.push({ x: tx, y: Y_UP })
-    } else if (sy >= 150 && ty >= 150) {
-        pts.push({ x: sx, y: Y_DOWN })
-        pts.push({ x: tx, y: Y_DOWN })
-    } else if (sy < 150 && ty >= 150) {
-        pts.push({ x: sx, y: Y_UP })
-        pts.push({ x: mx, y: Y_UP })
-        pts.push({ x: mx, y: Y_DOWN })
-        pts.push({ x: tx, y: Y_DOWN })
-    } else {
-        pts.push({ x: sx, y: Y_DOWN })
-        pts.push({ x: mx, y: Y_DOWN })
-        pts.push({ x: mx, y: Y_UP })
-        pts.push({ x: tx, y: Y_UP })
-    }
-    pts.push({ x: tx, y: ty })
-
-    const deduped: Array<{ x: number; y: number }> = []
-    for (const p of pts) {
-        const last = deduped[deduped.length - 1]
-        if (!last || Math.abs(p.x - last.x) > 0.5 || Math.abs(p.y - last.y) > 0.5) {
-            deduped.push(p)
-        }
-    }
-    if (deduped.length < 2) deduped.push({ x: tx, y: ty })
-
-    const path = deduped.map((p, i) =>
-        i === 0 ? `M ${p.x},${p.y}` : `L ${p.x},${p.y}`,
-    ).join(' ')
-
-    return { path, points: deduped }
-}
-
 function buildRoutedPath(
     id: string,
     sx: number, sy: number,
@@ -170,63 +89,10 @@ function buildRoutedPath(
     if (straight) {
         pts.push({ x: tx, y: ty })
     } else if (clean.length === 0) {
-        const offset = getDeterministicOffset(id)
-        const Y_UP = 20 + offset
-        const Y_DOWN = 275 + offset
-
-        const obstacles = getObstacles(nodes)
-
-        if (obstacles.length === 0) {
-            const mx = (sx + tx) / 2
-            return buildOrthPath(sx, sy, tx, ty, mx, Y_UP, Y_DOWN)
+        const smartPoints = findSmartPath(sx, sy, tx, ty, nodes)
+        for (let i = 1; i < smartPoints.length; i++) {
+            pts.push(smartPoints[i])
         }
-
-        const minObsX = Math.min(...obstacles.map(o => o.left))
-        const maxObsX = Math.max(...obstacles.map(o => o.right))
-
-        const outerLeft = minObsX - 40
-        const outerRight = maxObsX + 40
-
-        const corridors: Array<{ left: number; right: number }> = []
-        corridors.push({ left: outerLeft, right: minObsX })
-
-        for (let i = 0; i < obstacles.length - 1; i++) {
-            const left = obstacles[i].right
-            const right = obstacles[i + 1].left
-            if (right - left >= 15) {
-                corridors.push({ left, right })
-            }
-        }
-
-        corridors.push({ left: maxObsX, right: outerRight })
-
-        const idealMx = (sx + tx) / 2
-        const minST = Math.min(sx, tx)
-        const maxST = Math.max(sx, tx)
-
-        let bestMx = idealMx
-        let bestCost = Infinity
-
-        for (const corridor of corridors) {
-            const center = (corridor.left + corridor.right) / 2
-
-            let distOutside = 0
-            if (center < minST) {
-                distOutside = minST - center
-            } else if (center > maxST) {
-                distOutside = center - maxST
-            }
-
-            const cost = Math.abs(center - idealMx) + 2 * distOutside
-
-            if (cost < bestCost) {
-                bestCost = cost
-                bestMx = Math.max(corridor.left + 5, Math.min(corridor.right - 5, center + offset))
-            }
-        }
-
-        const mx = bestMx
-        return buildOrthPath(sx, sy, tx, ty, mx, Y_UP, Y_DOWN)
     } else {
         let cx = sx, cy = sy
         for (const wp of clean) {
@@ -256,7 +122,7 @@ function buildRoutedPath(
 }
 
 export function WireEdge({
-    id, sourceX, sourceY, targetX, targetY,
+    id, source, target, sourceX, sourceY, targetX, targetY,
     style, selected, data, label,
 }: EdgeProps) {
     const { setEdges, getZoom, getNodes } = useReactFlow()
@@ -270,17 +136,60 @@ export function WireEdge({
         w => w != null && typeof w.x === 'number',
     )
 
-    const isStraight = d?.straight ?? false
+    const isStraightProp = d?.straight ?? false
+    
+    // Hide label and force straight line on short AP-A runs
+    let hideLabel = false
+    let forceStraight = false
+    const srcAddr = parseInt(source, 10)
+    const tgtAddr = parseInt(target, 10)
+    if (!isNaN(srcAddr) && !isNaN(tgtAddr)) {
+        if (Math.abs(srcAddr - tgtAddr) === 1) {
+            const nodes = getNodes()
+            const srcNode = nodes.find(n => n.id === source)
+            const tgtNode = nodes.find(n => n.id === target)
+            if (srcNode && tgtNode) {
+                const isSrcApa = (srcNode.data as any).mod?.Name?.startsWith('CPX-AP-A')
+                const isTgtApa = (tgtNode.data as any).mod?.Name?.startsWith('CPX-AP-A')
+                if (isSrcApa && isTgtApa) {
+                    hideLabel = true
+                    forceStraight = true
+                }
+            }
+        }
+    }
     const nodes = getNodes()
 
-    const { path, points } = buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraight)
+    const { path, points } = buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraightProp || forceStraight)
+
+    // Calculate offset for overlapping redundant wires
+    const edges = useReactFlow().getEdges()
+    const siblingEdges = edges.filter(e => e.source === source && e.target === target && (e.data as any)?.kind === 'io')
+    const myIndex = siblingEdges.findIndex(e => e.id === id)
+    
+    const offsetMag = Math.ceil(myIndex / 2) * 6
+    const offsetSign = myIndex % 2 === 0 ? 1 : -1
+    const offset = myIndex <= 0 ? 0 : offsetMag * offsetSign
+
+    // Shift intermediate points to create a parallel bus effect
+    const shiftedPoints = points.map((p, i) => {
+        if (i === 0 || i === points.length - 1) return p
+        return {
+            x: p.x + offset,
+            y: p.y + offset
+        }
+    })
+
+    const svgPath = shiftedPoints.map((p, i) =>
+        i === 0 ? `M ${p.x},${p.y}` : `L ${p.x},${p.y}`,
+    ).join(' ')
 
     // Calculate the true midpoint of the path segments for accurate label placement
     let totalLength = 0;
     const segments = [];
-    for (let i = 0; i < points.length - 1; i++) {
-        const p1 = points[i];
-        const p2 = points[i + 1];
+    for (let i = 0; i < shiftedPoints.length - 1; i++) {
+        const p1 = shiftedPoints[i];
+        const p2 = shiftedPoints[i + 1];
         const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
         segments.push({ p1, p2, len });
         totalLength += len;
@@ -301,7 +210,7 @@ export function WireEdge({
         currentLength += seg.len;
     }
 
-    const corners = points.slice(1, -1)
+    const corners = shiftedPoints.slice(1, -1)
 
     // Update ref outside of render to satisfy React Compiler rules.
     useEffect(() => {
@@ -387,8 +296,12 @@ export function WireEdge({
                     onClick={onSegmentClick(seg.index)}
                 />
             ))}
-            <BaseEdge id={id} path={path}
-                style={{ stroke: color, strokeWidth, strokeLinejoin: 'round' }}
+            <BaseEdge id={id} path={svgPath}
+                style={{
+                    stroke: color, strokeWidth,
+                    strokeDasharray: isStraightProp || forceStraight ? 'none' : '6 6',
+                    strokeLinejoin: 'round'
+                }}
             />
             <EdgeLabelRenderer>
                 {(label || selected) && (
@@ -401,7 +314,7 @@ export function WireEdge({
                         pointerEvents: 'none',
                         zIndex: 1001,
                     }}>
-                        {label && (
+                        {(!hideLabel && label) && (
                             <div style={{
                                 ...LABEL_TEXT_BASE,
                                 color: color,

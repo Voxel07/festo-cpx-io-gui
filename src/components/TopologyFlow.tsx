@@ -15,6 +15,7 @@ import TopologyCanvas from './TopologyCanvas'
 import ModuleNode from './ModuleNode'
 import BackplaneNode from './BackplaneNode'
 import { CableEdge } from './CableEdge'
+import { WireEdge } from './WireEdge'
 import { buildLayout } from '../utils/layoutBuilder'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnection, ModuleInstance } from '../types'
 import { AlertsContext } from '../utils/AlertsManager'
@@ -30,6 +31,7 @@ const NODE_TYPES: NodeTypes = {
 
 const EDGE_TYPES: EdgeTypes = {
     cable: CableEdge as EdgeTypes[string],
+    wire: WireEdge as EdgeTypes[string],
 }
 
 // ── Helper: convert BenchConfig wiring → ReactFlow IO edges ────────────────
@@ -50,23 +52,50 @@ function wiringToEdges(wiring: WiringConnection[], instances: ModuleInstance[]):
         return 'in'
     }
 
-    return wiring.map(c => {
+    const edges: Edge[] = []
+    
+    wiring.forEach(c => {
         const srcAddrStr = c.source_instance_id.replace(/^mod-0*/, '') || '0'
         const tgtAddrStr = c.target_instance_id.replace(/^mod-0*/, '') || '0'
         const srcAddr = parseInt(srcAddrStr) || 0
         const tgtAddr = parseInt(tgtAddrStr) || 0
-        return {
+        const sh = `src-${srcKind(srcAddr)}-${c.source_channel}`
+        const th = `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`
+
+        const outKind = srcKind(srcAddr)
+        let wireColor = outKind === 'out' ? '#2e7d32' : outKind === 'in' ? '#1565c0' : '#e65100'
+
+        // Multi-color logic for redundant edges
+        const existingEdges = edges.filter(e => e.source === String(srcAddr) && e.target === String(tgtAddr))
+        const colorPalette = [
+            wireColor,
+            '#d81b60', // Pink/Red
+            '#00897b', // Teal
+            '#f57c00', // Orange
+            '#8e24aa', // Purple
+            '#1e88e5', // Blue
+            '#c0ca33', // Lime
+            '#546e7a', // Blue Grey
+        ]
+        if (existingEdges.length > 0) {
+            wireColor = colorPalette[existingEdges.length % colorPalette.length]
+        }
+
+        edges.push({
             id: c.id,
             source: String(srcAddr),
-            sourceHandle: `src-${srcKind(srcAddr)}-${c.source_channel}`,
+            sourceHandle: sh,
             target: String(tgtAddr),
-            targetHandle: `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`,
+            targetHandle: th,
+            type: 'wire',
             animated: true,
             zIndex: 1000,
-            style: { stroke: '#e65100', strokeWidth: 2.5 },
+            style: { stroke: wireColor, strokeWidth: 2.5 },
             data: { kind: 'io', portSrc: c.source_channel, portTgt: c.target_channel },
-        }
+        })
     })
+
+    return edges
 }
 
 interface Props {
