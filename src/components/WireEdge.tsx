@@ -61,6 +61,7 @@ export type WireData = {
     portTgt?: string
     wireColor?: string
     waypoints?: Array<{ x: number; y: number }>
+    straight?: boolean
     cpOffsetX?: number
     cpOffsetY?: number
 }
@@ -182,7 +183,7 @@ function buildRoutedPath(
 
         const minObsX = Math.min(...obstacles.map(o => o.left))
         const maxObsX = Math.max(...obstacles.map(o => o.right))
-        
+
         const outerLeft = minObsX - 40
         const outerRight = maxObsX + 40
 
@@ -208,7 +209,7 @@ function buildRoutedPath(
 
         for (const corridor of corridors) {
             const center = (corridor.left + corridor.right) / 2
-            
+
             let distOutside = 0
             if (center < minST) {
                 distOutside = minST - center

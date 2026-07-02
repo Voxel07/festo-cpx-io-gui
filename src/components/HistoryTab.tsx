@@ -5,9 +5,9 @@
  * in-memory history when PocketBase is not running.  Clicking a row opens
  * a detail drawer with per-test checkpoints, log output, and raw results.
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import {
-    Box, Stack, Typography, Paper, Table, TableBody, TableCell,
+    Stack, Typography, Paper, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Chip, CircularProgress, TablePagination
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
@@ -97,7 +97,7 @@ export default function HistoryTab() {
         }
     }
 
-    const handleChangePage = (event: unknown, newPage: number) => {
+    const handleChangePage = (_event: unknown, newPage: number) => {
         setPage(newPage)
     }
 

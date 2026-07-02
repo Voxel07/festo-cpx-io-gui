@@ -1,18 +1,18 @@
-import { useReducer, useRef, useCallback, useEffect } from 'react'
-import { Box, Tabs, Tab, Stack } from '@mui/material'
-import type { SxProps, Theme } from '@mui/material'
+import { lazy, Suspense, useReducer, useRef, useEffect } from 'react'
+import { Box, Tabs, Tab, CircularProgress, Typography } from '@mui/material'
 import AppHeader from './components/AppHeader'
-import GenerateCompareTab from './components/GenerateCompareTab'
-import TestRunTab from './components/TestRunTab'
-import HistoryTab from './components/HistoryTab'
-import TopologyFlow from './components/TopologyFlow'
-import ConnectionsFlow from './components/ConnectionsFlow'
-import RawModeTab from './components/RawModeTab'
-import DiagnosticsModal from './components/DiagnosticsModal'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig } from './types'
 import { configToTopology } from './utils/configMapper'
 import { AlertsManager, AlertsContext } from './utils/AlertsManager'
 import type { AlertsManagerRef } from './utils/AlertsManager'
+
+const GenerateCompareTab = lazy(() => import('./components/GenerateCompareTab'))
+const TestRunTab = lazy(() => import('./components/TestRunTab'))
+const HistoryTab = lazy(() => import('./components/HistoryTab'))
+const TopologyFlow = lazy(() => import('./components/TopologyFlow'))
+const ConnectionsFlow = lazy(() => import('./components/ConnectionsFlow'))
+const RawModeTab = lazy(() => import('./components/RawModeTab'))
+const DiagnosticsModal = lazy(() => import('./components/DiagnosticsModal'))
 
 const MIN_CANVAS_H = 140
 const MAX_CANVAS_H = 800
@@ -185,6 +185,15 @@ async function pollTestRunStatus(onStatusUpdate: (active: boolean, currentModule
     } catch { /* ignore */ }
 }
 
+function LoadingChunk({ label = 'Loading…' }: { label?: string }) {
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5, color: 'text.secondary' }}>
+            <CircularProgress size={18} />
+            <Typography variant="body2">{label}</Typography>
+        </Box>
+    )
+}
+
 export default function App() {
     const [state, dispatch] = useReducer(appReducer, initialAppState)
     const {
@@ -203,7 +212,6 @@ export default function App() {
         activeModuleAddr,
         rawSelectedAddr,
         diagOpen,
-        rawConfig,
     } = state
 
     const alertsRef = useRef<AlertsManagerRef>(null)
@@ -311,112 +319,128 @@ export default function App() {
                 />
 
                 {/* ── Topology canvas (collapsible) ── */}
-            {showTopology && (
-                <Box sx={fullscreen
-                    ? { position: 'fixed', inset: 0, zIndex: 1300, background: '#fafafa' }
-                    : {
-                        display: 'flex', flexDirection: 'row',
-                        height: canvasH, flexShrink: 0,
-                        borderBottom: '1px solid #ddd', background: '#fafafa',
-                    }
-                }>
-                    {/* Canvas area (width-constrained when user has dragged) */}
-                    <Box sx={{
-                        flex: canvasW ? 'none' : 1,
-                        width: canvasW ?? undefined,
-                        height: '100%',
-                        overflow: 'hidden',
-                        position: 'relative',
-                    }}>
-                        <TopologyFlow
-                            topology={topology}
-                            diffStatus={diffStatus}
-                            removedModules={removedModules}
-                            fullscreen={fullscreen}
-                            onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
-                            activeModuleAddr={activeModuleAddr}
-                            selectedModuleAddr={tab === 3 ? rawSelectedAddr : null}
-                            onSelectModuleAddr={tab === 3 ? (addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })) : undefined}
-                        />
+                {showTopology && (
+                    <Box sx={fullscreen
+                        ? { position: 'fixed', inset: 0, zIndex: 1300, background: '#fafafa' }
+                        : {
+                            display: 'flex', flexDirection: 'row',
+                            height: canvasH, flexShrink: 0,
+                            borderBottom: '1px solid #ddd', background: '#fafafa',
+                        }
+                    }>
+                        {/* Canvas area (width-constrained when user has dragged) */}
+                        <Box sx={{
+                            flex: canvasW ? 'none' : 1,
+                            width: canvasW ?? undefined,
+                            height: '100%',
+                            overflow: 'hidden',
+                            position: 'relative',
+                        }}>
+                            <Suspense fallback={<LoadingChunk label="Loading topology…" />}>
+                                <TopologyFlow
+                                    topology={topology}
+                                    diffStatus={diffStatus}
+                                    removedModules={removedModules}
+                                    fullscreen={fullscreen}
+                                    onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
+                                    activeModuleAddr={activeModuleAddr}
+                                    selectedModuleAddr={tab === 3 ? rawSelectedAddr : null}
+                                    onSelectModuleAddr={tab === 3 ? (addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })) : undefined}
+                                />
+                            </Suspense>
+                        </Box>
+
+                        {/* Right-edge width resize handle */}
+                        {!fullscreen && (
+                            <Box onMouseDown={onWidthDragStart} sx={{
+                                width: 6, flexShrink: 0, cursor: 'col-resize',
+                                background: 'linear-gradient(to right, #e0e0e0 0%, #bdbdbd 50%, #e0e0e0 100%)',
+                                '&:hover': { background: '#1976d2' },
+                                transition: 'background 0.15s',
+                                userSelect: 'none',
+                            }} />
+                        )}
                     </Box>
+                )}
 
-                    {/* Right-edge width resize handle */}
-                    {!fullscreen && (
-                        <Box onMouseDown={onWidthDragStart} sx={{
-                            width: 6, flexShrink: 0, cursor: 'col-resize',
-                            background: 'linear-gradient(to right, #e0e0e0 0%, #bdbdbd 50%, #e0e0e0 100%)',
-                            '&:hover': { background: '#1976d2' },
-                            transition: 'background 0.15s',
-                            userSelect: 'none',
-                        }} />
-                    )}
-                </Box>
-            )}
+                {/* ── Drag-resize handle ── */}
+                {!fullscreen && showTopology && (
+                    <Box onMouseDown={onDragStart} sx={{
+                        height: 6, flexShrink: 0, cursor: 'row-resize',
+                        background: 'linear-gradient(to bottom, #e0e0e0 0%, #bdbdbd 50%, #e0e0e0 100%)',
+                        '&:hover': { background: '#1976d2' },
+                        transition: 'background 0.15s',
+                        userSelect: 'none',
+                    }} />
+                )}
 
-            {/* ── Drag-resize handle ── */}
-            {!fullscreen && showTopology && (
-                <Box onMouseDown={onDragStart} sx={{
-                    height: 6, flexShrink: 0, cursor: 'row-resize',
-                    background: 'linear-gradient(to bottom, #e0e0e0 0%, #bdbdbd 50%, #e0e0e0 100%)',
-                    '&:hover': { background: '#1976d2' },
-                    transition: 'background 0.15s',
-                    userSelect: 'none',
-                }} />
-            )}
+                {/* ── Tab bar ── */}
+                {!fullscreen && (
+                    <Box sx={{ background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
+                        <Tabs value={tab} onChange={(_, v) => dispatch({ type: 'SET_TAB', tab: v })} sx={{ minHeight: 38 }}
+                            variant="scrollable" scrollButtons="auto">
+                            <Tab label="Topology" sx={{ minHeight: 38 }} />
+                            <Tab label="Connections" sx={{ minHeight: 38 }} />
+                            <Tab label="Test Run" sx={{ minHeight: 38 }} />
+                            <Tab label="Raw Mode" sx={{ minHeight: 38 }} />
+                            <Tab label="History" sx={{ minHeight: 38 }} />
+                        </Tabs>
+                    </Box>
+                )}
 
-            {/* ── Tab bar ── */}
-            {!fullscreen && (
-                <Box sx={{ background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
-                    <Tabs value={tab} onChange={(_, v) => dispatch({ type: 'SET_TAB', tab: v })} sx={{ minHeight: 38 }}
-                        variant="scrollable" scrollButtons="auto">
-                        <Tab label="Topology" sx={{ minHeight: 38 }} />
-                        <Tab label="Connections" sx={{ minHeight: 38 }} />
-                        <Tab label="Test Run" sx={{ minHeight: 38 }} />
-                        <Tab label="Raw Mode" sx={{ minHeight: 38 }} />
-                        <Tab label="History" sx={{ minHeight: 38 }} />
-                    </Tabs>
-                </Box>
-            )}
-
-            {/* ── Tab content ── */}
-            {!fullscreen && (
-                <Box sx={{ flex: 1, overflow: 'hidden', background: '#fafafa', display: 'flex', flexDirection: 'column' }}>
-                    {tab === 0 && (
-                        <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-                            <GenerateCompareTab ip={ip} timeout={timeout} onResult={onResult} />
-                        </Box>
-                    )}
-                    {tab === 1 && (
-                        <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                            <ConnectionsFlow
-                                topology={topology}
-                                diffStatus={diffStatus}
-                                ip={ip}
-                                onModuleValveChange={onModuleValveChange}
-                                onConfigLoad={onConfigLoad}
-                            />
-                        </Box>
-                    )}
-                    {tab === 2 && <TestRunTab ip={ip} />}
-                    {tab === 3 && (
-                        <RawModeTab
-                            topology={topology}
-                            ip={ip}
-                            selectedModuleAddr={rawSelectedAddr}
-                            onSelectModuleAddr={addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })}
-                        />
-                    )}
-                    {tab === 4 && (
-                        <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-                            <HistoryTab />
-                        </Box>
-                    )}
-                </Box>
-            )}
-            {diagOpen && (
-                <DiagnosticsModal open={diagOpen} onClose={() => dispatch({ type: 'SET_DIAG_OPEN', open: false })} ip={ip} />
-            )}
-        </Box>
+                {/* ── Tab content ── */}
+                {!fullscreen && (
+                    <Box sx={{ flex: 1, overflow: 'hidden', background: '#fafafa', display: 'flex', flexDirection: 'column' }}>
+                        {tab === 0 && (
+                            <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                                <Suspense fallback={<LoadingChunk label="Loading topology tools…" />}>
+                                    <GenerateCompareTab ip={ip} timeout={timeout} onResult={onResult} />
+                                </Suspense>
+                            </Box>
+                        )}
+                        {tab === 1 && (
+                            <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                                <Suspense fallback={<LoadingChunk label="Loading connection editor…" />}>
+                                    <ConnectionsFlow
+                                        topology={topology}
+                                        diffStatus={diffStatus}
+                                        ip={ip}
+                                        onModuleValveChange={onModuleValveChange}
+                                        onConfigLoad={onConfigLoad}
+                                    />
+                                </Suspense>
+                            </Box>
+                        )}
+                        {tab === 2 && (
+                            <Suspense fallback={<LoadingChunk label="Loading test runner…" />}>
+                                <TestRunTab ip={ip} />
+                            </Suspense>
+                        )}
+                        {tab === 3 && (
+                            <Suspense fallback={<LoadingChunk label="Loading raw mode…" />}>
+                                <RawModeTab
+                                    topology={topology}
+                                    ip={ip}
+                                    selectedModuleAddr={rawSelectedAddr}
+                                    onSelectModuleAddr={addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })}
+                                />
+                            </Suspense>
+                        )}
+                        {tab === 4 && (
+                            <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                                <Suspense fallback={<LoadingChunk label="Loading history…" />}>
+                                    <HistoryTab />
+                                </Suspense>
+                            </Box>
+                        )}
+                    </Box>
+                )}
+                {diagOpen && (
+                    <Suspense fallback={null}>
+                        <DiagnosticsModal open={diagOpen} onClose={() => dispatch({ type: 'SET_DIAG_OPEN', open: false })} ip={ip} />
+                    </Suspense>
+                )}
+            </Box>
         </AlertsContext.Provider>
     )
 }

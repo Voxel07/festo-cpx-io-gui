@@ -4,7 +4,7 @@
  *
  * Cached per URL so repeated calls are free.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 const cache = new Map<string, string[]>()
 
@@ -34,7 +34,7 @@ async function fetchAndParseValveGroups(
 }
 
 export function useValveGroups(svgUrl: string, overrideCount?: number): string[] {
-    const [, setTick] = useState(0)
+    const [tick, setTick] = useState(0)
 
     // Trigger async fetch on cache miss (only setState in the async callback)
     useEffect(() => {
@@ -45,10 +45,12 @@ export function useValveGroups(svgUrl: string, overrideCount?: number): string[]
         })
     }, [svgUrl])
 
-    if (overrideCount !== undefined) {
-        return Array.from({ length: overrideCount }, (_, i) => i === 0 ? 'Valve' : `Valve-${i + 1}`)
-    }
+    return useMemo(() => {
+        if (overrideCount !== undefined) {
+            return Array.from({ length: overrideCount }, (_, i) => i === 0 ? 'Valve' : `Valve-${i + 1}`)
+        }
 
-    // Derive from cache during render — React Compiler can optimise this
-    return svgUrl ? (cache.get(svgUrl) ?? []) : []
+        // Derive from cache during render — React Compiler can optimise this
+        return svgUrl ? (cache.get(svgUrl) ?? []) : []
+    }, [svgUrl, overrideCount, tick])
 }

@@ -1,4 +1,4 @@
-import { Box, Button, Checkbox, FormControlLabel, Paper, Stack, Typography, Chip, CircularProgress } from '@mui/material'
+import { Button, Checkbox, FormControlLabel, Paper, Stack, Typography, Chip, CircularProgress } from '@mui/material'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 
 export interface AvailableTest {

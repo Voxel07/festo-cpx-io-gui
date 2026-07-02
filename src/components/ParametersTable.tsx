@@ -58,7 +58,6 @@ export default function ParametersTable({
     expandedParams,
     readingAll,
     ip,
-    selectedModule,
     onReadParamInstance,
     onReadParamAllInstances,
     onWriteParamInstance,

@@ -88,10 +88,9 @@ interface Props {
 
 interface ConnectionsFlowState {
     showCables: boolean
+    showWires: boolean
     savePath: string
     loadPath: string
-    statusMsg: { text: string; severity: 'success' | 'error' } | null
-    wiringDisplay: 'all' | 'selected' | 'none'
     showPsConfig: boolean
     psComPort: string
     psIpAddr: string
@@ -254,7 +253,6 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 try {
                     const r = await fetch(`/io/module/${mod.Adress}/parameter/20201?ip_address=${encodeURIComponent(ip)}`)
                     if (r.ok) {
-                        const d = await r.json()
                         setVabxInputs(prev => ({ ...prev, [mod.Adress]: true }))
                     }
                 } catch (e) {
@@ -516,8 +514,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             if (d.power_supply) {
                 dispatch({
                     type: 'SET_PS_CONFIG_ALL',
-                    ComPort: d.power_supply.ComPort || '',
-                    IpAddr: d.power_supply['Ip addr'] || '',
+                    ComPort: d.power_supply.ComPort || d.power_supply.comport || '',
+                    IpAddr: d.power_supply['Ip addr'] || d.power_supply.ip_address || '',
                     plChannel: d.power_supply.pl_channel != null ? String(d.power_supply.pl_channel) : '',
                     psChannel: d.power_supply.ps_channel != null ? String(d.power_supply.ps_channel) : '',
                 })
@@ -790,7 +788,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 psComPort={psComPort}
                 onPsComPortChange={port => dispatch({ type: 'SET_PS_COMPORT', port })}
                 psIpAddr={psIpAddr}
-                onPsIpAddrChange={pip => dispatch({ type: 'SET_PS_IPADDR', pip })}
+                onPsIpAddrChange={ip => dispatch({ type: 'SET_PS_IPADDR', ip })}
                 psPlChannel={psPlChannel}
                 onPsPlChannelChange={ch => dispatch({ type: 'SET_PS_PL_CHANNEL', ch })}
                 psPsChannel={psPsChannel}

@@ -1,4 +1,4 @@
-import { Box, Typography, Chip, Divider, Stack, TextField, Alert } from '@mui/material'
+import { Box, Typography, Chip, Divider, Stack, TextField } from '@mui/material'
 import CableIcon from '@mui/icons-material/Cable'
 import TimelineIcon from '@mui/icons-material/Timeline'
 import PowerIcon from '@mui/icons-material/Power'
@@ -262,7 +262,7 @@ export default function ConnectionsToolbar({
                         onChange={e => onPsComPortChange(e.target.value)}
                         placeholder="e.g. COM3"
                         sx={{ width: 120, background: '#fff' }}
-                        InputLabelProps={{ style: { fontSize: '0.75rem' } }}
+                        slotProps={{ inputLabel: { sx: { fontSize: '0.75rem' } } }}
                     />
                     <TextField
                         label="IP Address"
@@ -271,7 +271,7 @@ export default function ConnectionsToolbar({
                         onChange={e => onPsIpAddrChange(e.target.value)}
                         placeholder="e.g. 192.168.0.20"
                         sx={{ width: 150, background: '#fff' }}
-                        InputLabelProps={{ style: { fontSize: '0.75rem' } }}
+                        slotProps={{ inputLabel: { sx: { fontSize: '0.75rem' } } }}
                     />
                     <TextField
                         label="PL Channel"
@@ -281,7 +281,7 @@ export default function ConnectionsToolbar({
                         onChange={e => onPsPlChannelChange(e.target.value)}
                         placeholder="1"
                         sx={{ width: 100, background: '#fff' }}
-                        InputLabelProps={{ style: { fontSize: '0.75rem' } }}
+                        slotProps={{ inputLabel: { sx: { fontSize: '0.75rem' } } }}
                     />
                     <TextField
                         label="PS Channel"
@@ -291,7 +291,7 @@ export default function ConnectionsToolbar({
                         onChange={e => onPsPsChannelChange(e.target.value)}
                         placeholder="2"
                         sx={{ width: 100, background: '#fff' }}
-                        InputLabelProps={{ style: { fontSize: '0.75rem' } }}
+                        slotProps={{ inputLabel: { sx: { fontSize: '0.75rem' } } }}
                     />
                     <Typography variant="caption" color="text.secondary">
                         (Only ComPort or IP addr should be populated to connect)

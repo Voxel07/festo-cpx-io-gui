@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
     Button, Typography, Box, Divider, Chip, CircularProgress,
     Stack, FormControlLabel, Checkbox, Alert, Switch,
@@ -44,7 +44,6 @@ function buildChannels(
     // ── Valve body: each slot → N hardware channels ──
     if (isValveBody(name)) {
         const cpv = channelsPerValve(name)
-        const mountedSet = new Set(mountedValves ?? [])
         // Determine number of valve slots from NumOfOutputs / cpv
         const totalValves = mod.NumOfOutputs > 0
             ? Math.floor(mod.NumOfOutputs / cpv)
@@ -59,7 +58,6 @@ function buildChannels(
         const channels: ActuateChannel[] = []
         for (const slotIdx of slots) {
             const hwChannels = valveSlotToChannels(slotIdx, cpv)
-            const isMounted = mountedSet.has(slotIdx)
             for (let sub = 0; sub < hwChannels.length; sub++) {
                 const coil = cpv > 1 ? (sub === 0 ? 'A' : 'B') : ''
                 channels.push({

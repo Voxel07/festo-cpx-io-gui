@@ -1,8 +1,8 @@
 import { useReducer, useState, useContext } from 'react'
-import { Box, Typography, Alert, Stack, Paper } from '@mui/material'
+import { Box, Typography, Alert, Paper } from '@mui/material'
 import SettingsIcon from '@mui/icons-material/Settings'
 import ModuleActuatePanel from './ModuleActuatePanel'
-import type { Topology, TopologyModule } from '../types'
+import type { Topology } from '../types'
 import ParametersTable from './ParametersTable'
 import { AlertsContext } from '../utils/AlertsManager'
 
@@ -133,7 +133,7 @@ function rawModeReducer(state: RawModeState, action: RawModeAction): RawModeStat
     }
 }
 
-export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectModuleAddr }: Props) {
+export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectModuleAddr: _onSelectModuleAddr }: Props) {
     const [state, dispatch] = useReducer(rawModeReducer, initialRawModeState)
     const {
         parameters,

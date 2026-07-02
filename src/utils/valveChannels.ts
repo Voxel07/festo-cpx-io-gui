@@ -49,7 +49,7 @@ export function valveSlotToChannels(valveIndex: number, cpv?: number): number[] 
 }
 
 /** Flatten a list of valve slot indices into hardware channel indices. */
-function expandValveIndices(valveIndices: number[], moduleName: string): number[] {
+export function expandValveIndices(valveIndices: number[], moduleName: string): number[] {
     const cpv = channelsPerValve(moduleName)
     const channels: number[] = []
     for (const vi of valveIndices) {

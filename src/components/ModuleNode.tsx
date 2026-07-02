@@ -1,8 +1,9 @@
-import { memo, Fragment, useState, useEffect } from 'react'
-import { Handle, Position, useReactFlow, useUpdateNodeInternals } from '@xyflow/react'
+import { memo, Fragment, useState, useEffect, useMemo } from 'react'
+import { Handle, Position, useUpdateNodeInternals } from '@xyflow/react'
 import type { NodeProps, Node } from '@xyflow/react'
-import { Box, Typography, Chip, Tooltip, IconButton } from '@mui/material'
+import { Box, Typography, Tooltip, IconButton } from '@mui/material'
 import type { ChipOwnProps } from '@mui/material'
+import Stack from '@mui/material/Stack'
 import { useSvgMap, resolveIcon } from '../hooks/useSvgMap'
 import { useSvgPorts } from '../hooks/useSvgPorts'
 import type { PortKind } from '../hooks/useSvgPorts'
@@ -174,6 +175,20 @@ function getPortTgtStyle(cx: number, cy: number, editMode: boolean): React.CSSPr
     }
 }
 
+function supportsMountedValves(name: string, type: string): boolean {
+    const upName = name.toUpperCase()
+    if (/^VABX-A-(?:S-)?EL-E(?:12|34)-AP[IPA]\b/.test(upName)) return false
+    return type === 'Valve' || upName.startsWith('VMPAL') || upName.startsWith('VAEM') || upName.startsWith('VTUX') || /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(upName)
+}
+
+function defaultValveSlots(name: string, explicitSlots?: number): number | undefined {
+    if (explicitSlots !== undefined) return explicitSlots
+    const upName = name.toUpperCase()
+    if (upName.startsWith('VTUX')) return 4
+    if (upName.startsWith('VMPAL')) return 16
+    return undefined
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
@@ -201,8 +216,10 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         numOut: mod.NumOfOutputs,
         numInOut: mod.NumOfInOuts,
     })
-    const isVmpal = mod.Name.startsWith('VMPAL')
-    const numValves = isVmpal ? (mod.ValveSlots || 16) : undefined
+    const isVmpal = mod.Name.toUpperCase().startsWith('VMPAL')
+    const isVtux = mod.Name.toUpperCase().startsWith('VTUX')
+    const canConfigureValves = supportsMountedValves(mod.Name, mod.Type)
+    const numValves = defaultValveSlots(mod.Name, mod.ValveSlots)
 
     let dispW = DISP_W
     if (isVmpal && numValves !== undefined) {
@@ -210,12 +227,10 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         dispW = Math.round(svgW * (DISP_H / 109))
     }
 
-    const wantsValves = showValveEditor || showValves
+    const wantsValves = canConfigureValves && (showValveEditor || showValves)
     const valveGroups = useValveGroups(wantsValves ? svgUrl : '', numValves)
-    const displayUrl = useModifiedSvg(svgUrl, hiddenValves, numValves)
 
     const [valveEditorOpen, setValveEditorOpen] = useState(false)
-    const { setNodes } = useReactFlow()
     const updateNodeInternals = useUpdateNodeInternals()
 
     // Notify React Flow when SVG port handles mount/dismount so edges can resolve
@@ -223,20 +238,13 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         updateNodeInternals(nodeId)
     }, [ports, nodeId, updateNodeInternals])
 
-    // When valveGroups are loaded and mod.MountedValves is known, derive hiddenValves.
-    // undefined MountedValves → effect is skipped → hiddenValves stays [] (all mounted by default).
-    useEffect(() => {
-        if (!wantsValves || valveGroups.length === 0 || mod.MountedValves === undefined) return
-        if (mod.MountedValves.length === 0) return  // empty = not yet configured → default all mounted
+    const effectiveHiddenValves = useMemo(() => {
+        if (!wantsValves || valveGroups.length === 0) return []
+        if (mod.MountedValves === undefined) return hiddenValves
         const mountedSet = new Set(mod.MountedValves)
-        const expected = valveGroups.filter((_, i) => !mountedSet.has(i))
-        setNodes(prev => prev.map(n => {
-            if (n.id !== nodeId) return n
-            const cur = (n.data as ModuleNodeData).hiddenValves ?? []
-            const same = expected.length === cur.length && expected.every(id => cur.includes(id))
-            return same ? n : { ...n, data: { ...n.data, hiddenValves: expected } }
-        }))
-    }, [valveGroups, mod.MountedValves, wantsValves, nodeId, setNodes])
+        return valveGroups.filter((_, i) => !mountedSet.has(i))
+    }, [hiddenValves, mod.MountedValves, valveGroups, wantsValves])
+    const displayUrl = useModifiedSvg(svgUrl, effectiveHiddenValves, numValves)
 
     const st = STATUS_STYLE[status] ?? STATUS_STYLE.unchanged
     const hasPorts = ports.length > 0
@@ -246,30 +254,29 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const topCount = numOut + numInOut
     const botCount = numIn + numInOut
 
+    function setMountedValves(mounted: number[]) {
+        if (onValveChange) onValveChange(mod.Adress, mounted, numValves)
+    }
+
     function onToggleValve(valveId: string, hide: boolean) {
-        setNodes(prev => prev.map(n => {
-            if (n.id !== nodeId) return n
-            const cur = (n.data as ModuleNodeData).hiddenValves ?? []
-            const next = hide
-                ? [...cur.filter(v => v !== valveId), valveId]
-                : cur.filter(v => v !== valveId)
-            // Compute 0-based mounted indices and propagate to topology
-            const mounted: number[] = valveGroups.reduce<number[]>((acc, gid, idx) => {
-                if (!next.includes(gid)) acc.push(idx)
-                return acc
-            }, [])
-            // Call onValveChange (which will hit App dispatch)
-            if (onValveChange) onValveChange(mod.Adress, mounted, numValves)
-            return { ...n, data: { ...n.data, hiddenValves: next } }
-        }))
+        const nextHidden = hide
+            ? [...effectiveHiddenValves.filter(v => v !== valveId), valveId]
+            : effectiveHiddenValves.filter(v => v !== valveId)
+        const nextHiddenSet = new Set(nextHidden)
+        const mounted = valveGroups.reduce<number[]>((acc, gid, idx) => {
+            if (!nextHiddenSet.has(gid)) acc.push(idx)
+            return acc
+        }, [])
+        setMountedValves(mounted)
     }
 
     function onValveSlotsChange(slots: number) {
         if (onValveChange) {
-            const mounted = mod.MountedValves ?? []
+            const boundedSlots = Math.max(1, Math.min(slots, isVtux ? 4 : slots))
+            const mounted = mod.MountedValves ?? Array.from({ length: boundedSlots }, (_, idx) => idx)
             // filter out mounted indices >= slots
-            const validMounted = mounted.filter(idx => idx < slots)
-            onValveChange(mod.Adress, validMounted, slots)
+            const validMounted = mounted.filter(idx => idx < boundedSlots)
+            onValveChange(mod.Adress, validMounted, boundedSlots)
         }
     }
 
@@ -337,12 +344,29 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
             ))}
 
             {/* ── Address badge (above image) ── */}
-            <Typography sx={{
-                fontSize: '0.48rem', fontWeight: 700, color: '#1565c0',
-                mb: 0.15, lineHeight: 1, letterSpacing: '0.02em',
-            }}>
-                #{mod.Adress}
-            </Typography>
+            <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{ justifyContent: 'center', alignItems: 'center', marginBottom: 0.25 }}
+
+            >
+                <Typography sx={{
+                    fontSize: '0.48rem', fontWeight: 700, color: '#1565c0',
+                    lineHeight: 1, letterSpacing: '0.02em',
+                }}>
+                    #{mod.Adress}
+                </Typography>
+
+                {(numIn > 0 || numOut > 0 || numInOut > 0) && (
+                    <Typography sx={{ fontSize: '0.44rem', color: '#666', lineHeight: 1, whiteSpace: 'nowrap' }}>
+                        {numIn > 0 && <span style={{ color: PORT_COLOR.in }}>↓{numIn}</span>}
+                        {numOut > 0 && <span style={{ color: PORT_COLOR.out }}>↑{numOut}</span>}
+                        {numInOut > 0 && <span style={{ color: PORT_COLOR.inout }}>⇅{numInOut}</span>}
+                    </Typography>
+                )}
+            </Stack>
+
+
 
             {/* ── SVG image container ── */}
             <Box sx={{ position: 'relative', width: dispW, height: DISP_H, margin: '0 auto' }}>
@@ -412,21 +436,14 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 }}>
                     {mod.Name}
                 </Typography>
-                {(numIn > 0 || numOut > 0 || numInOut > 0) && (
-                    <Typography sx={{ fontSize: '0.44rem', color: '#666', lineHeight: 1, whiteSpace: 'nowrap' }}>
-                        {numIn > 0 && <span style={{ color: PORT_COLOR.in }}>↓{numIn}</span>}
-                        {numOut > 0 && <span style={{ color: PORT_COLOR.out }}>↑{numOut}</span>}
-                        {numInOut > 0 && <span style={{ color: PORT_COLOR.inout }}>⇅{numInOut}</span>}
-                    </Typography>
-                )}
             </Box>
 
             {/* ── Type chip (non-backplane only) ── */}
-            {!isBackplane && (
+            {/* {!isBackplane && (
                 <Chip label={mod.Type} size="small" color={st.chip} variant="outlined"
                     sx={{ fontSize: '0.46rem', height: 13, mt: 0.25, '& .MuiChip-label': { px: '3px' } }}
                 />
-            )}
+            )} */}
 
             {/* ── Connection list (edit mode, whenever wires are drawn) ── */}
             {connections.length > 0 && (
@@ -449,7 +466,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
             )}
 
             {/* ── Valve editor button (VABX body modules in edit mode) ── */}
-            {showValveEditor && (
+            {showValveEditor && canConfigureValves && (
                 <>
                     <Tooltip title="Configure mounted valves" placement="top">
                         <IconButton size="small"
@@ -468,9 +485,11 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                         <ValveEditorDialog
                             open={valveEditorOpen}
                             svgUrl={svgUrl}
-                            hiddenValves={hiddenValves}
+                            hiddenValves={effectiveHiddenValves}
                             numValves={numValves}
+                            maxValves={isVtux ? 4 : undefined}
                             onToggle={onToggleValve}
+                            onSetMountedValves={setMountedValves}
                             onNumValvesChange={onValveSlotsChange}
                             onClose={() => setValveEditorOpen(false)}
                         />

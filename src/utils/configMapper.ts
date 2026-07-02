@@ -1,4 +1,4 @@
-import type { BenchConfig, Topology, TopologyModule } from '../types'
+import type { BenchConfig, Topology } from '../types'
 
 export function configToTopology(config: BenchConfig): Topology {
     return {
@@ -14,7 +14,7 @@ export function configToTopology(config: BenchConfig): Topology {
 
             let m_type = 'Input'
             const upName = inst.display_name.toUpperCase()
-            if (inst.category === 'valve' || upName.includes('VABX') || upName.includes('VMPAL') || upName.includes('VAEM')) m_type = 'Valve'
+            if (inst.category === 'valve' || upName.includes('VABX-A-S-BV-V4') || upName.includes('VMPAL') || upName.includes('VAEM')) m_type = 'Valve'
             else if (inst.category === 'inout') m_type = 'In/Out'
             else if (inst.category === 'output') m_type = 'Output'
             else if (inst.category === 'bus') m_type = 'Bus'

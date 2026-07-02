@@ -179,7 +179,6 @@ export function buildLayout(
             const isLast = i === seg.mods.length - 1
             const stride = NODE_W + INLINE_G
             const isDirectValveBody = seg.kind === 'apa' && isValveBody(m.Name)
-            const modIsEpli = isEpli(m.Name)
             const modIsApChain = isApChainInterface(m.Name)
             const apPos = modIsApChain ? getApHandlePos(m.Name) : undefined
 

@@ -6,8 +6,7 @@
  * web UI or CI.
  */
 import { useReducer, useEffect, useRef, useCallback } from 'react'
-import { Box, Stack, Typography, Alert, Paper, CircularProgress, TextField, Tooltip } from '@mui/material'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import { Box, Stack, Typography, Alert, Paper, CircularProgress } from '@mui/material'
 import TestSelection from './TestSelection'
 import TestProgress from './TestProgress'
 import TestResults from './TestResults'
@@ -54,9 +53,6 @@ const AVAILABLE_TESTS = [
     { id: 'factory-reset', label: 'Factory Reset' },
     { id: 'open-load-diag', label: 'Open-Load Diagnostic' },
 ]
-
-/** Tests that require a power supply comport to perform a real power cycle. */
-const POWER_CYCLE_TESTS = new Set(['remanent-params', 'condition-counter', 'factory-reset'])
 
 interface Props {
     ip: string

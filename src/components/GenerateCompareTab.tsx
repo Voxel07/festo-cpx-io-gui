@@ -1,4 +1,4 @@
-import { useReducer } from 'react'
+import { useContext, useReducer } from 'react'
 import {
     Stack, Button, Alert, CircularProgress, TextField,
     Typography, Box, Divider, Chip,
@@ -6,6 +6,7 @@ import {
 import SplitDiff from './SplitDiff'
 import type { Topology, TopologyModule, DiffStatus, CompareResult, BenchConfig } from '../types'
 import { configToTopology } from '../utils/configMapper'
+import { AlertsContext } from '../utils/AlertsManager'
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -206,6 +207,7 @@ function tabReducer(state: TabState, action: TabAction): TabState {
 
 export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
     const [state, dispatch] = useReducer(tabReducer, initialTabState)
+    const alerts = useContext(AlertsContext)
     const {
         filePath,
         liveConfig,
@@ -226,7 +228,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
             const r = await fetch('/config/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ip_address: ip, timeout, save_path: filePath }),
+                body: JSON.stringify({ ip_address: ip, timeout }),
             })
             const d = await r.json()
             if (!r.ok) {
@@ -243,7 +245,12 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
     }
 
     async function compare() {
-        if (!filePath) { dispatch({ type: 'COMPARE_FAIL', error: 'Enter a configuration file path.' }); return }
+        if (!filePath) {
+            const error = 'Enter a configuration file path.'
+            dispatch({ type: 'COMPARE_FAIL', error })
+            alerts?.showAlert('error', error)
+            return
+        }
         dispatch({ type: 'COMPARE_START' })
         try {
             const r = await fetch('/config/compare', {
@@ -254,9 +261,16 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
             const d: CompareResult & { detail?: string } = await r.json()
             if (!r.ok) {
                 dispatch({ type: 'COMPARE_FAIL', error: d.detail ?? 'Unknown error' })
+                alerts?.showAlert('error', d.detail ?? 'Unknown error')
                 return
             }
             dispatch({ type: 'COMPARE_SUCCESS', data: d })
+            alerts?.showAlert(
+                d.has_diff ? 'warning' : 'success',
+                d.has_diff
+                    ? `${d.changes.length} field change(s) · ${d.added.length} module(s) added · ${d.removed.length} module(s) removed`
+                    : 'Topology matches — no differences detected',
+            )
             const ds: DiffStatus = {}
             for (const m of (d.live?.Topology ?? [])) ds[m.Adress] = 'unchanged'
             for (const c of d.changes) ds[c.address] = 'changed'
@@ -265,11 +279,17 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
             onResult(d.live, ds, d.removed)
         } catch (e) {
             dispatch({ type: 'COMPARE_FAIL', error: (e as Error).message })
+            alerts?.showAlert('error', (e as Error).message)
         }
     }
 
     async function writeToFile() {
-        if (!liveConfig) { dispatch({ type: 'WRITE_FAIL', error: 'Read live config first.' }); return }
+        if (!liveConfig) {
+            const error = 'Read live config first.'
+            dispatch({ type: 'WRITE_FAIL', error })
+            alerts?.showAlert('error', error)
+            return
+        }
         dispatch({ type: 'WRITE_START' })
         try {
             const r = await fetch('/config', {
@@ -280,11 +300,15 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
             const d: { saved_to?: string; detail?: string } = await r.json()
             if (!r.ok) {
                 dispatch({ type: 'WRITE_FAIL', error: d.detail ?? 'Unknown error' })
+                alerts?.showAlert('error', d.detail ?? 'Unknown error')
                 return
             }
-            dispatch({ type: 'WRITE_SUCCESS', savedTo: d.saved_to ?? filePath })
+            const savedToPath = d.saved_to ?? filePath
+            dispatch({ type: 'WRITE_SUCCESS', savedTo: savedToPath })
+            alerts?.showAlert('success', `Saved → ${savedToPath}`)
         } catch (e) {
             dispatch({ type: 'WRITE_FAIL', error: (e as Error).message })
+            alerts?.showAlert('error', (e as Error).message)
         }
     }
 
@@ -336,16 +360,6 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
                             Use the buttons above to read the live config, compare it with a file, or save it.
                         </Typography>
                     </Box>
-                )}
-
-                {/* ── Alerts row ── */}
-                {(readError || cmpError || writeError || savedTo) && (
-                    <Stack spacing={1} sx={{ width: '100%', maxWidth: '70%', mb: 2 }}>
-                        {readError && <Alert severity="error">{readError}</Alert>}
-                        {cmpError && <Alert severity="error">{cmpError}</Alert>}
-                        {writeError && <Alert severity="error">{writeError}</Alert>}
-                        {savedTo && <Alert severity="success">Saved → {savedTo}</Alert>}
-                    </Stack>
                 )}
 
                 {/* ── Step 1: Live JSON preview (only when no compare yet) ── */}

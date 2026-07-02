@@ -26,7 +26,7 @@ export interface AlertsManagerRef {
     showAlert: (severity: AlertColor, message: any) => void;
 }
 
-const AlertsManager = forwardRef<AlertsManagerRef, {}>((props, ref) => {
+const AlertsManager = forwardRef<AlertsManagerRef, {}>((_props, ref) => {
     const [alerts, setAlerts] = useState<AlertMessage[]>([]);
 
     useEffect(() => {

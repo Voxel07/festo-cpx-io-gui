@@ -172,9 +172,19 @@ export interface UIVisualizationMetadata {
     channel_anchors?: UIChannelAnchor[]
 }
 
+export interface PowerSupplyConfig {
+    ComPort?: string | null
+    'Ip addr'?: string | null
+    comport?: string | null
+    ip_address?: string | null
+    pl_channel?: number | null
+    ps_channel?: number | null
+}
+
 export interface BenchConfig {
     schema_version: string
     test_bench: TestBenchMetadata
+    power_supply?: PowerSupplyConfig | null
     module_types: Record<string, ModuleTypeDefinition>
     module_instances: ModuleInstance[]
     wiring: WiringConnection[]

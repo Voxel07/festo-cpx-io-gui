@@ -8,11 +8,9 @@ import { TooltipButton } from './TooltipButton'
 import {
     useNodesState,
     useEdgesState,
-    BaseEdge,
-    EdgeLabelRenderer,
     Panel,
 } from '@xyflow/react'
-import type { Node, Edge, NodeTypes, EdgeTypes, EdgeChange, EdgeProps } from '@xyflow/react'
+import type { Node, Edge, NodeTypes, EdgeTypes, EdgeChange } from '@xyflow/react'
 import TopologyCanvas from './TopologyCanvas'
 import ModuleNode from './ModuleNode'
 import BackplaneNode from './BackplaneNode'

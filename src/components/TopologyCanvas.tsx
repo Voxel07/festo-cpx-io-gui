@@ -11,7 +11,7 @@ import {
     Controls,
     useReactFlow,
 } from '@xyflow/react'
-import type { Node, Edge, NodeTypes, EdgeTypes, EdgeChange, OnNodesChange, OnEdgesChange, OnConnect, OnReconnect, IsValidConnection, NodeMouseHandler } from '@xyflow/react'
+import type { Node, Edge, NodeTypes, EdgeTypes, OnNodesChange, OnEdgesChange, OnConnect, OnReconnect, IsValidConnection, NodeMouseHandler } from '@xyflow/react'
 
 interface Props {
     nodes: Node[]

@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     Button, FormControlLabel, Checkbox, Box, Typography, Divider,
@@ -13,19 +12,32 @@ interface Props {
     numValves?: number
     maxValves?: number
     onToggle: (id: string, hide: boolean) => void
+    onSetMountedValves?: (mountedValves: number[]) => void
     onNumValvesChange?: (num: number) => void
     onClose: () => void
 }
 
-export default function ValveEditorDialog({ open, svgUrl, hiddenValves, numValves, maxValves = 16, onToggle, onNumValvesChange, onClose }: Props) {
+export default function ValveEditorDialog({ open, svgUrl, hiddenValves, numValves, maxValves = 16, onToggle, onSetMountedValves, onNumValvesChange, onClose }: Props) {
     const valveGroups = useValveGroups(open ? svgUrl : '', numValves)
     const displayUrl = useModifiedSvg(svgUrl, hiddenValves, numValves)
     const hiddenSet = new Set(hiddenValves)
+    const mountedIndices = valveGroups.reduce<number[]>((acc, id, idx) => {
+        if (!hiddenSet.has(id)) acc.push(idx)
+        return acc
+    }, [])
+
+    function setAllMounted(mounted: boolean) {
+        if (onSetMountedValves) {
+            onSetMountedValves(mounted ? valveGroups.map((_, idx) => idx) : [])
+            return
+        }
+        valveGroups.forEach(id => onToggle(id, !mounted))
+    }
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
             <DialogTitle sx={{ fontSize: '0.9rem', fontWeight: 700, pb: 1 }}>
-                ⚙ Configure Mounted Valves
+                Configure Mounted Valves
             </DialogTitle>
 
             <DialogContent dividers>
@@ -43,7 +55,7 @@ export default function ValveEditorDialog({ open, svgUrl, hiddenValves, numValve
                     </Box>
 
                     <Box sx={{ flex: 1 }}>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                             Uncheck valve slots that have <strong>no valve physically mounted</strong>.
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
@@ -92,13 +104,16 @@ export default function ValveEditorDialog({ open, svgUrl, hiddenValves, numValve
             </DialogContent>
 
             <DialogActions>
-                <Button size="small" onClick={() => valveGroups.forEach(id => onToggle(id, false))}>
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                    {mountedIndices.length}/{valveGroups.length} mounted
+                </Typography>
+                <Box sx={{ flex: 1 }} />
+                <Button size="small" onClick={() => setAllMounted(true)}>
                     All Mounted
                 </Button>
-                <Button size="small" color="warning" onClick={() => valveGroups.forEach(id => onToggle(id, true))}>
+                <Button size="small" color="warning" onClick={() => setAllMounted(false)}>
                     All Empty
                 </Button>
-                <Box sx={{ flex: 1 }} />
                 <Button size="small" variant="contained" onClick={onClose}>
                     Done
                 </Button>

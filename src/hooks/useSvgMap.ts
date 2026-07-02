@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 // Icon file mapping bundled at build time — no network fetch needed.
 import iconMapping from '../assets/IconFileMapping.json'
 

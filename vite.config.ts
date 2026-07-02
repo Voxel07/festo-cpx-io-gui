@@ -2,11 +2,17 @@ import { defineConfig } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 
+const reactCompiler = reactCompilerPreset()
+reactCompiler.rolldown.filter ??= {}
+reactCompiler.rolldown.filter.id = {
+    exclude: ['src/utils/**', 'src/types.ts'],
+}
+
 // https://vite.dev/config/
 export default defineConfig({
     plugins: [
         react(),
-        babel({ presets: [reactCompilerPreset()] })
+        babel({ presets: [reactCompiler], sourceMap: false })
     ],
     server: {
         port: 5173,

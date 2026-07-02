@@ -3,9 +3,10 @@
  * When hiddenIds is empty the original URL is returned unchanged.
  * Uses DOMParser + XMLSerializer to produce a data URL so the img tag refreshes.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 const textCache = new Map<string, string>()
+const dataUrlCache = new Map<string, string>()
 
 function buildDataUrl(text: string, hiddenIds: string[], numValves?: number): string {
     const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
@@ -67,7 +68,8 @@ async function fetchSvgText(url: string): Promise<string> {
 }
 
 export function useModifiedSvg(svgUrl: string, hiddenIds: string[], numValves?: number): string {
-    const [, setTick] = useState(0)
+    const [tick, setTick] = useState(0)
+    const hiddenKey = hiddenIds.join('\u0000')
 
     // Trigger async fetch on cache miss (only setState in the async callback)
     useEffect(() => {
@@ -79,11 +81,20 @@ export function useModifiedSvg(svgUrl: string, hiddenIds: string[], numValves?: 
                 setTick(t => t + 1)  // trigger re-render so cached text is picked up below
             }
         })
-    }, [svgUrl, hiddenIds, numValves])
+    }, [svgUrl, hiddenKey, hiddenIds.length, numValves])
 
-    // Derive display URL from cache during render — React Compiler can optimise this
-    if (hiddenIds.length === 0 && numValves === undefined) return svgUrl
-    const text = textCache.get(svgUrl)
-    if (!text) return svgUrl
-    return buildDataUrl(text, hiddenIds, numValves)
+    return useMemo(() => {
+        // Derive display URL from cache during render — React Compiler can optimise this
+        if (hiddenIds.length === 0 && numValves === undefined) return svgUrl
+        const text = textCache.get(svgUrl)
+        if (!text) return svgUrl
+
+        const cacheKey = `${svgUrl}|${numValves ?? ''}|${hiddenKey}`
+        const cached = dataUrlCache.get(cacheKey)
+        if (cached) return cached
+
+        const next = buildDataUrl(text, hiddenIds, numValves)
+        dataUrlCache.set(cacheKey, next)
+        return next
+    }, [svgUrl, hiddenKey, hiddenIds, hiddenIds.length, numValves, tick])
 }
