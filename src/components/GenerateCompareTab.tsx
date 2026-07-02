@@ -5,7 +5,7 @@ import {
 } from '@mui/material'
 import SplitDiff from './SplitDiff'
 import type { Topology, TopologyModule, DiffStatus, CompareResult, BenchConfig } from '../types'
-import { configToTopology } from '../utils/configMapper'
+import { configToTopology } from '../App'
 import { AlertsContext } from '../utils/AlertsManager'
 
 // ── Sub-components ────────────────────────────────────────────────────────────

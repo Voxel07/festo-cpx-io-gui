@@ -178,7 +178,7 @@ function getPortTgtStyle(cx: number, cy: number, editMode: boolean): React.CSSPr
 function supportsMountedValves(name: string, type: string): boolean {
     const upName = name.toUpperCase()
     if (/^VABX-A-(?:S-)?EL-E(?:12|34)-AP[IPA]\b/.test(upName)) return false
-    return type === 'Valve' || upName.startsWith('VMPAL') || upName.startsWith('VAEM') || upName.startsWith('VTUX') || /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(upName)
+    return type.toLowerCase() === 'valve' || upName.startsWith('VMPAL') || upName.startsWith('VAEM') || upName.startsWith('VTUX') || /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(upName)
 }
 
 function defaultValveSlots(name: string, explicitSlots?: number): number | undefined {

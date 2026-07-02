@@ -80,24 +80,15 @@ interface Props {
     /** Module address currently selected in Raw Mode (for highlighting) */
     selectedModuleAddr?: number | null
     onSelectModuleAddr?: (addr: number | null) => void
+    rawConfig?: BenchConfig | null
 }
 
-async function fetchBenchConfig(onSuccess: (config: BenchConfig) => void, onFailure: () => void) {
-    try {
-        const r = await fetch('/config?file_path=bench_config.json')
-        if (r.ok) {
-            onSuccess(await r.json())
-        } else {
-            onFailure()
-        }
-    } catch {
-        onFailure()
-    }
-}
+
 
 export default function TopologyFlow({
     topology, diffStatus, removedModules = [], fullscreen, onToggleFullscreen,
-    activeModuleAddr = null, selectedModuleAddr = null, onSelectModuleAddr
+    activeModuleAddr = null, selectedModuleAddr = null, onSelectModuleAddr,
+    rawConfig
 }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
@@ -106,24 +97,16 @@ export default function TopologyFlow({
     const [ioEdges, setIoEdges] = useState<Edge[]>([])
     const alerts = useContext(AlertsContext)
 
-    // ── Auto-load bench_config.json on mount ────────────────────────────
+    // ── Derive ioEdges from rawConfig (no need to fetch again) ────────────
     useEffect(() => {
-        let cancelled = false
-        fetchBenchConfig(
-            (config) => {
-                if (cancelled) return
-                const wiring = config.wiring ?? []
-                const edges = wiringToEdges(wiring, config.module_instances ?? [])
-                setIoEdges(edges)
-                if (wiring.length === 0) alerts?.showAlert('warning', 'bench_config.json loaded but contains no wiring.')
-            },
-            () => {
-                if (cancelled) return
-                alerts?.showAlert('warning', 'bench_config.json not found. Save a configuration in the Connections tab to see I/O wiring here.')
-            }
-        )
-        return () => { cancelled = true }
-    }, [alerts])
+        if (!rawConfig) {
+            setIoEdges([])
+            return
+        }
+        const wiring = rawConfig.wiring ?? []
+        const edges = wiringToEdges(wiring, rawConfig.module_instances ?? [])
+        setIoEdges(edges)
+    }, [rawConfig])
 
     // When ioEdges load (possibly after topology is already set), merge them in
     useEffect(() => {
@@ -158,7 +141,7 @@ export default function TopologyFlow({
                 // Valve bodies always get showValves so the ModuleNode effect can
                 // derive the correct hidden set — even when MountedValves is empty
                 // (all unmounted) or full (all mounted).
-                const isValveBody = mod?.Type === 'Valve' || (mod?.MountedValves?.length ?? 0) > 0
+                const isValveBody = mod?.Type?.toLowerCase() === 'valve' || (mod?.MountedValves?.length ?? 0) > 0
                 const active = (activeModuleAddr != null && n.id === String(activeModuleAddr) && n.type === 'mod')
                     || (selectedModuleAddr != null && n.id === String(selectedModuleAddr) && n.type === 'mod')
                 const prev = prevNodeMap.get(n.id)

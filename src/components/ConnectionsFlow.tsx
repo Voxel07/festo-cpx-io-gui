@@ -84,6 +84,7 @@ interface Props {
     onModuleValveChange?: (addr: number, mountedValves: number[], valveSlots?: number) => void
     /** Called when a BenchConfig is loaded — allows parent to sync topology state */
     onConfigLoad?: (config: BenchConfig) => void
+    rawConfig?: BenchConfig | null
 }
 
 interface ConnectionsFlowState {
@@ -207,7 +208,7 @@ function connectionsFlowReducer(state: ConnectionsFlowState, action: Connections
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValveChange, onConfigLoad }: Props) {
+export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValveChange, onConfigLoad, rawConfig }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])  // ModuleNode | BackplaneNode
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
 
@@ -261,6 +262,81 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             }
         })
     }, [topology, ip])
+
+    // ── Sync from rawConfig ──────────────────────────────────────────────
+    useEffect(() => {
+        if (!rawConfig) return
+        const d = rawConfig
+
+        if (d.power_supply) {
+            const rawCom = d.power_supply.ComPort || d.power_supply.comport || ''
+            const rawIp = d.power_supply['Ip addr'] || d.power_supply.ip_address || ''
+            // If both are somehow present in the file, prioritize COM to prevent UI deadlock
+            const finalCom = rawCom
+            const finalIp = rawCom ? '' : rawIp
+
+            dispatch({
+                type: 'SET_PS_CONFIG_ALL',
+                ComPort: finalCom.replace(/^COM\s*/i, ''),
+                IpAddr: finalIp,
+                plChannel: d.power_supply.pl_channel != null ? String(d.power_supply.pl_channel) : '',
+                psChannel: d.power_supply.ps_channel != null ? String(d.power_supply.ps_channel) : '',
+            })
+        } else {
+            dispatch({ type: 'SET_PS_CONFIG_ALL', ComPort: '', IpAddr: '', plChannel: '', psChannel: '' })
+        }
+
+        const catByAddr: Record<number, string> = {}
+        ; (d.module_instances ?? []).forEach(inst => {
+            catByAddr[inst.address] = inst.category
+        })
+
+        function srcKind(addr: number): string {
+            const cat = catByAddr[addr] ?? 'inout'
+            if (cat === 'inout') return 'inout'
+            return 'out'
+        }
+        function tgtKind(addr: number): string {
+            const cat = catByAddr[addr] ?? 'inout'
+            if (cat === 'inout') return 'inout'
+            return 'in'
+        }
+
+        const loaded: WiringConnection[] = d.wiring ?? []
+        const newIo: Edge[] = loaded.map(c => {
+            const srcAddrStr = c.source_instance_id.replace(/^mod-0*/, '')
+            const tgtAddrStr = c.target_instance_id.replace(/^mod-0*/, '')
+            const srcAddr = srcAddrStr === '' ? 0 : parseInt(srcAddrStr)
+            const tgtAddr = tgtAddrStr === '' ? 0 : parseInt(tgtAddrStr)
+            const resolvedSrcHandle = c.source_handle || `src-${srcKind(srcAddr)}-${c.source_channel}`
+            const resolvedTgtHandle = c.target_handle || `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`
+            return {
+                id: c.id,
+                source: String(srcAddr),
+                sourceHandle: resolvedSrcHandle,
+                target: String(tgtAddr),
+                targetHandle: resolvedTgtHandle,
+                type: 'wire',
+                animated: true,
+                zIndex: 1000,
+                style: { stroke: IO_COLOR, strokeWidth: 2.5 },
+                label: c.label ?? `#${srcAddr}:${c.source_channel} → #${tgtAddr}:${c.target_channel}`,
+                data: {
+                    kind: 'io',
+                    portSrc: c.source_channel,
+                    portTgt: c.target_channel,
+                    waypoints: c.waypoints ?? undefined,
+                    straight: c.straight ?? false,
+                },
+            }
+        })
+
+        pendingIoRef.current = newIo
+        setEdges(prev => [
+            ...prev.filter(e => (e.data as Record<string, unknown>)?.kind !== 'io'),
+            ...newIo,
+        ])
+    }, [rawConfig, setEdges])
 
     // ── Build nodes when topology changes ─────────────────────
     useEffect(() => {
@@ -475,12 +551,21 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 return next
             })
 
-            config.power_supply = {
-                ComPort: psComPort.trim() || null,
-                'Ip addr': psIpAddr.trim() || null,
+            const hasPs = psComPort.trim() || psIpAddr.trim() || psPlChannel.trim() || psPsChannel.trim()
+            const formattedComPort = psComPort.trim() ? (
+                /^\d+$/.test(psComPort.trim()) ? `COM${psComPort.trim()}` : psComPort.trim()
+            ) : null
+            // Ensure only one connection method is saved
+            const formattedIpAddr = formattedComPort ? null : (psIpAddr.trim() || null)
+
+            config.power_supply = hasPs ? {
+                ComPort: formattedComPort,
+                comport: null,
+                'Ip addr': formattedIpAddr,
+                ip_address: null,
                 pl_channel: psPlChannel.trim() ? parseInt(psPlChannel) : null,
                 ps_channel: psPsChannel.trim() ? parseInt(psPsChannel) : null,
-            }
+            } : null
 
             const saveRes = await fetch('/config', {
                 method: 'POST',
@@ -511,93 +596,10 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 return
             }
 
-            if (d.power_supply) {
-                dispatch({
-                    type: 'SET_PS_CONFIG_ALL',
-                    ComPort: d.power_supply.ComPort || d.power_supply.comport || '',
-                    IpAddr: d.power_supply['Ip addr'] || d.power_supply.ip_address || '',
-                    plChannel: d.power_supply.pl_channel != null ? String(d.power_supply.pl_channel) : '',
-                    psChannel: d.power_supply.ps_channel != null ? String(d.power_supply.ps_channel) : '',
-                })
-            } else {
-                dispatch({ type: 'SET_PS_CONFIG_ALL', ComPort: '', IpAddr: '', plChannel: '', psChannel: '' })
-            }
-
-            // Build an address → category map so we can derive correct handle kind
-            const catByAddr: Record<number, string> = {}
-                ; (d.module_instances ?? []).forEach(inst => {
-                    catByAddr[inst.address] = inst.category
-                })
-
-            // Derive the ReactFlow handle kind from the module category:
-            //   output/inout module on the source side → 'out'
-            //   input/inout module on the target side → 'in'
-            //   otherwise → 'inout'
-            function srcKind(addr: number): string {
-                const cat = catByAddr[addr] ?? 'inout'
-                if (cat === 'inout') return 'inout'
-                return 'out'
-            }
-            function tgtKind(addr: number): string {
-                const cat = catByAddr[addr] ?? 'inout'
-                if (cat === 'inout') return 'inout'
-                return 'in'
-            }
-
-            const loaded: WiringConnection[] = d.wiring ?? []
-            const newIo: Edge[] = loaded.map(c => {
-                const srcAddrStr = c.source_instance_id.replace(/^mod-0*/, '')
-                const tgtAddrStr = c.target_instance_id.replace(/^mod-0*/, '')
-                const srcAddr = srcAddrStr === '' ? 0 : parseInt(srcAddrStr)
-                const tgtAddr = tgtAddrStr === '' ? 0 : parseInt(tgtAddrStr)
-                const resolvedSrcHandle = c.source_handle || `src-${srcKind(srcAddr)}-${c.source_channel}`
-                const resolvedTgtHandle = c.target_handle || `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`
-                return {
-                    id: c.id,
-                    source: String(srcAddr),
-                    sourceHandle: resolvedSrcHandle,
-                    target: String(tgtAddr),
-                    targetHandle: resolvedTgtHandle,
-                    type: 'wire',
-                    animated: true,
-                    zIndex: 1000,
-                    style: { stroke: IO_COLOR, strokeWidth: 2.5 },
-                    label: c.label ?? `#${srcAddr}:${c.source_channel} → #${tgtAddr}:${c.target_channel}`,
-                    data: {
-                        kind: 'io',
-                        portSrc: c.source_channel,
-                        portTgt: c.target_channel,
-                        waypoints: c.waypoints ?? undefined,
-                        straight: c.straight ?? false,
-                    },
-                }
-            })
-
-            // Stash IO edges BEFORE calling onConfigLoad so the topology rebuild
-            // effect (triggered by onConfigLoad changing topology) picks them up
-            // from pendingIoRef instead of the not-yet-updated ioEdgesRef.
-            pendingIoRef.current = newIo
-
             // Let the parent sync topology / rawConfig from the loaded file
             onConfigLoad?.(d)
 
-            // Also set edges directly – covers cases where topology doesn't change
-            // (same config already loaded) so the topology rebuild effect won't fire.
-            setEdges(prev => [
-                ...prev.filter(e => (e.data as Record<string, unknown>)?.kind !== 'io'),
-                ...newIo,
-            ])
-
-            // Restore mounted valve config for each valve body
-            if (d.module_instances) {
-                d.module_instances.forEach(inst => {
-                    if (inst.mounted_valves && inst.mounted_valves.length >= 0) {
-                        onModuleValveChange?.(inst.address, inst.mounted_valves ?? [], inst.valve_slots)
-                    }
-                })
-            }
-
-            alerts?.showAlert('success', `Loaded ${loaded.length} connection(s)`)
+            alerts?.showAlert('success', `Loaded config from ${loadPath}`)
         } catch (e) {
             alerts?.showAlert('error', `Error: ${(e as Error).message}`)
         }

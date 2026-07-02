@@ -6,8 +6,8 @@ import type { Node } from '@xyflow/react'
 
 // ─── Module classification ────────────────────────────────────────────────────
 
-function isApA(name: string, series?: string): boolean {
-    return series === 'CPX-AP-A' || name.includes('CPX-AP-A')
+function isApA(name: string): boolean {
+    return name.includes('CPX-AP-A')
 }
 
 /** EPLI interface module — AP-bus connectors are on top (AP-in) and bottom (AP-out)
@@ -94,9 +94,9 @@ function segmentModules(mods: TopologyModule[]): Segment[] {
     let i = 0
     while (i < mods.length) {
         const m = mods[i]
-        if (isApA(m.Name, m.Series)) {
+        if (isApA(m.Name)) {
             const run: TopologyModule[] = []
-            while (i < mods.length && isApA(mods[i].Name, mods[i].Series)) run.push(mods[i++])
+            while (i < mods.length && isApA(mods[i].Name)) run.push(mods[i++])
             // VABX bodies that follow an AP-A run with no interface module are physically
             // snapped onto the AP-A backplane via a PCB adapter – no cable, no separate group.
             while (i < mods.length && isValveBody(mods[i].Name)) run.push(mods[i++])

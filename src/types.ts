@@ -2,7 +2,6 @@ export interface TopologyModule {
     Name: string
     Modulecode: number
     ProductKey: string
-    Series?: string   // 'CPX-AP-A' | 'CPX-AP-I' | 'Other'
     Adress: number
     Type: string
     NumOfInputs: number
@@ -100,7 +99,6 @@ export interface ChannelDefinition {
 
 export interface ModuleTypeDefinition {
     module_code: number
-    product_family: string
     capabilities: string[]
     num_inputs: number
     num_outputs: number

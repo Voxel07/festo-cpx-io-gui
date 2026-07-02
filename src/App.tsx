@@ -1,8 +1,7 @@
-import { lazy, Suspense, useReducer, useRef, useEffect } from 'react'
+import { lazy, Suspense, useReducer, useRef, useEffect, useMemo } from 'react'
 import { Box, Tabs, Tab, CircularProgress, Typography } from '@mui/material'
 import AppHeader from './components/AppHeader'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig } from './types'
-import { configToTopology } from './utils/configMapper'
 import { AlertsManager, AlertsContext } from './utils/AlertsManager'
 import type { AlertsManagerRef } from './utils/AlertsManager'
 
@@ -79,6 +78,29 @@ type AppAction =
     | { type: 'SET_RESULT'; topo: Topology | null; status: DiffStatus | null; removed: TopologyModule[]; config?: BenchConfig }
     | { type: 'CONFIG_LOAD'; config: BenchConfig }
     | { type: 'MODULE_VALVE_CHANGE'; addr: number; mountedValves: number[]; valveSlots?: number }
+
+export function configToTopology(config: BenchConfig): Topology {
+    return {
+        Name: config.test_bench.name || 'CPX-AP Bench',
+        Description: config.test_bench.description || '',
+        Version: config.test_bench.version || '1.0',
+        Topology: (config.module_instances || []).map(inst => {
+            const typeDef = config.module_types?.[inst.module_type_ref]
+            return {
+                Name: inst.display_name,
+                Modulecode: inst.module_code,
+                ProductKey: inst.product_key,
+                Adress: inst.address,
+                Type: inst.category, // Direct mapping from backend metadata!
+                NumOfInputs: inst.num_inputs ?? typeDef?.num_inputs ?? 0,
+                NumOfOutputs: inst.num_outputs ?? typeDef?.num_outputs ?? 0,
+                NumOfInOuts: inst.num_inouts ?? typeDef?.num_configurable ?? 0,
+                MountedValves: inst.mounted_valves ?? undefined,
+                ValveSlots: inst.valve_slots ?? typeDef?.valve_count ?? undefined,
+            }
+        })
+    }
+}
 
 function appReducer(state: AppState, action: AppAction): AppState {
     switch (action.type) {
@@ -212,6 +234,7 @@ export default function App() {
         activeModuleAddr,
         rawSelectedAddr,
         diagOpen,
+        rawConfig,
     } = state
 
     const alertsRef = useRef<AlertsManagerRef>(null)
@@ -246,6 +269,25 @@ export default function App() {
             })
         }, 2000)
         return () => clearInterval(timer)
+    }, [])
+
+    // Auto-load bench_config.json on startup
+    useEffect(() => {
+        let cancelled = false
+        fetch('/config?file_path=bench_config.json')
+            .then(r => {
+                if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`)
+                return r.json()
+            })
+            .then(config => {
+                if (!cancelled && config?.test_bench) {
+                    dispatch({ type: 'CONFIG_LOAD', config })
+                }
+            })
+            .catch(err => {
+                console.error("Auto-load config failed:", err)
+            })
+        return () => { cancelled = true }
     }, [])
 
     // Drag-to-resize height handle
@@ -301,8 +343,12 @@ export default function App() {
         dispatch({ type: 'MODULE_VALVE_CHANGE', addr, mountedValves, valveSlots })
     }
 
+    const alertsContextValue = useMemo(() => ({
+        showAlert: (sev: any, msg: any) => alertsRef.current?.showAlert(sev, msg)
+    }), [])
+
     return (
-        <AlertsContext.Provider value={{ showAlert: (sev: any, msg: any) => alertsRef.current?.showAlert(sev, msg) }}>
+        <AlertsContext.Provider value={alertsContextValue}>
             <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
                 <AlertsManager ref={alertsRef} />
                 <AppHeader
@@ -346,6 +392,7 @@ export default function App() {
                                     activeModuleAddr={activeModuleAddr}
                                     selectedModuleAddr={tab === 3 ? rawSelectedAddr : null}
                                     onSelectModuleAddr={tab === 3 ? (addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })) : undefined}
+                                    rawConfig={rawConfig}
                                 />
                             </Suspense>
                         </Box>
@@ -407,6 +454,7 @@ export default function App() {
                                         ip={ip}
                                         onModuleValveChange={onModuleValveChange}
                                         onConfigLoad={onConfigLoad}
+                                        rawConfig={rawConfig}
                                     />
                                 </Suspense>
                             </Box>

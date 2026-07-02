@@ -261,6 +261,7 @@ export default function ConnectionsToolbar({
                         value={psComPort}
                         onChange={e => onPsComPortChange(e.target.value)}
                         placeholder="e.g. COM3"
+                        disabled={psIpAddr.trim().length > 0}
                         sx={{ width: 120, background: '#fff' }}
                         slotProps={{ inputLabel: { sx: { fontSize: '0.75rem' } } }}
                     />
@@ -270,6 +271,7 @@ export default function ConnectionsToolbar({
                         value={psIpAddr}
                         onChange={e => onPsIpAddrChange(e.target.value)}
                         placeholder="e.g. 192.168.0.20"
+                        disabled={psComPort.trim().length > 0}
                         sx={{ width: 150, background: '#fff' }}
                         slotProps={{ inputLabel: { sx: { fontSize: '0.75rem' } } }}
                     />

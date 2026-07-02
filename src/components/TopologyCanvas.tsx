@@ -10,6 +10,7 @@ import {
     BackgroundVariant,
     Controls,
     useReactFlow,
+    useNodesInitialized,
 } from '@xyflow/react'
 import type { Node, Edge, NodeTypes, EdgeTypes, OnNodesChange, OnEdgesChange, OnConnect, OnReconnect, IsValidConnection, NodeMouseHandler } from '@xyflow/react'
 
@@ -37,8 +38,10 @@ interface Props {
 
 function FitViewTrigger({ nodesStr, padding }: { nodesStr: string, padding: number }) {
     const { fitView } = useReactFlow()
+    const initialized = useNodesInitialized()
+    
     useEffect(() => {
-        if (nodesStr) {
+        if (nodesStr && initialized) {
             const timer = setTimeout(() => {
                 window.requestAnimationFrame(() => {
                     fitView({ padding, duration: 400 })
@@ -46,7 +49,7 @@ function FitViewTrigger({ nodesStr, padding }: { nodesStr: string, padding: numb
             }, 50)
             return () => clearTimeout(timer)
         }
-    }, [nodesStr, fitView, padding])
+    }, [nodesStr, initialized, fitView, padding])
     return null
 }
 
