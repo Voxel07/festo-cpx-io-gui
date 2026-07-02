@@ -37,6 +37,7 @@ interface AppState {
     rawSelectedAddr: number | null
     diagOpen: boolean
     rawConfig: BenchConfig | null
+    configPath: string
 }
 
 const initialAppState: AppState = {
@@ -56,6 +57,7 @@ const initialAppState: AppState = {
     rawSelectedAddr: null,
     diagOpen: false,
     rawConfig: null,
+    configPath: 'bench_config.json',
 }
 
 type AppAction =
@@ -78,6 +80,7 @@ type AppAction =
     | { type: 'SET_RESULT'; topo: Topology | null; status: DiffStatus | null; removed: TopologyModule[]; config?: BenchConfig }
     | { type: 'CONFIG_LOAD'; config: BenchConfig }
     | { type: 'MODULE_VALVE_CHANGE'; addr: number; mountedValves: number[]; valveSlots?: number }
+    | { type: 'SET_CONFIG_PATH'; path: string }
 
 export function configToTopology(config: BenchConfig): Topology {
     return {
@@ -110,6 +113,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
                 tab: action.tab,
                 rawSelectedAddr: action.tab !== 3 ? null : state.rawSelectedAddr,
             }
+        case 'SET_CONFIG_PATH':
+            return { ...state, configPath: action.path }
         case 'SET_IP':
             return { ...state, ip: action.ip }
         case 'SET_TIMEOUT':
@@ -235,6 +240,7 @@ export default function App() {
         rawSelectedAddr,
         diagOpen,
         rawConfig,
+        configPath,
     } = state
 
     const alertsRef = useRef<AlertsManagerRef>(null)
@@ -362,6 +368,8 @@ export default function App() {
                     pbStatus={pbStatus}
                     onCheckPocketBase={checkPocketBase}
                     onOpenDiagnostics={() => dispatch({ type: 'SET_DIAG_OPEN', open: true })}
+                    configPath={configPath}
+                    onConfigPathChange={path => dispatch({ type: 'SET_CONFIG_PATH', path })}
                 />
 
                 {/* ── Topology canvas (collapsible) ── */}
@@ -441,7 +449,7 @@ export default function App() {
                         {tab === 0 && (
                             <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
                                 <Suspense fallback={<LoadingChunk label="Loading topology tools…" />}>
-                                    <GenerateCompareTab ip={ip} timeout={timeout} onResult={onResult} />
+                                    <GenerateCompareTab ip={ip} timeout={timeout} onResult={onResult} configPath={configPath} />
                                 </Suspense>
                             </Box>
                         )}
@@ -455,6 +463,7 @@ export default function App() {
                                         onModuleValveChange={onModuleValveChange}
                                         onConfigLoad={onConfigLoad}
                                         rawConfig={rawConfig}
+                                        configPath={configPath}
                                     />
                                 </Suspense>
                             </Box>

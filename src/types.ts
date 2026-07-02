@@ -59,6 +59,9 @@ export interface IOConnection {
     waypoints?: Array<{ x: number; y: number }>
     /** True if point-to-point straight line routing is used */
     straight?: boolean
+    /** For per-channel wiring: specific subchannel index (e.g., 0 or 1 for M12, 0 for M8) */
+    source_subchannel?: number
+    target_subchannel?: number
 }
 
 export interface ConnectionEntry {
@@ -134,6 +137,8 @@ export interface WiringConnection {
     label?: string
     waypoints?: Array<{ x: number; y: number }>
     straight?: boolean
+    source_subchannel?: number
+    target_subchannel?: number
 }
 
 export interface TestDefinition {

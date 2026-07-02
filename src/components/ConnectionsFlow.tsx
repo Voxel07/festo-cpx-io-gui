@@ -25,6 +25,7 @@ import type { Topology, DiffStatus, ConnectionEntry, BenchConfig, WiringConnecti
 import ConnectionsToolbar from './ConnectionsToolbar'
 import WiringTestPanel from './WiringTestPanel'
 import { AlertsContext } from '../utils/AlertsManager'
+import ChannelSelectionModal from './ChannelSelectionModal'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -85,13 +86,12 @@ interface Props {
     /** Called when a BenchConfig is loaded — allows parent to sync topology state */
     onConfigLoad?: (config: BenchConfig) => void
     rawConfig?: BenchConfig | null
+    configPath: string
 }
 
 interface ConnectionsFlowState {
     showCables: boolean
     showWires: boolean
-    savePath: string
-    loadPath: string
     showPsConfig: boolean
     psComPort: string
     psIpAddr: string
@@ -104,12 +104,11 @@ interface ConnectionsFlowState {
     testAllBusy: boolean
     actuateModule: TopologyModule | null
     actuateMountedValves: number[] | undefined
+    connectionMode: 'port' | 'channel'
 }
 
 const initialConnectionsFlowState: ConnectionsFlowState = {
     showCables: false,
-    savePath: 'bench_config.json',
-    loadPath: 'bench_config.json',
     showWires: true,
     showPsConfig: false,
     psComPort: '',
@@ -123,12 +122,11 @@ const initialConnectionsFlowState: ConnectionsFlowState = {
     testAllBusy: false,
     actuateModule: null,
     actuateMountedValves: undefined,
+    connectionMode: 'port',
 }
 
 type ConnectionsFlowAction =
     | { type: 'TOGGLE_CABLES' }
-    | { type: 'SET_SAVE_PATH'; path: string }
-    | { type: 'SET_LOAD_PATH'; path: string }
     | { type: 'TOGGLE_WIRES' }
     | { type: 'TOGGLE_PS_CONFIG' }
     | { type: 'SET_PS_COMPORT'; port: string }
@@ -145,15 +143,12 @@ type ConnectionsFlowAction =
     | { type: 'SET_TEST_ALL_BUSY'; busy: boolean }
     | { type: 'OPEN_ACTUATE'; module: TopologyModule; mountedValves: number[] | undefined }
     | { type: 'CLOSE_ACTUATE' }
+    | { type: 'SET_CONNECTION_MODE'; mode: 'port' | 'channel' }
 
 function connectionsFlowReducer(state: ConnectionsFlowState, action: ConnectionsFlowAction): ConnectionsFlowState {
     switch (action.type) {
         case 'TOGGLE_CABLES':
             return { ...state, showCables: !state.showCables }
-        case 'SET_SAVE_PATH':
-            return { ...state, savePath: action.path }
-        case 'SET_LOAD_PATH':
-            return { ...state, loadPath: action.path }
         case 'TOGGLE_WIRES':
             return { ...state, showWires: !state.showWires }
         case 'TOGGLE_PS_CONFIG':
@@ -201,6 +196,8 @@ function connectionsFlowReducer(state: ConnectionsFlowState, action: Connections
             return { ...state, actuateModule: action.module, actuateMountedValves: action.mountedValves }
         case 'CLOSE_ACTUATE':
             return { ...state, actuateModule: null, actuateMountedValves: undefined }
+        case 'SET_CONNECTION_MODE':
+            return { ...state, connectionMode: action.mode }
         default:
             return state
     }
@@ -208,15 +205,13 @@ function connectionsFlowReducer(state: ConnectionsFlowState, action: Connections
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValveChange, onConfigLoad, rawConfig }: Props) {
+export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValveChange, onConfigLoad, rawConfig, configPath }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])  // ModuleNode | BackplaneNode
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
 
     const [state, dispatch] = useReducer(connectionsFlowReducer, initialConnectionsFlowState)
     const {
         showCables,
-        savePath,
-        loadPath,
         showWires,
         showPsConfig,
         psComPort,
@@ -230,6 +225,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         testAllBusy,
         actuateModule,
         actuateMountedValves,
+        connectionMode,
     } = state
 
     const ioEdgesRef = useRef<Edge[]>([])
@@ -247,6 +243,17 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
     // Fetch param 20201 for VABX modules
     const [vabxInputs, setVabxInputs] = useState<Record<number, boolean>>({})
+
+    const [pendingConn, setPendingConn] = useState<{
+        conn: Connection,
+        srcIsM12: boolean,
+        tgtIsM12: boolean,
+        sh: string,
+        th: string,
+        srcNode: string,
+        tgtNode: string
+    } | null>(null)
+
     useEffect(() => {
         if (!topology?.Topology?.length || !ip) return
         topology.Topology.forEach(async (mod) => {
@@ -325,6 +332,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     kind: 'io',
                     portSrc: c.source_channel,
                     portTgt: c.target_channel,
+                    subSrc: c.source_subchannel,
+                    subTgt: c.target_subchannel,
                     waypoints: c.waypoints ?? undefined,
                     straight: c.straight ?? false,
                 },
@@ -421,6 +430,65 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     }, [dispatch])
 
     // ── New connection ────────────────────────────────────
+    const processConnection = useCallback((
+        srcNode: string, tgtNode: string, sh: string, th: string,
+        subSrc?: number, subTgt?: number
+    ) => {
+        const pSrc = portId(sh)
+        const pTgt = portId(th)
+        
+        // Block same-port self-loop (same module AND same port ID) but allow
+        // cross-port connections on the same module (DIDO / DIO loopback).
+        if (srcNode === tgtNode && pSrc === pTgt) return
+        
+        // If subchannels are provided, append them to the edge ID to make it unique per channel.
+        const edgeId = subSrc !== undefined && subTgt !== undefined
+            ? `io-${srcNode}-${pSrc}.${subSrc}-${tgtNode}-${pTgt}.${subTgt}`
+            : `io-${srcNode}-${pSrc}-${tgtNode}-${pTgt}`
+
+        // Wire colour by source port kind
+        const outKind = handleKind(sh)
+        let wireColor = outKind === 'out' ? '#2e7d32' : outKind === 'in' ? '#1565c0' : IO_COLOR
+
+        // Multi-color logic for multiple edges to same device
+        if (subSrc !== undefined || subTgt !== undefined) {
+            // Count existing edges between these two nodes
+            const existingEdges = edges.filter(e => e.source === srcNode && e.target === tgtNode)
+            const colorPalette = [
+                wireColor,
+                '#d81b60', // Pink/Red
+                '#00897b', // Teal
+                '#f57c00', // Orange
+                '#8e24aa', // Purple
+                '#1e88e5', // Blue
+                '#c0ca33', // Lime
+                '#546e7a', // Blue Grey
+            ]
+            if (existingEdges.length > 0) {
+                wireColor = colorPalette[existingEdges.length % colorPalette.length]
+            }
+        }
+
+        const newEdge: Edge = {
+            id: edgeId,
+            source: srcNode,
+            sourceHandle: sh,
+            target: tgtNode,
+            targetHandle: th,
+            type: 'wire',
+            animated: true,
+            zIndex: 1000,
+            style: { stroke: wireColor, strokeWidth: 2 },
+            label: subSrc !== undefined
+                ? `#${srcNode}:${pSrc}.${subSrc} \u2192 #${tgtNode}:${pTgt}.${subTgt}`
+                : `#${srcNode}:${pSrc} \u2192 #${tgtNode}:${pTgt}`,
+            data: { kind: 'io', portSrc: pSrc, portTgt: pTgt, subSrc, subTgt, wireColor, straight: false },
+        }
+        // Only deduplicate by edge ID — allow fan-out (one output → many inputs)
+        // and fan-in (many outputs → one input). Exact duplicate = same ID.
+        setEdges(prev => prev.some(e => e.id === edgeId) ? prev : [...prev, newEdge])
+    }, [edges, setEdges])
+
     const onConnect = useCallback((connection: Connection) => {
         let sh = connection.sourceHandle ?? ''
         let th = connection.targetHandle ?? ''
@@ -437,34 +505,22 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             th = tmpH.replace(/^src-/, 'tgt-') // src-in-X0  → tgt-in-X0
         }
 
-        const pSrc = portId(sh)
-        const pTgt = portId(th)
-        // Block same-port self-loop (same module AND same port ID) but allow
-        // cross-port connections on the same module (DIDO / DIO loopback).
-        if (srcNode === tgtNode && pSrc === pTgt) return
-        const edgeId = `io-${srcNode}-${pSrc}-${tgtNode}-${pTgt}`
-
-        // Wire colour by source port kind
-        const outKind = handleKind(sh)
-        const wireColor = outKind === 'out' ? '#2e7d32' : outKind === 'in' ? '#1565c0' : IO_COLOR
-
-        const newEdge: Edge = {
-            id: edgeId,
-            source: srcNode,
-            sourceHandle: sh,
-            target: tgtNode,
-            targetHandle: th,
-            type: 'wire',
-            animated: true,
-            zIndex: 1000,
-            style: { stroke: wireColor, strokeWidth: 2 },
-            label: `#${srcNode}:${pSrc} \u2192 #${tgtNode}:${pTgt}`,
-            data: { kind: 'io', portSrc: pSrc, portTgt: pTgt, wireColor, straight: false },
+        if (connectionMode === 'channel') {
+            const srcMod = topology?.Topology?.find(m => String(m.Adress) === srcNode)
+            const tgtMod = topology?.Topology?.find(m => String(m.Adress) === tgtNode)
+            const srcIsM12 = isM12(srcMod?.Name)
+            const tgtIsM12 = isM12(tgtMod?.Name)
+            
+            if (srcIsM12 || tgtIsM12) {
+                setPendingConn({ conn: connection, srcIsM12, tgtIsM12, sh, th, srcNode, tgtNode })
+            } else {
+                // both M8, auto connect on channel 0
+                processConnection(srcNode, tgtNode, sh, th, 0, 0)
+            }
+        } else {
+            processConnection(srcNode, tgtNode, sh, th)
         }
-        // Only deduplicate by edge ID — allow fan-out (one output → many inputs)
-        // and fan-in (many outputs → one input). Exact duplicate = same ID.
-        setEdges(prev => prev.some(e => e.id === edgeId) ? prev : [...prev, newEdge])
-    }, [setEdges])
+    }, [connectionMode, topology, processConnection])
 
     // ── Reconnect: drag an existing IO edge endpoint to a new port ──
     const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
@@ -489,9 +545,20 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             nsh = th.replace(/^tgt-/, 'src-')
             nth = sh.replace(/^src-/, 'tgt-')
         }
+        let subSrc: number | undefined
+        let subTgt: number | undefined
+        if ((c.data as Record<string, unknown>)?.subSrc !== undefined) {
+            subSrc = (c.data as Record<string, unknown>).subSrc as number
+            subTgt = (c.data as Record<string, unknown>).subTgt as number
+        }
+
         // Block same-port self-loop; allow cross-port same-module connections (DIDO / DIO loopback).
         if (srcNode === tgtNode && portId(nsh) === portId(nth)) return false
-        const edgeId = `io-${srcNode}-${portId(nsh)}-${tgtNode}-${portId(nth)}`
+        
+        const edgeId = subSrc !== undefined && subTgt !== undefined
+            ? `io-${srcNode}-${portId(nsh)}.${subSrc}-${tgtNode}-${portId(nth)}.${subTgt}`
+            : `io-${srcNode}-${portId(nsh)}-${tgtNode}-${portId(nth)}`
+
         return !ioEdgesRef.current.some(e => e.id === edgeId)
     }, [])
 
@@ -499,7 +566,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     async function doSave() {
         try {
             // 1. Fetch current config
-            const getRes = await fetch(`/config?file_path=${encodeURIComponent(savePath)}`)
+            const getRes = await fetch(`/config?file_path=${encodeURIComponent(configPath)}`)
             if (!getRes.ok) {
                 alerts?.showAlert('error', 'Could not read existing configuration to update. Make sure you generate/save a configuration first.')
                 return
@@ -524,6 +591,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     label: typeof e.label === 'string' ? e.label : '',
                     waypoints: (d.waypoints as Array<{ x: number; y: number }>) ?? undefined,
                     straight: d.straight === true ? true : undefined,
+                    source_subchannel: typeof d.subSrc === 'number' ? d.subSrc : undefined,
+                    target_subchannel: typeof d.subTgt === 'number' ? d.subTgt : undefined,
                 }
             })
 
@@ -572,7 +641,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     config,
-                    save_path: savePath,
+                    save_path: configPath,
                 }),
             })
             const d = await saveRes.json()
@@ -589,7 +658,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     // ── Load ──────────────────────────────────────────────
     async function doLoad() {
         try {
-            const r = await fetch(`/config?file_path=${encodeURIComponent(loadPath)}`)
+            const r = await fetch(`/config?file_path=${encodeURIComponent(configPath)}`)
             const d: BenchConfig = await r.json()
             if (!r.ok) {
                 alerts?.showAlert('error', `Error: ${(d as any).detail ?? 'Unknown error'}`)
@@ -599,7 +668,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             // Let the parent sync topology / rawConfig from the loaded file
             onConfigLoad?.(d)
 
-            alerts?.showAlert('success', `Loaded config from ${loadPath}`)
+            alerts?.showAlert('success', `Loaded config from ${configPath}`)
         } catch (e) {
             alerts?.showAlert('error', `Error: ${(e as Error).message}`)
         }
@@ -616,6 +685,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         tgtAddr: number; tgtCh: string; label: string
         /** Channels per port: 2 for M12-5P connectors, 1 for M8 / single-channel */
         srcCPP: number; tgtCPP: number
+        srcSubchannel?: number; tgtSubchannel?: number
     }
 
 
@@ -634,6 +704,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 label: typeof e.label === 'string' ? e.label : `#${e.source} → #${e.target}`,
                 srcCPP: isM12(srcMod?.Name) ? 2 : 1,
                 tgtCPP: isM12(tgtMod?.Name) ? 2 : 1,
+                srcSubchannel: typeof d.subSrc === 'number' ? d.subSrc : undefined,
+                tgtSubchannel: typeof d.subTgt === 'number' ? d.subTgt : undefined,
             })
         }
         return acc
@@ -642,10 +714,16 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     async function doReadInput(conn: TestConn) {
         if (!ip) return
         try {
-            const r = await fetch(
-                `/io/read-input?ip_address=${encodeURIComponent(ip)}&module_addr=${conn.tgtAddr}&channel=${encodeURIComponent(conn.tgtCh)}&channels_per_port=${conn.tgtCPP}`,
-                { signal: AbortSignal.timeout(8000) },
-            )
+            const url = new URL('/io/read-input', window.location.origin)
+            url.searchParams.set('ip_address', ip)
+            url.searchParams.set('module_addr', String(conn.tgtAddr))
+            url.searchParams.set('channel', conn.tgtCh)
+            url.searchParams.set('channels_per_port', String(conn.tgtCPP))
+            if (conn.tgtSubchannel !== undefined) {
+                url.searchParams.set('subchannel', String(conn.tgtSubchannel))
+            }
+
+            const r = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) })
             if (!r.ok) {
                 const errMsg = await extractErrMsg(r)
                 dispatch({ type: 'SET_TEST_RESULT', edgeId: conn.id, result: { value: null, error: errMsg } })
@@ -666,7 +744,14 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             const r = await fetch('/io/set-output', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: newVal, channels_per_port: conn.srcCPP }),
+                body: JSON.stringify({
+                    ip_address: ip ?? '',
+                    module_addr: conn.srcAddr,
+                    channel: conn.srcCh,
+                    value: newVal,
+                    channels_per_port: conn.srcCPP,
+                    subchannel: conn.srcSubchannel
+                }),
                 signal: AbortSignal.timeout(8000),
             })
             if (!r.ok) {
@@ -700,7 +785,14 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     const rOn = await fetch('/io/set-output', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: true, channels_per_port: conn.srcCPP }),
+                        body: JSON.stringify({
+                            ip_address: ip ?? '',
+                            module_addr: conn.srcAddr,
+                            channel: conn.srcCh,
+                            value: true,
+                            channels_per_port: conn.srcCPP,
+                            subchannel: conn.srcSubchannel
+                        }),
                         signal: AbortSignal.timeout(8000),
                     })
                     dispatch({ type: 'SET_OUTPUT_STATE', edgeId: conn.id, value: true })
@@ -715,7 +807,14 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     await fetch('/io/set-output', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: false, channels_per_port: conn.srcCPP }),
+                        body: JSON.stringify({
+                            ip_address: ip ?? '',
+                            module_addr: conn.srcAddr,
+                            channel: conn.srcCh,
+                            value: false,
+                            channels_per_port: conn.srcCPP,
+                            subchannel: conn.srcSubchannel
+                        }),
                         signal: AbortSignal.timeout(8000),
                     }).catch(() => { /* best-effort LOW */ })
                     dispatch({ type: 'SET_OUTPUT_STATE', edgeId: conn.id, value: false })
@@ -737,7 +836,14 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     await fetch('/io/set-output', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ip_address: ip ?? '', module_addr: conn.srcAddr, channel: conn.srcCh, value: false, channels_per_port: conn.srcCPP }),
+                        body: JSON.stringify({
+                            ip_address: ip ?? '',
+                            module_addr: conn.srcAddr,
+                            channel: conn.srcCh,
+                            value: false,
+                            channels_per_port: conn.srcCPP,
+                            subchannel: conn.srcSubchannel
+                        }),
                     })
                 } catch { /* best-effort */ }
             }
@@ -776,13 +882,11 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 onToggleCables={() => dispatch({ type: 'TOGGLE_CABLES' })}
                 showWires={showWires}
                 onToggleWires={() => dispatch({ type: 'TOGGLE_WIRES' })}
+                connectionMode={connectionMode}
+                onConnectionModeChange={(mode) => dispatch({ type: 'SET_CONNECTION_MODE', mode })}
                 showPsConfig={showPsConfig}
                 onTogglePsConfig={() => dispatch({ type: 'TOGGLE_PS_CONFIG' })}
-                savePath={savePath}
-                onSavePathChange={path => dispatch({ type: 'SET_SAVE_PATH', path })}
                 onSave={doSave}
-                loadPath={loadPath}
-                onLoadPathChange={path => dispatch({ type: 'SET_LOAD_PATH', path })}
                 onLoad={doLoad}
                 onClear={doClear}
                 showTestPanel={showTestPanel}
@@ -842,6 +946,35 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 ip={ip ?? ''}
                 mountedValves={actuateMountedValves}
                 onClose={() => dispatch({ type: 'CLOSE_ACTUATE' })}
+            />
+
+            {/* ── Channel Selection Modal ──────── */}
+            <ChannelSelectionModal
+                open={pendingConn !== null}
+                sourceIsM12={pendingConn?.srcIsM12 ?? false}
+                targetIsM12={pendingConn?.tgtIsM12 ?? false}
+                onConfirm={(srcSub, tgtSub) => {
+                    if (pendingConn) {
+                        const { srcNode, tgtNode, sh, th, srcIsM12, tgtIsM12 } = pendingConn
+
+                        if (srcSub === 'both' || tgtSub === 'both') {
+                            const srcChannels = (srcSub === 'both' && srcIsM12) ? [0, 1] : [srcSub === 'both' ? 0 : srcSub]
+                            const tgtChannels = (tgtSub === 'both' && tgtIsM12) ? [0, 1] : [tgtSub === 'both' ? 0 : tgtSub]
+
+                            const maxLen = Math.max(srcChannels.length, tgtChannels.length)
+                            for (let i = 0; i < maxLen; i++) {
+                                const s = srcChannels[i % srcChannels.length]
+                                const t = tgtChannels[i % tgtChannels.length]
+                                processConnection(srcNode, tgtNode, sh, th, s as number, t as number)
+                            }
+                        } else {
+                            processConnection(srcNode, tgtNode, sh, th, srcSub as number, tgtSub as number)
+                        }
+                        
+                        setPendingConn(null)
+                    }
+                }}
+                onCancel={() => setPendingConn(null)}
             />
         </Box>
     )

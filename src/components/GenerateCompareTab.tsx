@@ -10,22 +10,7 @@ import { AlertsContext } from '../utils/AlertsManager'
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-interface ConfigFileInputProps {
-    value: string
-    onChange: (v: string) => void
-}
-function ConfigFileInput({ value, onChange }: ConfigFileInputProps) {
-    return (
-        <TextField
-            label="Configuration file"
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            size="small"
-            placeholder="bench_config.json"
-            sx={{ width: 220 }}
-        />
-    )
-}
+// ConfigFileInput removed, using global configPath from AppHeader
 
 interface ReadLiveStepProps {
     busy: boolean
@@ -133,10 +118,10 @@ interface Props {
     ip: string
     timeout: number
     onResult: (topo: Topology | null, status: DiffStatus | null, removed?: TopologyModule[], rawConfig?: BenchConfig) => void
+    configPath: string
 }
 
 interface TabState {
-    filePath: string
     liveConfig: BenchConfig | null
     liveTopology: Topology | null
     readBusy: boolean
@@ -150,7 +135,6 @@ interface TabState {
 }
 
 const initialTabState: TabState = {
-    filePath: 'bench_config.json',
     liveConfig: null,
     liveTopology: null,
     readBusy: false,
@@ -164,7 +148,6 @@ const initialTabState: TabState = {
 }
 
 type TabAction =
-    | { type: 'SET_FILE_PATH'; path: string }
     | { type: 'READ_START' }
     | { type: 'READ_SUCCESS'; config: BenchConfig; topology: Topology }
     | { type: 'READ_FAIL'; error: string }
@@ -178,8 +161,6 @@ type TabAction =
 
 function tabReducer(state: TabState, action: TabAction): TabState {
     switch (action.type) {
-        case 'SET_FILE_PATH':
-            return { ...state, filePath: action.path }
         case 'READ_START':
             return { ...state, readBusy: true, readError: null, cmpData: null, savedTo: null }
         case 'READ_SUCCESS':
@@ -205,11 +186,10 @@ function tabReducer(state: TabState, action: TabAction): TabState {
     }
 }
 
-export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
+export default function GenerateCompareTab({ ip, timeout, onResult, configPath }: Props) {
     const [state, dispatch] = useReducer(tabReducer, initialTabState)
     const alerts = useContext(AlertsContext)
     const {
-        filePath,
         liveConfig,
         liveTopology,
         readBusy,
@@ -245,7 +225,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
     }
 
     async function compare() {
-        if (!filePath) {
+        if (!configPath) {
             const error = 'Enter a configuration file path.'
             dispatch({ type: 'COMPARE_FAIL', error })
             alerts?.showAlert('error', error)
@@ -256,7 +236,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
             const r = await fetch('/config/compare', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ip_address: ip, timeout, config_path: filePath }),
+                body: JSON.stringify({ ip_address: ip, timeout, config_path: configPath }),
             })
             const d: CompareResult & { detail?: string } = await r.json()
             if (!r.ok) {
@@ -295,7 +275,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
             const r = await fetch('/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ config: liveConfig, save_path: filePath }),
+                body: JSON.stringify({ config: liveConfig, save_path: configPath }),
             })
             const d: { saved_to?: string; detail?: string } = await r.json()
             if (!r.ok) {
@@ -303,7 +283,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
                 alerts?.showAlert('error', d.detail ?? 'Unknown error')
                 return
             }
-            const savedToPath = d.saved_to ?? filePath
+            const savedToPath = d.saved_to ?? configPath
             dispatch({ type: 'WRITE_SUCCESS', savedTo: savedToPath })
             alerts?.showAlert('success', `Saved → ${savedToPath}`)
         } catch (e) {
@@ -329,9 +309,6 @@ export default function GenerateCompareTab({ ip, timeout, onResult }: Props) {
                 flexWrap: 'wrap',
                 flexShrink: 0,
             }}>
-                <ConfigFileInput value={filePath} onChange={path => dispatch({ type: 'SET_FILE_PATH', path })} />
-
-                <Divider orientation="vertical" flexItem sx={{ my: 0.25 }} />
                 <ReadLiveStep busy={readBusy} result={liveTopology} onRead={readLive} />
 
                 <Divider orientation="vertical" flexItem sx={{ my: 0.25 }} />

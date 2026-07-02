@@ -275,6 +275,32 @@ export function WireEdge({
 
     const { path, points } = buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraight)
 
+    // Calculate the true midpoint of the path segments for accurate label placement
+    let totalLength = 0;
+    const segments = [];
+    for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        segments.push({ p1, p2, len });
+        totalLength += len;
+    }
+    const half = totalLength / 2;
+    let currentLength = 0;
+    let labelPos = { x: (sourceX + targetX) / 2, y: (sourceY + targetY) / 2 };
+    for (const seg of segments) {
+        if (currentLength + seg.len >= half) {
+            const remaining = half - currentLength;
+            const ratio = seg.len === 0 ? 0.5 : remaining / seg.len;
+            labelPos = {
+                x: seg.p1.x + (seg.p2.x - seg.p1.x) * ratio,
+                y: seg.p1.y + (seg.p2.y - seg.p1.y) * ratio
+            };
+            break;
+        }
+        currentLength += seg.len;
+    }
+
     const corners = points.slice(1, -1)
 
     // Update ref outside of render to satisfy React Compiler rules.
@@ -368,7 +394,7 @@ export function WireEdge({
                 {(label || selected) && (
                     <div style={{
                         position: 'absolute',
-                        transform: `translate(-50%, calc(-100% - 4px)) translate(${(sourceX + targetX) / 2}px, ${(sourceY + targetY) / 2}px)`,
+                        transform: `translate(-50%, calc(-100% - 4px)) translate(${labelPos.x}px, ${labelPos.y}px)`,
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
@@ -378,10 +404,10 @@ export function WireEdge({
                         {label && (
                             <div style={{
                                 ...LABEL_TEXT_BASE,
-                                color: selected ? '#d84315' : '#888',
-                                fontWeight: selected ? 600 : 400,
-                                boxShadow: selected ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
-                                border: selected ? '1px solid #ffccbc' : 'none',
+                                color: color,
+                                fontWeight: 600,
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                                border: `1px solid ${color}`,
                             }}>
                                 {label}
                             </div>

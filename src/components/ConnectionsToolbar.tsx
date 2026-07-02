@@ -15,13 +15,11 @@ interface ConnectionsToolbarProps {
     onToggleCables: () => void
     showWires: boolean
     onToggleWires: () => void
+    connectionMode: 'port' | 'channel'
+    onConnectionModeChange: (mode: 'port' | 'channel') => void
     showPsConfig: boolean
     onTogglePsConfig: () => void
-    savePath: string
-    onSavePathChange: (path: string) => void
     onSave: () => void
-    loadPath: string
-    onLoadPathChange: (path: string) => void
     onLoad: () => void
     onClear: () => void
     showTestPanel: boolean
@@ -42,13 +40,11 @@ export default function ConnectionsToolbar({
     onToggleCables,
     showWires,
     onToggleWires,
+    connectionMode,
+    onConnectionModeChange,
     showPsConfig,
     onTogglePsConfig,
-    savePath,
-    onSavePathChange,
     onSave,
-    loadPath,
-    onLoadPathChange,
     onLoad,
     onClear,
     showTestPanel,
@@ -132,6 +128,27 @@ export default function ConnectionsToolbar({
 
                 <Divider orientation="vertical" flexItem />
 
+                {/* Connection Mode toggle */}
+                <TooltipButton
+                    size="small"
+                    variant={connectionMode === 'channel' ? 'contained' : 'outlined'}
+                    color="inherit"
+                    onClick={() => onConnectionModeChange(connectionMode === 'port' ? 'channel' : 'port')}
+                    tooltip={connectionMode === 'channel' ? 'Channel Mode: connect specific channels within a port' : 'Port Mode: connect all channels on a port simultaneously'}
+                    icon={<SettingsInputComponentIcon />}
+                    sx={{
+                        fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
+                        color: connectionMode === 'channel' ? '#fff' : '#1976d2',
+                        background: connectionMode === 'channel' ? '#1976d2' : 'transparent',
+                        borderColor: '#1976d2',
+                        '&:hover': { borderColor: '#115293', background: connectionMode === 'channel' ? '#115293' : 'rgba(25,118,210,0.08)' },
+                    }}
+                >
+                    {connectionMode === 'channel' ? 'Mode: Channel' : 'Mode: Port'}
+                </TooltipButton>
+
+                <Divider orientation="vertical" flexItem />
+
                 {/* Power Supply toggle */}
                 <TooltipButton
                     size="small"
@@ -152,43 +169,8 @@ export default function ConnectionsToolbar({
 
                 <Divider orientation="vertical" flexItem />
 
-                {/* Save */}
+                {/* Load / Save */}
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                    <Typography sx={{ fontSize: '0.72rem', fontWeight: 600, color: '#333', whiteSpace: 'nowrap' }}>
-                        Save:
-                    </Typography>
-                    <TextField
-                        size="small" value={savePath}
-                        onChange={e => onSavePathChange(e.target.value)}
-                        placeholder="connections.jsonc"
-                        sx={{ width: 180 }}
-                        slotProps={{ htmlInput: { style: { fontSize: '0.72rem', padding: '4px 8px' } } }}
-                    />
-                    <TooltipButton
-                        size="small"
-                        variant="contained"
-                        color="success"
-                        onClick={onSave}
-                        tooltip="Save wiring and configuration to the JSON file"
-                        icon={<SaveIcon />}
-                        sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}
-                    >
-                        Save
-                    </TooltipButton>
-                </Stack>
-
-                {/* Load */}
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                    <Typography sx={{ fontSize: '0.72rem', fontWeight: 600, color: '#333', whiteSpace: 'nowrap' }}>
-                        Load:
-                    </Typography>
-                    <TextField
-                        size="small" value={loadPath}
-                        onChange={e => onLoadPathChange(e.target.value)}
-                        placeholder="connections.jsonc"
-                        sx={{ width: 180 }}
-                        slotProps={{ htmlInput: { style: { fontSize: '0.72rem', padding: '4px 8px' } } }}
-                    />
                     <TooltipButton
                         size="small"
                         variant="outlined"
@@ -199,6 +181,17 @@ export default function ConnectionsToolbar({
                         sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}
                     >
                         Load
+                    </TooltipButton>
+                    <TooltipButton
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        onClick={onSave}
+                        tooltip="Save wiring and configuration to the JSON file"
+                        icon={<SaveIcon />}
+                        sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}
+                    >
+                        Save
                     </TooltipButton>
                 </Stack>
 

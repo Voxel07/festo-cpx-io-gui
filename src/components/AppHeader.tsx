@@ -32,6 +32,8 @@ interface AppHeaderProps {
     pbStatus: 'unknown' | 'ok' | 'error'
     onCheckPocketBase: () => void
     onOpenDiagnostics: () => void
+    configPath: string
+    onConfigPathChange: (path: string) => void
 }
 
 export default function AppHeader({
@@ -45,6 +47,8 @@ export default function AppHeader({
     pbStatus,
     onCheckPocketBase,
     onOpenDiagnostics,
+    configPath,
+    onConfigPathChange,
 }: AppHeaderProps) {
     const [diagCount, setDiagCount] = useState(0)
     const [diagSeverity, setDiagSeverity] = useState<'error' | 'warning' | 'info' | 'none'>('none')
@@ -99,7 +103,14 @@ export default function AppHeader({
                     label="Timeout (s)" value={timeout}
                     onChange={e => onTimeoutChange(parseFloat(e.target.value) || 0)}
                     size="small" type="number" variant="outlined"
-                    sx={{ ...appBarFieldSx, width: 120 }}
+                    sx={{ ...appBarFieldSx, width: 100 }}
+                />
+                <TextField
+                    label="Config File" value={configPath}
+                    onChange={e => onConfigPathChange(e.target.value)}
+                    size="small" variant="outlined"
+                    placeholder="bench_config.json"
+                    sx={{ ...appBarFieldSx, width: 160 }}
                 />
                 <Stack direction="row" spacing={1} sx={{ ml: 'auto', alignItems: 'center' }}>
                     <TooltipButton
