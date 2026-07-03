@@ -30,6 +30,7 @@ interface RawModeState {
     loadingParams: boolean
     readingParams: Record<string, boolean>
     writingParams: Record<string, boolean>
+    writingAllParams: Record<string, boolean>
     expandedParams: Record<number, boolean>
     readingAll: boolean
     tabError: string | null
@@ -41,6 +42,7 @@ const initialRawModeState: RawModeState = {
     loadingParams: false,
     readingParams: {},
     writingParams: {},
+    writingAllParams: {},
     expandedParams: {},
     readingAll: false,
     tabError: null,
@@ -56,6 +58,7 @@ type RawModeAction =
     | { type: 'SET_PARAM_VALUE'; key: string; value: string }
     | { type: 'SET_PARAM_VALUES'; values: Record<string, string> }
     | { type: 'TOGGLE_EXPAND'; paramId: number }
+    | { type: 'SET_WRITING_ALL_PARAM'; key: string; writing: boolean }
     | { type: 'SET_READING_ALL'; reading: boolean }
     | { type: 'SET_TAB_ERROR'; error: string | null }
 
@@ -118,6 +121,11 @@ function rawModeReducer(state: RawModeState, action: RawModeAction): RawModeStat
                     [action.paramId]: !state.expandedParams[action.paramId],
                 },
             }
+        case 'SET_WRITING_ALL_PARAM':
+            return {
+                ...state,
+                writingAllParams: { ...state.writingAllParams, [action.key]: action.writing },
+            }
         case 'SET_READING_ALL':
             return {
                 ...state,
@@ -141,6 +149,7 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
         loadingParams,
         readingParams,
         writingParams,
+        writingAllParams,
         expandedParams,
         readingAll,
         tabError,
@@ -252,20 +261,22 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
         dispatch({ type: 'SET_READING_ALL', reading: true })
         dispatch({ type: 'SET_TAB_ERROR', error: null })
         const errors: string[] = []
-        const nextVals: Record<string, string> = {}
 
         for (const p of parameters) {
             try {
                 const r = await fetch(`/io/module/${selectedModule.Adress}/parameter/${p.parameter_id}?ip_address=${encodeURIComponent(ip)}`)
                 const d = await r.json()
                 if (r.ok) {
+                    const vals: Record<string, string> = {}
                     if (Array.isArray(d.value)) {
                         for (let i = 0; i < p.num_instances; i++) {
-                            nextVals[`${p.parameter_id}_${i}`] = d.value[i] !== undefined ? String(d.value[i]) : ''
+                            vals[`${p.parameter_id}_${i}`] = d.value[i] !== undefined ? String(d.value[i]) : ''
                         }
                     } else {
-                        nextVals[`${p.parameter_id}_0`] = String(d.value)
+                        vals[`${p.parameter_id}_0`] = String(d.value)
                     }
+                    // Dispatch incrementally so the UI fills in value by value
+                    dispatch({ type: 'SET_PARAM_VALUES', values: vals })
                 } else {
                     const errText = d.detail ?? 'error'
                     errors.push(`${p.name}: ${errText}`)
@@ -276,7 +287,6 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
             }
         }
 
-        dispatch({ type: 'SET_PARAM_VALUES', values: nextVals })
         if (errors.length > 0) {
             alerts?.showAlert('error', 'Some parameters failed to read. Check the tab error.')
             dispatch({ type: 'SET_TAB_ERROR', error: `Some parameters failed to read:\n${errors.join('\n')}` })
@@ -323,6 +333,60 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
             alerts?.showAlert('error', `Param ${paramId}: ${errText}`)
             dispatch({ type: 'SET_TAB_ERROR', error: errText })
             dispatch({ type: 'SET_WRITING_PARAM', key, writing: false })
+        }
+    }
+
+    // Write the same value to all instances of a multi-instance parameter
+    async function handleWriteParamAllInstances(paramId: number, numInstances: number) {
+        if (!selectedModule || !ip) return
+        const bulkKey = `${paramId}_bulk`
+        const val = paramValues[bulkKey]
+        if (val === undefined || val.trim() === '') {
+            dispatch({ type: 'SET_TAB_ERROR', error: 'Please enter a value to write to all channels.' })
+            return
+        }
+
+        const writeKey = `${paramId}_writeall`
+        dispatch({ type: 'SET_WRITING_ALL_PARAM', key: writeKey, writing: true })
+        dispatch({ type: 'SET_TAB_ERROR', error: null })
+        try {
+            // Omit instance field → backend writes to ALL instances
+            const r = await fetch(`/io/module/${selectedModule.Adress}/parameter/${paramId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ip_address: ip,
+                    value: val,
+                }),
+            })
+            const d = await r.json()
+            if (!r.ok) {
+                const errText = d.detail ?? `Failed to write parameter ${paramId} to all instances.`
+                alerts?.showAlert('error', `Param ${paramId}: ${errText}`)
+                dispatch({ type: 'SET_TAB_ERROR', error: errText })
+            } else {
+                // Read all instances back to refresh the per-channel UI
+                const r2 = await fetch(`/io/module/${selectedModule.Adress}/parameter/${paramId}?ip_address=${encodeURIComponent(ip)}`)
+                const d2 = await r2.json()
+                if (r2.ok) {
+                    const nextVals: Record<string, string> = {}
+                    if (Array.isArray(d2.value)) {
+                        for (let i = 0; i < numInstances; i++) {
+                            nextVals[`${paramId}_${i}`] = d2.value[i] !== undefined ? String(d2.value[i]) : ''
+                        }
+                    } else {
+                        nextVals[`${paramId}_0`] = String(d2.value)
+                    }
+                    dispatch({ type: 'SET_PARAM_VALUES', values: nextVals })
+                }
+                alerts?.showAlert('success', `Parameter ${paramId} written to all instances successfully.`)
+            }
+            dispatch({ type: 'SET_WRITING_ALL_PARAM', key: writeKey, writing: false })
+        } catch (err) {
+            const errText = (err as Error).message
+            alerts?.showAlert('error', `Param ${paramId}: ${errText}`)
+            dispatch({ type: 'SET_TAB_ERROR', error: errText })
+            dispatch({ type: 'SET_WRITING_ALL_PARAM', key: writeKey, writing: false })
         }
     }
 
@@ -385,6 +449,7 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
                                 loadingParams={loadingParams}
                                 readingParams={readingParams}
                                 writingParams={writingParams}
+                                writingAllParams={writingAllParams}
                                 expandedParams={expandedParams}
                                 readingAll={readingAll}
                                 ip={ip}
@@ -392,6 +457,7 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
                                 onReadParamInstance={handleReadParamInstance}
                                 onReadParamAllInstances={handleReadParamAllInstances}
                                 onWriteParamInstance={handleWriteParamInstance}
+                                onWriteParamAllInstances={handleWriteParamAllInstances}
                                 onReadAll={handleReadAll}
                                 onToggleExpand={toggleExpand}
                                 onValueChange={onValueChange}

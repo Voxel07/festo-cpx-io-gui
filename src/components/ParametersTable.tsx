@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import {
     TableContainer, Table, TableHead, TableRow, TableCell, TableBody,
-    Stack, Box, Typography, Select, MenuItem, TextField, Collapse, IconButton, CircularProgress, Checkbox
+    Stack, Box, Typography, Select, MenuItem, TextField, Collapse, IconButton, CircularProgress, Checkbox, Divider
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
@@ -37,6 +37,7 @@ interface ParametersTableProps {
     loadingParams: boolean
     readingParams: Record<string, boolean>
     writingParams: Record<string, boolean>
+    writingAllParams: Record<string, boolean>
     expandedParams: Record<number, boolean>
     readingAll: boolean
     ip: string
@@ -44,6 +45,7 @@ interface ParametersTableProps {
     onReadParamInstance: (paramId: number, instanceIdx: number) => void
     onReadParamAllInstances: (paramId: number, numInstances: number) => void
     onWriteParamInstance: (paramId: number, instanceIdx: number) => void
+    onWriteParamAllInstances: (paramId: number, numInstances: number) => void
     onReadAll: () => void
     onToggleExpand: (paramId: number) => void
     onValueChange: (key: string, value: string) => void
@@ -55,12 +57,14 @@ export default function ParametersTable({
     loadingParams,
     readingParams,
     writingParams,
+    writingAllParams,
     expandedParams,
     readingAll,
     ip,
     onReadParamInstance,
     onReadParamAllInstances,
     onWriteParamInstance,
+    onWriteParamAllInstances,
     onReadAll,
     onToggleExpand,
     onValueChange,
@@ -112,6 +116,9 @@ export default function ParametersTable({
                                 const isReading0 = readingParams[`${p.parameter_id}_0`] === true
                                 const isWriting0 = writingParams[`${p.parameter_id}_0`] === true
                                 const isReadingAllP = readingParams[`${p.parameter_id}_all`] === true
+                                const bulkKey = `${p.parameter_id}_bulk`
+                                const bulkVal = paramValues[bulkKey] ?? ''
+                                const isWritingAllP = writingAllParams[`${p.parameter_id}_writeall`] === true
 
                                 return (
                                     <Fragment key={p.parameter_id}>
@@ -229,6 +236,61 @@ export default function ParametersTable({
                                                             <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: 'block', color: '#666', fontSize: '0.65rem' }}>
                                                                 Channel Parameters
                                                             </Typography>
+                                                            {p.is_writable && (
+                                                                <Box sx={{ mb: 1.5, p: 1, background: '#f0f7ff', borderRadius: 1, border: '1px dashed #90caf9' }}>
+                                                                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                                                        <Typography sx={{ fontSize: '0.62rem', color: '#1976d2', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                                                            Write all:
+                                                                        </Typography>
+                                                                        {p.enums ? (
+                                                                            <Select
+                                                                                size="small"
+                                                                                value={bulkVal}
+                                                                                onChange={e => onValueChange(bulkKey, e.target.value)}
+                                                                                sx={{ fontSize: '0.68rem', height: 26, flex: 1 }}
+                                                                                displayEmpty
+                                                                            >
+                                                                                <MenuItem value="" disabled sx={{ fontSize: '0.68rem' }}>
+                                                                                    Select...
+                                                                                </MenuItem>
+                                                                                {p.enums.map(enumName => (
+                                                                                    <MenuItem key={enumName} value={enumName} sx={{ fontSize: '0.68rem' }}>
+                                                                                        {enumName}
+                                                                                    </MenuItem>
+                                                                                ))}
+                                                                            </Select>
+                                                                        ) : p.data_type === 'BOOL' ? (
+                                                                            <Checkbox
+                                                                                size="small"
+                                                                                checked={bulkVal === 'true' || bulkVal === '1'}
+                                                                                onChange={e => onValueChange(bulkKey, e.target.checked ? 'true' : 'false')}
+                                                                                sx={{ p: 0 }}
+                                                                            />
+                                                                        ) : (
+                                                                            <TextField
+                                                                                size="small"
+                                                                                placeholder="Value..."
+                                                                                value={bulkVal}
+                                                                                onChange={e => onValueChange(bulkKey, e.target.value)}
+                                                                                sx={{ '& input': { fontSize: '0.68rem', py: 0.3, px: 0.8 }, flex: 1 }}
+                                                                            />
+                                                                        )}
+                                                                        <TooltipButton
+                                                                            size="small"
+                                                                            variant="contained"
+                                                                            color="secondary"
+                                                                            onClick={() => onWriteParamAllInstances(p.parameter_id, p.num_instances)}
+                                                                            disabled={isWritingAllP || !ip || bulkVal === ''}
+                                                                            tooltip="Write this value to all channel instances"
+                                                                            icon={isWritingAllP ? <CircularProgress size={10} color="inherit" /> : undefined}
+                                                                            sx={{ fontSize: '0.62rem', minWidth: 32, p: 0.3, whiteSpace: 'nowrap' }}
+                                                                        >
+                                                                            Write All
+                                                                        </TooltipButton>
+                                                                    </Stack>
+                                                                </Box>
+                                                            )}
+                                                            <Divider sx={{ mb: 1 }} />
                                                             <Table size="small">
                                                                 <TableBody>
                                                                     {Array.from({ length: p.num_instances }, (_, idx) => {

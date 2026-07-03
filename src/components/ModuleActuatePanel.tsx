@@ -320,7 +320,7 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
                                 </Button>
                             </Stack>
 
-                            <Box sx={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: 1, p: 1 }}>
+                            <Box sx={{ maxHeight: 280, overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: 1, p: 1 }}>
                                 {valveSlots.map(slotIdx => {
                                     const full = isSlotFullySelected(slotIdx)
                                     const partial = isSlotPartiallySelected(slotIdx)
