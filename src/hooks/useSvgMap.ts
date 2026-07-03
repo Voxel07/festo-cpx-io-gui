@@ -48,10 +48,15 @@ export function resolveIcon(
     if (!file) {
         const upperName = name.toUpperCase()
         if (upperName.includes('CPX-AP-I') || upperName.includes('AP-I')) {
+            // 16-channel AP-I devices use the Wide module SVG (more connector positions)
+            const isWide = /(?:16(?:DI|DIO|NDI|NIDO))/.test(upperName)
             if (upperName.includes('M12')) {
-                file = 'CPX-AP-I-M12.svg'
-            } else if (upperName.includes('M8') || upperName.includes('16DI')) {
-                file = 'CPX-AP-I-M8.svg'
+                file = isWide ? 'CPX-AP-I-M12_Wide.svg' : 'CPX-AP-I-M12.svg'
+            } else if (upperName.includes('M8')) {
+                file = isWide ? 'CPX-AP-I-M8_Wide.svg' : 'CPX-AP-I-M8.svg'
+            } else if (upperName.includes('16DI')) {
+                // 16DI without explicit M8/M12 — default to M8 Wide
+                file = 'CPX-AP-I-M8_Wide.svg'
             }
         }
     }

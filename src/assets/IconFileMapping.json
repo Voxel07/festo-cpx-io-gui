@@ -71,8 +71,33 @@
     {
       "OrderCode": "CPX-AP-I-16DI-M8-3P",
       "PartNumber": "8086600",
-      "FileName": "CPX-AP-I-M8.svg",
+      "FileName": "CPX-AP-I-M8_Wide.svg",
       "ModuleCode": "8501"
+    },
+    {
+      "OrderCode": "CPX-AP-I-16DI-M12-5P",
+      "PartNumber": "N/A",
+      "FileName": "CPX-AP-I-M12_Wide.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-I-16NDI-M12-5P",
+      "PartNumber": "N/A",
+      "FileName": "CPX-AP-I-M12_Wide.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-I-16DIO-M12-5P",
+      "PartNumber": "N/A",
+      "FileName": "CPX-AP-I-M12_Wide.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-I-16DIO-M8-3P",
+      "PartNumber": "N/A",
+      "FileName": "CPX-AP-I-M8_Wide.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-I-16NIDO-M12-5P",
+      "PartNumber": "N/A",
+      "FileName": "CPX-AP-I-M12_Wide.svg"
     },
     {
       "OrderCode": "CPX-AP-I-8DI-M12-5P",
