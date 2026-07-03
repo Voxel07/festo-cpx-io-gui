@@ -60,10 +60,12 @@ export function buildRows(cmpData: CompareResult): DiffRow[] {
     ctx('{')
     for (const f of ['Name', 'Description', 'Version'] as const) {
         const sv = stored[f], lv = live[f]
-        if (sv !== lv) {
-            push(`    "${f}": ${JSON.stringify(sv)},`, 'del', `    "${f}": ${JSON.stringify(lv)},`, 'add')
-        } else {
-            ctx(`    "${f}": ${JSON.stringify(sv ?? lv)},`)
+        if (sv !== undefined || lv !== undefined) {
+            if (sv !== lv) {
+                push(`    "${f}": ${JSON.stringify(sv)},`, 'del', `    "${f}": ${JSON.stringify(lv)},`, 'add')
+            } else {
+                ctx(`    "${f}": ${JSON.stringify(sv ?? lv)},`)
+            }
         }
     }
     ctx('    "Topology": [')

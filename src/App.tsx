@@ -452,7 +452,7 @@ export default function App() {
                                 onToggleIoCables={() => dispatch({ type: 'TOGGLE_IO_CABLES' })}
                                 fullscreen={fullscreen}
                                 onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
-                                showLegend={tab === 1 && !!diffStatus}
+                                showLegend={tab === 0 && !!diffStatus}
                             />
                         )}
                         {/* Canvas area (width-constrained when user has dragged) */}
@@ -466,8 +466,8 @@ export default function App() {
                             <Suspense fallback={<LoadingChunk label="Loading topology…" />}>
                                 <TopologyFlow
                                     topology={topology}
-                                    diffStatus={tab === 1 ? diffStatus : null}
-                                    removedModules={tab === 1 ? removedModules : []}
+                                    diffStatus={tab === 0 ? diffStatus : null}
+                                    removedModules={tab === 0 ? removedModules : []}
                                     activeModuleAddr={activeModuleAddr}
                                     selectedModuleAddr={tab === 3 ? rawSelectedAddr : null}
                                     onSelectModuleAddr={tab === 3 ? (addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })) : undefined}

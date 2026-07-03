@@ -30,5 +30,18 @@ export default defineConfig({
         // Write compiled assets into festo-cpx-io-api/dist so FastAPI can serve them
         outDir: '../festo-cpx-io-api/dist',
         emptyOutDir: true,
+        rollupOptions: {
+            output: {
+                manualChunks(id: string) {
+                    if (id.includes('node_modules')) {
+                        if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'react-vendor'
+                        if (id.includes('@mui/material') || id.includes('@mui/icons-material') || id.includes('@emotion')) return 'mui-vendor'
+                        if (id.includes('@mui/x-data-grid')) return 'datagrid-vendor'
+                        if (id.includes('recharts')) return 'recharts-vendor'
+                        if (id.includes('@xyflow')) return 'xyflow-vendor'
+                    }
+                }
+            }
+        }
     },
 })
