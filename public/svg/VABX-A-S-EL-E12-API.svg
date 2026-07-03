@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="46" height="109" viewBox="0 0 46 109">
+  <g id="VABX-A-S-EL-E12-API">
+    <rect id="Body" width="46" height="107" fill="#b6bec6"/>
+    <g id="Pneumatic_Supply" data-name="Pneumatic Supply">
+      <rect id="Fitting" width="18" height="2" fill="#b6bec6" x="26" y="107"/>
+      <rect id="Cover" width="22" height="107" fill="#e5e8eb" x="24"/>
+    </g>
+    <g id="Auxiliary_Interfaces" data-name="Auxiliary Interfaces">
+      <circle id="XD2" cx="12.0" cy="85.5" r="4" fill="#d8dce1">
+        <title>XD2</title>
+      </circle>
+      <circle id="XD1" cx="12.0" cy="64.5" r="4" fill="#d8dce1">
+        <title>XD1</title>
+      </circle>
+    </g>
+    <g id="Connectors">
+      <g id="XF20">
+        <g id="Left">
+          <circle id="M8" cx="12.0" cy="44.5" r="4" fill="#0091dc" stroke="#0091dc" stroke-width="2"/>
+        </g>
+        <title>XF20</title>
+      </g>
+      <g id="XF10">
+        <g id="Left-2" data-name="Left">
+          <circle id="M8-2" data-name="M8" cx="12.0" cy="23.5" r="4" fill="#0091dc" stroke="#0091dc" stroke-width="2"/>
+        </g>
+        <title>XF10</title>
+      </g>
+    </g>
+    <g id="LEDs">
+      <rect id="LED_MD" width="8" height="2" fill="#e5e8eb" data-name="MD" x="4" y="54">
+        <title>MD</title>
+      </rect>
+    </g>
+  </g>
+</svg>

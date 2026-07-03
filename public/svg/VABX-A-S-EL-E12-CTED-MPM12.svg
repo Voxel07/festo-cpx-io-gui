@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="49" height="109" viewBox="0 0 49 109">
+  <g id="VABX-A-S-EL-E12-CTED-MPM12">
+    <rect id="Base" width="49" height="107" fill="#b6bec6"/>
+    <g id="Pneumatic_Supply" data-name="Pneumatic Supply">
+      <rect id="Fitting" width="18" height="2" fill="#b6bec6" x="28.999999999999993" y="107"/>
+      <rect id="Cover" width="22" height="107" fill="#e5e8eb" x="26.999999999999993"/>
+    </g>
+    <g id="CTED_Base" data-name="CTED Base">
+      <path id="Body" d="M11818.983,13642v-107h6.733l1.641,8.731h8.892c0-.007.376-2,.773-4.107.331-1.762.685-3.638.87-4.622h7.09v107h-26Z" transform="translate(-11818.983 -13534.998)" fill="#d8dce1"/>
+      <path id="Contour" d="M12.408-13.144-.685-3.972a9.272,9.272,0,0,0-4.1,7.28s.245,26.081,0,31.558c-.285,6.35-4.981,14.775-5.965,17.367.05-.159.011-.046-.012.044a21.775,21.775,0,0,0-.386,4.471V84.856h23.5v-98" transform="translate(13.591 22.146)" fill="#e5e8eb"/>
+    </g>
+    <g id="Connectors">
+      <g id="XF2_Out" data-name="XF2 Out">
+        <g id="Left">
+          <circle id="M12" cx="13.0" cy="97.999" r="6" fill="#ffd600" stroke="#ffd600" stroke-width="2"/>
+        </g>
+        <title>XF2 Out</title>
+      </g>
+      <g id="XF1_In" data-name="XF1 In">
+        <g id="Left-2" data-name="Left">
+          <circle id="M12-2" data-name="M12" cx="13.0" cy="81.999" r="6" fill="#ffd600" stroke="#ffd600" stroke-width="2"/>
+        </g>
+        <title>XF1 In</title>
+      </g>
+    </g>
+    <g id="LEDs">
+      <rect id="LED_LA XF2 Out" data-name="LA XF2 Out" width="8" height="2" fill="#b6bec6" x="12.999999999999996" y="48">
+        <title>LA XF2 Out</title>
+      </rect>
+      <rect id="LED_LA XF1 In" data-name="LA XF1 In" width="8" height="2" fill="#b6bec6" x="12.999999999999996" y="45">
+        <title>LA XF1 In</title>
+      </rect>
+      <rect id="LED_ER-NS-NF" width="8" height="2" fill="#b6bec6" data-name="ER-NS-NF" x="12.999999999999996" y="42">
+        <title>ER-NS-NF</title>
+      </rect>
+      <rect id="LED_RN-MS-SF" width="8" height="2" fill="#b6bec6" data-name="RN-MS-SF" x="12.999999999999996" y="39">
+        <title>RN-MS-SF</title>
+      </rect>
+      <rect id="LED_SD" width="8" height="2" fill="#b6bec6" data-name="SD" x="12.999999999999996" y="32">
+        <title>SD</title>
+      </rect>
+      <rect id="LED_MT" width="8" height="2" fill="#b6bec6" data-name="MT" x="12.999999999999996" y="29">
+        <title>MT</title>
+      </rect>
+      <rect id="LED_MD" width="8" height="2" fill="#b6bec6" data-name="MD" x="12.999999999999996" y="23">
+        <title>MD</title>
+      </rect>
+    </g>
+  </g>
+</svg>

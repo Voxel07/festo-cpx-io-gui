@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="CPX-AP-A-4AI-U-I-RTD-M12" width="50" height="107" viewBox="0 0 50 107">
+  <g id="CPX-AP-A_Base" data-name="CPX-AP-A Base">
+    <rect id="Base" width="50" height="107" fill="#e5e8eb"/>
+    <line id="Line" x2="49" transform="translate(0.5 29.5)" fill="none" stroke="#d8dce1" stroke-linecap="square" stroke-width="1"/>
+  </g>
+  <g id="Auxiliary_Interfaces" data-name="Auxiliary Interfaces">
+    <circle id="X3" cx="33.0" cy="88.0" r="6" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X3</title>
+    </circle>
+    <circle id="X2" cx="17.0" cy="73.0" r="6" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X2</title>
+    </circle>
+    <circle id="X1" cx="33.0" cy="55.0" r="6" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X1</title>
+    </circle>
+    <circle id="X0" cx="17.0" cy="40.0" r="6" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X0</title>
+    </circle>
+  </g>
+  <g id="LEDs">
+    <g id="Right">
+      <rect id="LED_PL" width="6" height="2" fill="#b6bec6" data-name="PL" x="37" y="10"/>
+      <rect id="LED_MD" width="6" height="2" fill="#b6bec6" data-name="MD" x="29" y="10"/>
+      <title>Right</title>
+    </g>
+    <g id="Left">
+      <rect id="LED_3" data-name="3" width="6" height="2" fill="#b6bec6" x="15" y="18"/>
+      <rect id="LED_2" data-name="2" width="6" height="2" fill="#b6bec6" x="7" y="18"/>
+      <rect id="LED_1" data-name="1" width="6" height="2" fill="#b6bec6" x="15" y="14"/>
+      <rect id="LED_0" data-name="0" width="6" height="2" fill="#b6bec6" x="7" y="14"/>
+      <title>Left</title>
+    </g>
+  </g>
+</svg>

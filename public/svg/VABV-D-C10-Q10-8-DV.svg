@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="115" viewBox="0 0 28 115">
+  <g id="VABV-D-C10-Q10-8-DV">
+    <rect id="Body" width="28" height="115" fill="#e5e8eb"/>
+    <circle id="Screw" cx="22.5" cy="4.5" r="3.5" fill="#b6bec6"/>
+    <circle id="Screw-2" data-name="Screw" cx="22.5" cy="110.5" r="3.5" fill="#b6bec6"/>
+    <g id="Rectangle" fill="none" stroke="#b6bec6" stroke-width="1">
+      <rect width="14" height="112" stroke="none" x="2" y="1"/>
+      <rect x="2.5" y="1.5" width="13" height="111" fill="none"/>
+    </g>
+    <g id="LEDs">
+      <rect id="LED_LED8" width="7" height="3" fill="#b6bec6" data-name="LED8" x="19" y="99">
+        <title>LED8</title>
+      </rect>
+      <rect id="LED_LED7" width="7" height="3" fill="#b6bec6" data-name="LED7" x="19" y="93">
+        <title>LED7</title>
+      </rect>
+      <rect id="LED_LED6" width="7" height="3" fill="#b6bec6" data-name="LED6" x="19" y="87">
+        <title>LED6</title>
+      </rect>
+      <rect id="LED_LED5" width="7" height="3" fill="#b6bec6" data-name="LED5" x="19" y="81">
+        <title>LED5</title>
+      </rect>
+      <rect id="LED_LED4" width="7" height="3" fill="#b6bec6" data-name="LED4" x="19" y="75">
+        <title>LED4</title>
+      </rect>
+      <rect id="LED_LED3" width="7" height="3" fill="#b6bec6" data-name="LED3" x="19" y="69">
+        <title>LED3</title>
+      </rect>
+      <rect id="LED_LED2" width="7" height="3" fill="#b6bec6" data-name="LED2" x="19" y="63">
+        <title>LED2</title>
+      </rect>
+      <rect id="LED_LED1" width="7" height="3" fill="#b6bec6" data-name="LED1" x="19" y="57">
+        <title>LED1</title>
+      </rect>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="CPX-AP-A-12DI4DO-M8-4P" width="50" height="107" viewBox="0 0 50 107">
+  <g id="CPX-AP-A_Base" data-name="CPX-AP-A Base">
+    <rect id="Base" width="50" height="107" fill="#e5e8eb"/>
+    <line id="Line" x2="49" transform="translate(0.5 29.5)" fill="none" stroke="#d8dce1" stroke-linecap="square" stroke-width="1"/>
+  </g>
+  <g id="Auxiliary_Interfaces" data-name="Auxiliary Interfaces">
+    <circle id="X7" cx="36.0" cy="93.0" r="4" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X7</title>
+    </circle>
+    <circle id="X6" cx="36.0" cy="76.0" r="4" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X6</title>
+    </circle>
+    <circle id="X5" cx="36.0" cy="59.0" r="4" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X5</title>
+    </circle>
+    <circle id="X4" cx="36.0" cy="42.0" r="4" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X4</title>
+    </circle>
+    <circle id="X3" cx="14.0" cy="93.0" r="4" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X3</title>
+    </circle>
+    <circle id="X2" cx="14.0" cy="76.0" r="4" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X2</title>
+    </circle>
+    <circle id="X1" cx="14.0" cy="59.0" r="4" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X1</title>
+    </circle>
+    <circle id="X0" cx="14.0" cy="42.0" r="4" fill="#b6bec6" stroke="#b6bec6" stroke-width="2">
+      <title>X0</title>
+    </circle>
+  </g>
+  <g id="LEDs">
+    <g id="Right">
+      <rect id="LED_O3" width="6" height="2" fill="#b6bec6" data-name="O3" x="37" y="26"/>
+      <rect id="LED_O2" width="6" height="2" fill="#b6bec6" data-name="O2" x="29" y="26"/>
+      <rect id="LED_I11" width="6" height="2" fill="#b6bec6" data-name="I11" x="37" y="22"/>
+      <rect id="LED_I10" width="6" height="2" fill="#b6bec6" data-name="I10" x="29" y="22"/>
+      <rect id="LED_I7" width="6" height="2" fill="#b6bec6" data-name="I7" x="37" y="18"/>
+      <rect id="LED_I6" width="6" height="2" fill="#b6bec6" data-name="I6" x="29" y="18"/>
+      <rect id="LED_I3" width="6" height="2" fill="#b6bec6" data-name="I3" x="37" y="14"/>
+      <rect id="LED_I2" width="6" height="2" fill="#b6bec6" data-name="I2" x="29" y="14"/>
+      <rect id="LED_PL" width="6" height="2" fill="#b6bec6" data-name="PL" x="37" y="10"/>
+      <rect id="LED_MD" width="6" height="2" fill="#b6bec6" data-name="MD" x="29" y="10"/>
+      <title>Right</title>
+    </g>
+    <g id="Left">
+      <rect id="LED_O1" width="6" height="2" fill="#b6bec6" data-name="O1" x="15" y="26"/>
+      <rect id="LED_O0" width="6" height="2" fill="#b6bec6" data-name="O0" x="7" y="26"/>
+      <rect id="LED_I9" width="6" height="2" fill="#b6bec6" data-name="I9" x="15" y="22"/>
+      <rect id="LED_I8" width="6" height="2" fill="#b6bec6" data-name="I8" x="7" y="22"/>
+      <rect id="LED_I5" width="6" height="2" fill="#b6bec6" data-name="I5" x="15" y="18"/>
+      <rect id="LED_I4" width="6" height="2" fill="#b6bec6" data-name="I4" x="7" y="18"/>
+      <rect id="LED_I1" width="6" height="2" fill="#b6bec6" data-name="I1" x="15" y="14"/>
+      <rect id="LED_I0" width="6" height="2" fill="#b6bec6" data-name="I0" x="7" y="14"/>
+      <title>Left</title>
+    </g>
+  </g>
+</svg>

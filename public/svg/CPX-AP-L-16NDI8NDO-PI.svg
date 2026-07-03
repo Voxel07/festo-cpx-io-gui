@@ -1,0 +1,430 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="148" height="90.004" viewBox="0 0 148 90.004">
+  <g id="CPX-AP-L-16NDI8NDO-PI">
+    <g id="Body">
+      <path id="Base" d="M11958.994,16128h-138l138,0v-2h-138v2H11816v-90h4.993v2h138v-2h5v90h-5.007Z" transform="translate(-11816.001 -16037.998)" fill="#d8dce1"/>
+    </g>
+    <g id="Auxiliary_Interfaces" data-name="Auxiliary Interfaces">
+      <g id="Bottom_Right" data-name="Bottom Right">
+        <g id="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="112.99600000000001" y="72.003"/>
+          <rect x="113.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="116.99600000000001" y="72.003"/>
+          <rect x="117.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="120.99600000000001" y="72.003"/>
+          <rect x="121.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="124.99600000000001" y="72.003"/>
+          <rect x="125.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="128.996" y="72.003"/>
+          <rect x="129.496" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="132.996" y="72.003"/>
+          <rect x="133.496" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="136.996" y="72.003"/>
+          <rect x="137.496" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="140.996" y="72.003"/>
+          <rect x="141.496" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <title>Bottom Right</title>
+      </g>
+      <g id="Bottom_Middle" data-name="Bottom Middle">
+        <g id="X0-2" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="50.99600000000001" y="72.003"/>
+          <rect x="51.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X1-2" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="54.99600000000001" y="72.003"/>
+          <rect x="55.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X2-2" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="58.99600000000001" y="72.003"/>
+          <rect x="59.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X3-2" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="62.99600000000001" y="72.003"/>
+          <rect x="63.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X4-2" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="66.99600000000001" y="72.003"/>
+          <rect x="67.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X5-2" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="70.99600000000001" y="72.003"/>
+          <rect x="71.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X6-2" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="74.99600000000001" y="72.003"/>
+          <rect x="75.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X7-2" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="78.99600000000001" y="72.003"/>
+          <rect x="79.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <title>Bottom Middle</title>
+      </g>
+      <g id="Bottom_Left" data-name="Bottom Left">
+        <g id="X0-3" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="8.99600000000001" y="72.003"/>
+          <rect x="9.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X1-3" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="12.99600000000001" y="72.003"/>
+          <rect x="13.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X2-3" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="16.99600000000001" y="72.003"/>
+          <rect x="17.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X3-3" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="20.99600000000001" y="72.003"/>
+          <rect x="21.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X4-3" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="24.99600000000001" y="72.003"/>
+          <rect x="25.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X5-3" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="28.99600000000001" y="72.003"/>
+          <rect x="29.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X6-3" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="32.99600000000001" y="72.003"/>
+          <rect x="33.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X7-3" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="36.99600000000001" y="72.003"/>
+          <rect x="37.49600000000001" y="72.503" width="2" height="5" fill="none"/>
+        </g>
+        <title>Bottom Left</title>
+      </g>
+      <g id="Top_Right" data-name="Top Right">
+        <g id="X0-4" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="112.99600000000001" y="58.003"/>
+          <rect x="113.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X1-4" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="116.99600000000001" y="58.003"/>
+          <rect x="117.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X2-4" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="120.99600000000001" y="58.003"/>
+          <rect x="121.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X3-4" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="124.99600000000001" y="58.003"/>
+          <rect x="125.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X4-4" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="128.996" y="58.003"/>
+          <rect x="129.496" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X5-4" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="132.996" y="58.003"/>
+          <rect x="133.496" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X6-4" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="136.996" y="58.003"/>
+          <rect x="137.496" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X7-4" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="140.996" y="58.003"/>
+          <rect x="141.496" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <title>Top Right</title>
+      </g>
+      <g id="Top_Right-2" data-name="Top Right">
+        <g id="X0-5" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="112.99600000000001" y="38.003"/>
+          <rect x="113.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X1-5" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="116.99600000000001" y="38.003"/>
+          <rect x="117.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X2-5" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="120.99600000000001" y="38.003"/>
+          <rect x="121.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X3-5" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="124.99600000000001" y="38.003"/>
+          <rect x="125.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X4-5" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="128.996" y="38.003"/>
+          <rect x="129.496" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X5-5" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="132.996" y="38.003"/>
+          <rect x="133.496" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X6-5" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="136.996" y="38.003"/>
+          <rect x="137.496" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X7-5" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="140.996" y="38.003"/>
+          <rect x="141.496" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <title>Top Right</title>
+      </g>
+      <g id="Top_Middle" data-name="Top Middle">
+        <g id="X0-6" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="50.99600000000001" y="58.003"/>
+          <rect x="51.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X1-6" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="54.99600000000001" y="58.003"/>
+          <rect x="55.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X2-6" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="58.99600000000001" y="58.003"/>
+          <rect x="59.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X3-6" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="62.99600000000001" y="58.003"/>
+          <rect x="63.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X4-6" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="66.99600000000001" y="58.003"/>
+          <rect x="67.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X5-6" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="70.99600000000001" y="58.003"/>
+          <rect x="71.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X6-6" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="74.99600000000001" y="58.003"/>
+          <rect x="75.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X7-6" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="78.99600000000001" y="58.003"/>
+          <rect x="79.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <title>Top Middle</title>
+      </g>
+      <g id="Top_Middle-2" data-name="Top Middle">
+        <g id="X0-7" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="50.99600000000001" y="38.003"/>
+          <rect x="51.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X1-7" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="54.99600000000001" y="38.003"/>
+          <rect x="55.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X2-7" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="58.99600000000001" y="38.003"/>
+          <rect x="59.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X3-7" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="62.99600000000001" y="38.003"/>
+          <rect x="63.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X4-7" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="66.99600000000001" y="38.003"/>
+          <rect x="67.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X5-7" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="70.99600000000001" y="38.003"/>
+          <rect x="71.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X6-7" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="74.99600000000001" y="38.003"/>
+          <rect x="75.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X7-7" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="78.99600000000001" y="38.003"/>
+          <rect x="79.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <title>Top Middle</title>
+      </g>
+      <g id="Top_Left" data-name="Top Left">
+        <g id="X0-8" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="8.99600000000001" y="58.003"/>
+          <rect x="9.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X1-8" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="12.99600000000001" y="58.003"/>
+          <rect x="13.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X2-8" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="16.99600000000001" y="58.003"/>
+          <rect x="17.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X3-8" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="20.99600000000001" y="58.003"/>
+          <rect x="21.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X4-8" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="24.99600000000001" y="58.003"/>
+          <rect x="25.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X5-8" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="28.99600000000001" y="58.003"/>
+          <rect x="29.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X6-8" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="32.99600000000001" y="58.003"/>
+          <rect x="33.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X7-8" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="36.99600000000001" y="58.003"/>
+          <rect x="37.49600000000001" y="58.503" width="2" height="5" fill="none"/>
+        </g>
+        <title>Top Left</title>
+      </g>
+      <g id="Top_Left-2" data-name="Top Left">
+        <g id="X0-9" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="8.99600000000001" y="38.003"/>
+          <rect x="9.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X1-9" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="12.99600000000001" y="38.003"/>
+          <rect x="13.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X2-9" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="16.99600000000001" y="38.003"/>
+          <rect x="17.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X3-9" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="20.99600000000001" y="38.003"/>
+          <rect x="21.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X4-9" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="24.99600000000001" y="38.003"/>
+          <rect x="25.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X5-9" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="28.99600000000001" y="38.003"/>
+          <rect x="29.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X6-9" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="32.99600000000001" y="38.003"/>
+          <rect x="33.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X7-9" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="36.99600000000001" y="38.003"/>
+          <rect x="37.49600000000001" y="38.503" width="2" height="5" fill="none"/>
+        </g>
+        <title>Top Left</title>
+      </g>
+      <g id="Top">
+        <g id="X0-10" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="50.99600000000001" y="10.003"/>
+          <rect x="51.49600000000001" y="10.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X1-10" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="54.99600000000001" y="10.003"/>
+          <rect x="55.49600000000001" y="10.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X2-10" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="58.99600000000001" y="10.003"/>
+          <rect x="59.49600000000001" y="10.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X3-10" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="62.99600000000001" y="10.003"/>
+          <rect x="63.49600000000001" y="10.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X4-10" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="67.99600000000001" y="10.003"/>
+          <rect x="68.49600000000001" y="10.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X5-10" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="71.99600000000001" y="10.003"/>
+          <rect x="72.49600000000001" y="10.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X6-10" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="75.99600000000001" y="10.003"/>
+          <rect x="76.49600000000001" y="10.503" width="2" height="5" fill="none"/>
+        </g>
+        <g id="X7-10" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="3" height="6" stroke="none" x="79.99600000000001" y="10.003"/>
+          <rect x="80.49600000000001" y="10.503" width="2" height="5" fill="none"/>
+        </g>
+        <title>Top</title>
+      </g>
+    </g>
+    <g id="Connectors">
+      <g id="XF20">
+        <g id="Up">
+          <rect id="RJ45" width="10" height="10" fill="#0091dc" stroke="#0091dc" stroke-width="2" x="132.996" y="10.003"/>
+        </g>
+        <title>XF20</title>
+      </g>
+      <g id="XF10">
+        <g id="Up-2" data-name="Up">
+          <rect id="RJ45-2" data-name="RJ45" width="10" height="10" fill="#0091dc" stroke="#0091dc" stroke-width="2" x="113.99600000000001" y="10.003"/>
+        </g>
+        <title>XF10</title>
+      </g>
+    </g>
+    <g id="LEDs">
+      <g id="X0_IN">
+        <rect id="LED_15" data-name="15" width="3" height="2" fill="#b6bec6" x="140.996" y="34.003"/>
+        <rect id="LED_14" data-name="14" width="3" height="2" fill="#b6bec6" x="136.996" y="34.003"/>
+        <rect id="LED_13" data-name="13" width="3" height="2" fill="#b6bec6" x="132.996" y="34.003"/>
+        <rect id="LED_12" data-name="12" width="3" height="2" fill="#b6bec6" x="128.996" y="34.003"/>
+        <rect id="LED_11" data-name="11" width="3" height="2" fill="#b6bec6" x="124.99600000000001" y="34.003"/>
+        <rect id="LED_10" data-name="10" width="3" height="2" fill="#b6bec6" x="120.99600000000001" y="34.003"/>
+        <rect id="LED_9" data-name="9" width="3" height="2" fill="#b6bec6" x="116.99600000000001" y="34.003"/>
+        <rect id="LED_8" data-name="8" width="3" height="2" fill="#b6bec6" x="112.99600000000001" y="34.003"/>
+        <rect id="LED_7" data-name="7" width="3" height="2" fill="#b6bec6" x="78.99600000000001" y="34.003"/>
+        <rect id="LED_6" data-name="6" width="3" height="2" fill="#b6bec6" x="74.99600000000001" y="34.003"/>
+        <rect id="LED_5" data-name="5" width="3" height="2" fill="#b6bec6" x="70.99600000000001" y="34.003"/>
+        <rect id="LED_4" data-name="4" width="3" height="2" fill="#b6bec6" x="66.99600000000001" y="34.003"/>
+        <rect id="LED_3" data-name="3" width="3" height="2" fill="#b6bec6" x="62.99600000000001" y="34.003"/>
+        <rect id="LED_2" data-name="2" width="3" height="2" fill="#b6bec6" x="58.99600000000001" y="34.003"/>
+        <rect id="LED_1" data-name="1" width="3" height="2" fill="#b6bec6" x="54.99600000000001" y="34.003"/>
+        <rect id="LED_0" data-name="0" width="3" height="2" fill="#b6bec6" x="50.99600000000001" y="34.003"/>
+        <title>X0_IN</title>
+      </g>
+      <g id="X6_OUT">
+        <rect id="LED_7" data-name="7" width="3" height="2" fill="#b6bec6" x="36.99600000000001" y="34.003"/>
+        <rect id="LED_6" data-name="6" width="3" height="2" fill="#b6bec6" x="32.99600000000001" y="34.003"/>
+        <rect id="LED_5" data-name="5" width="3" height="2" fill="#b6bec6" x="28.99600000000001" y="34.003"/>
+        <rect id="LED_4" data-name="4" width="3" height="2" fill="#b6bec6" x="24.99600000000001" y="34.003"/>
+        <rect id="LED_3" data-name="3" width="3" height="2" fill="#b6bec6" x="20.99600000000001" y="34.003"/>
+        <rect id="LED_2" data-name="2" width="3" height="2" fill="#b6bec6" x="16.99600000000001" y="34.003"/>
+        <rect id="LED_1" data-name="1" width="3" height="2" fill="#b6bec6" x="12.99600000000001" y="34.003"/>
+        <rect id="LED_0" data-name="0" width="3" height="2" fill="#b6bec6" x="8.99600000000001" y="34.003"/>
+        <title>X6_OUT</title>
+      </g>
+      <rect id="LED_2" data-name="2" width="3" height="2" fill="#b6bec6" opacity="0.95" x="61.99600000000001" y="24.003">
+        <title>2</title>
+      </rect>
+      <rect id="LED_1" data-name="1" width="3" height="2" fill="#b6bec6" x="68.99600000000001" y="24.003">
+        <title>1</title>
+      </rect>
+      <rect id="LED_MD" width="3" height="2" fill="#b6bec6" data-name="MD" x="68.99600000000001" y="21.003">
+        <title>MD</title>
+      </rect>
+      <rect id="LED_PL" width="3" height="2" fill="#b6bec6" data-name="PL" x="61.99600000000001" y="21.003">
+        <title>PL</title>
+      </rect>
+    </g>
+    <g id="Handle">
+      <g id="Handle-2" data-name="Handle" fill="#e5e8eb" stroke="#e5e8eb" stroke-width="1">
+        <rect width="148" height="25" stroke="none" y="60.003"/>
+        <rect x="0.5" y="60.503" width="147" height="24" fill="none"/>
+      </g>
+      <g id="Festo_Logo" data-name="Festo Logo">
+        <path id="F" d="M.121,3.533A.12.12,0,0,1,0,3.415V.118A.12.12,0,0,1,.121,0H3.494a.12.12,0,0,1,.121.118V.589a.119.119,0,0,1-.121.118H1.084A.119.119,0,0,0,.964.825V1.3a.12.12,0,0,0,.121.118H3.253a.119.119,0,0,1,.121.118V2a.119.119,0,0,1-.12.117H1.084a.12.12,0,0,0-.121.119V3.416a.119.119,0,0,1-.121.118Z" transform="translate(122.0 77.003)" fill="#0091dc"/>
+        <path id="E" d="M0,.118A.12.12,0,0,1,.121,0H3.735a.12.12,0,0,1,.121.118V.589a.12.12,0,0,1-.121.118H1.085A.119.119,0,0,0,.964.825V1.3a.119.119,0,0,0,.121.118h2.41a.119.119,0,0,1,.121.118V2a.119.119,0,0,1-.121.117H1.085a.12.12,0,0,0-.121.119v.471a.119.119,0,0,0,.121.118H3.735a.119.119,0,0,1,.121.118v.471a.12.12,0,0,1-.121.118H.121A.12.12,0,0,1,0,3.416Z" transform="translate(125.856 77.003)" fill="#0091dc"/>
+        <path id="S" d="M0,1.414a.715.715,0,0,0,.723.706H2.651a.238.238,0,0,1,.241.236v.235a.238.238,0,0,1-.241.236H1.084a.12.12,0,0,1-.121-.118.119.119,0,0,0-.12-.118H.12A.119.119,0,0,0,0,2.708v.118a.715.715,0,0,0,.723.707h2.41a.715.715,0,0,0,.722-.707V2.12a.714.714,0,0,0-.722-.706H1.2a.238.238,0,0,1-.241-.236V.942A.238.238,0,0,1,1.2.707H2.771a.119.119,0,0,1,.121.118.119.119,0,0,0,.12.118h.724a.119.119,0,0,0,.12-.118V.707A.716.716,0,0,0,3.133,0H.723A.715.715,0,0,0,0,.707Z" transform="translate(129.952 77.003)" fill="#0091dc"/>
+        <path id="T" d="M0,.118A.12.12,0,0,1,.122,0H3.735a.12.12,0,0,1,.121.118V.589a.12.12,0,0,1-.121.118h-1.2a.119.119,0,0,0-.12.118v2.59a.12.12,0,0,1-.121.118H1.567a.12.12,0,0,1-.121-.118V.825a.119.119,0,0,0-.12-.118H.121A.12.12,0,0,1,0,.589V.118Z" transform="translate(134.048 77.003)" fill="#0091dc"/>
+        <path id="O" d="M3.084,3.543H.711a.712.712,0,0,1-.655-.433A.7.7,0,0,1,0,2.835V.709a.706.706,0,0,1,.208-.5A.71.71,0,0,1,.711,0H3.084A.709.709,0,0,1,3.8.709V2.835a.709.709,0,0,1-.711.709ZM1.186.709a.237.237,0,0,0-.168.069A.234.234,0,0,0,.948.945V2.6a.236.236,0,0,0,.237.237H2.609A.236.236,0,0,0,2.847,2.6V.945A.234.234,0,0,0,2.777.778.237.237,0,0,0,2.609.709Z" transform="translate(138.20499999999998 77.003)" fill="#0091dc"/>
+      </g>
+    </g>
+  </g>
+</svg>

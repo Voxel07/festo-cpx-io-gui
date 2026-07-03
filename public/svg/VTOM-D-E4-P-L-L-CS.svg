@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="147" viewBox="0 0 28 147">
+  <g id="VTOM-D-E4-P-L-L-CS">
+    <rect id="Body" width="28" height="147" fill="#e5e8eb"/>
+    <g id="LEDs">
+      <circle id="LED_TD2" cx="11.5" cy="114.5" r="3.5" fill="#b6bec6" data-name="TD2">
+        <title>TD2</title>
+      </circle>
+      <circle id="LED_TD1" cx="11.5" cy="107.5" r="3.5" fill="#b6bec6" data-name="TD1">
+        <title>TD1</title>
+      </circle>
+      <circle id="LED_MD2" cx="11.5" cy="100.5" r="3.5" fill="#b6bec6" data-name="MD2">
+        <title>MD2</title>
+      </circle>
+      <circle id="LED_MD1" cx="11.5" cy="93.5" r="3.5" fill="#b6bec6" data-name="MD1">
+        <title>MD1</title>
+      </circle>
+    </g>
+    <circle id="Screw" cx="24.5" cy="36.5" r="3.5" fill="#b6bec6"/>
+    <circle id="Screw-2" data-name="Screw" cx="24.5" cy="142.5" r="3.5" fill="#b6bec6"/>
+    <g id="Rectangle" fill="none" stroke="#b6bec6" stroke-width="1">
+      <rect width="21" height="33" rx="4" stroke="none" x="5" y="87"/>
+      <rect x="5.5" y="87.5" width="20" height="32" rx="3.5" fill="none"/>
+    </g>
+    <g id="Connectors">
+      <g id="XF20">
+        <g id="Right">
+          <circle id="M8" cx="22.0" cy="22.5" r="4" fill="#0091dc" stroke="#0091dc" stroke-width="2"/>
+        </g>
+        <title>XF20</title>
+      </g>
+      <g id="XF10">
+        <g id="Left">
+          <circle id="M8-2" data-name="M8" cx="22.0" cy="9.5" r="4" fill="#0091dc" stroke="#0091dc" stroke-width="2"/>
+        </g>
+        <title>XF10</title>
+      </g>
+    </g>
+  </g>
+</svg>
