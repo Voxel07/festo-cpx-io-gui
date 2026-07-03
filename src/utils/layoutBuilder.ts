@@ -30,15 +30,22 @@ function isApIM12orM8(name: string): boolean {
 /** AP-chain interface — module that has explicit ap-in / ap-out handles instead of
  *  the standard left/right cable handles. */
 function isApChainInterface(name: string): boolean {
-    return isEpli(name) || isVabxApInterface(name) || isApIM12orM8(name)
+    return isEpli(name) || isVabxApInterface(name) || isApIM12orM8(name) || name === 'VMPAL-EPL-AP'
 }
 
 /** Handle position percentages within the SVG image container box (60 × 128 px).
  *  Derived from connector circle centres in each module's SVG. */
-function getApHandlePos(name: string): {
+function getApHandlePos(mod: TopologyModule): {
     apInTop: string; apInLeft: string
     apOutTop: string; apOutLeft: string
 } {
+    const name = mod.Name
+    if (name === 'VMPAL-EPL-AP') {
+        const numValves = mod.ValveSlots ?? 16
+        const svgW = 33 + numValves * 10
+        const leftPct = (12.5 / svgW * 100).toFixed(2) + '%'
+        return { apInTop: '19.72%', apInLeft: leftPct, apOutTop: '38.99%', apOutLeft: leftPct }
+    }
     if (isVabxApInterface(name)) {
         // VABX-A-EL-API-S.svg viewBox 46×109; objectFit:contain scale = 128/109 ≈ 1.174
         // XF10 cy=23.5 → 21.6 %  |  XF20 cy=44.5 → 40.8 %  |  cx=12.0 → 28.5 %
@@ -180,7 +187,7 @@ export function buildLayout(
             const stride = NODE_W + INLINE_G
             const isDirectValveBody = seg.kind === 'apa' && isValveBody(m.Name)
             const modIsApChain = isApChainInterface(m.Name)
-            const apPos = modIsApChain ? getApHandlePos(m.Name) : undefined
+            const apPos = modIsApChain ? getApHandlePos(m) : undefined
 
             modNodes.push({
                 id,
