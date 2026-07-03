@@ -67,9 +67,9 @@ export default function AppHeader({
                     setDiagCount(d.length)
                     if (d.length === 0) {
                         setDiagSeverity('none')
-                    } else if (d.some((x: any) => x.name.toLowerCase().includes('error') || x.description.toLowerCase().includes('error'))) {
+                    } else if (d.some((x: any) => x.severity === 'error' || (!x.severity && (x.name.toLowerCase().includes('error') || x.description.toLowerCase().includes('error'))))) {
                         setDiagSeverity('error')
-                    } else if (d.some((x: any) => x.name.toLowerCase().includes('warning') || x.description.toLowerCase().includes('warning'))) {
+                    } else if (d.some((x: any) => x.severity === 'warning' || (!x.severity && (x.name.toLowerCase().includes('warning') || x.description.toLowerCase().includes('warning'))))) {
                         setDiagSeverity('warning')
                     } else {
                         setDiagSeverity('info')

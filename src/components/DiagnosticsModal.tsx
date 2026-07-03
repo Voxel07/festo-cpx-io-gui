@@ -16,6 +16,8 @@ interface DiagnosisEntry {
     name: string
     description: string
     guideline: string
+    channel?: number
+    severity?: string
 }
 
 interface Props {
@@ -86,9 +88,10 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1, borderBottom: '1px solid #e0e0e0' }}>
                 <ReportProblemIcon sx={{
-                    color: diagnoses.some(d => d.name.toLowerCase().includes('error') || d.description.toLowerCase().includes('error')) ? '#d32f2f' :
-                        diagnoses.some(d => d.name.toLowerCase().includes('warning') || d.description.toLowerCase().includes('warning')) ? '#ed6c02' :
-                            diagnoses.length > 0 ? '#0288d1' : 'action'
+                    color: diagnoses.some(d => d.severity === 'error') ? '#d32f2f' :
+                        diagnoses.some(d => d.severity === 'warning') ? '#ed6c02' :
+                            diagnoses.some(d => d.severity === 'maintenance') ? '#0288d1' :
+                                diagnoses.length > 0 ? '#4caf50' : 'action'
                 }} />
                 <Box sx={{ flex: 1 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
@@ -99,9 +102,6 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
                     </Typography>
                 </Box>
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                    <Typography variant="caption" sx={{ color: '#666', fontStyle: 'italic', mr: 1, minWidth: 100, textAlign: 'right' }}>
-                        Refreshes in {secondsLeft}s
-                    </Typography>
                     <TooltipButton
                         size="small"
                         variant="outlined"
@@ -111,7 +111,7 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
                         icon={loading ? <CircularProgress size={12} /> : <RefreshIcon sx={{ fontSize: '0.9rem' }} />}
                         sx={{ py: 0.3, px: 1, fontSize: '0.68rem', height: 26 }}
                     >
-                        Refresh
+                        Refresh ({secondsLeft}s)
                     </TooltipButton>
                 </Stack>
             </DialogTitle>
@@ -143,30 +143,41 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
                         </Box>
                     </Box>
                 ) : (
-                    <Stack spacing={2}>
-                        <Alert severity="warning" sx={{ py: 0, '& .MuiAlert-message': { fontSize: '0.72rem', fontWeight: 600 } }}>
-                            {diagnoses.length} active diagnostic warning(s) detected in the system!
-                        </Alert>
-
+                    <Stack spacing={2} sx={{ mt: 1 }}>
                         <TableContainer component={Paper} variant="outlined">
                             <Table size="small">
                                 <TableHead sx={{ background: '#f5f5f5' }}>
                                     <TableRow>
                                         <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, width: '25%' }}>Module</TableCell>
+                                        <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, width: '5%' }}>Address</TableCell>
+                                        <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, width: '5%' }}>Channel</TableCell>
+                                        <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, width: '10%' }}>Severity</TableCell>
                                         <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, width: '15%' }}>Diag Code</TableCell>
-                                        <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, width: '35%' }}>Description</TableCell>
-                                        <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, width: '25%' }}>Action Guideline</TableCell>
+                                        <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, width: '20%' }}>Description</TableCell>
+                                        <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700, width: '20%' }}>Action Guideline</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {diagnoses.map((diag) => (
-                                        <TableRow key={`${diag.address}-${diag.diagnosis_id}`} sx={{ background: '#fff' }}>
+                                        <TableRow key={`${diag.address}-${diag.channel ?? 'none'}-${diag.diagnosis_id}`} sx={{ background: '#fff' }}>
                                             <TableCell>
                                                 <Typography sx={{ fontSize: '0.72rem', fontWeight: 700 }}>
                                                     {diag.module_name}
                                                 </Typography>
-                                                <Typography sx={{ fontSize: '0.62rem', color: '#666' }}>
-                                                    Address: #{diag.address}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography sx={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                                                    #{diag.address}
+                                                </Typography>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography sx={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                                                    {diag.channel != null ? diag.channel : '-'}
+                                                </Typography>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: diag.severity === 'error' ? '#d32f2f' : diag.severity === 'warning' ? '#ed6c02' : diag.severity === 'maintenance' ? '#0288d1' : '#4caf50' }}>
+                                                    {diag.severity ? diag.severity.toUpperCase() : 'UNKNOWN'}
                                                 </Typography>
                                             </TableCell>
                                             <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.72rem', fontWeight: 600 }}>
@@ -175,9 +186,6 @@ export default function DiagnosticsModal({ open, onClose, ip }: Props) {
                                             <TableCell>
                                                 <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: '#d32f2f' }}>
                                                     {diag.name}
-                                                </Typography>
-                                                <Typography sx={{ fontSize: '0.68rem', color: '#555', mt: 0.25 }}>
-                                                    {diag.description}
                                                 </Typography>
                                             </TableCell>
                                             <TableCell sx={{ fontSize: '0.68rem', color: '#1b5e20', fontStyle: 'italic', bgcolor: '#f1f8e9' }}>
