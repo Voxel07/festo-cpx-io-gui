@@ -1,5 +1,10 @@
 import { Box, Paper, Stack, Typography, IconButton, Tooltip, LinearProgress, Chip } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import CancelIcon from '@mui/icons-material/Cancel'
+import HourglassBottomIcon from '@mui/icons-material/HourglassBottom'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import type { Checkpoint } from './TestRunTab'
 
 const TERMINAL_STATUSES = new Set<Checkpoint['status']>(['passed', 'failed', 'skipped'])
@@ -11,6 +16,7 @@ interface TestProgressProps {
     tests: string[]
     checkpoints: Checkpoint[]
     results?: Array<{ test_id?: string; passed?: boolean; error?: string; duration_ms?: number;[k: string]: unknown }>
+    logs?: Array<{ level: string; message: string; timestamp: string }>
     onRefresh: () => void
 }
 
@@ -21,6 +27,7 @@ export default function TestProgress({
     tests,
     checkpoints,
     results = [],
+    logs = [],
     onRefresh,
 }: TestProgressProps) {
     const cpMap = new Map(checkpoints.map(c => [c.test, c]))
@@ -82,29 +89,136 @@ export default function TestProgress({
                     const testDur = matchResult?.duration_ms
 
                     return (
-                        <Stack key={testId} direction="row" sx={{ alignItems: 'center' }} spacing={1}>
-                            <Chip
-                                label={testId}
-                                size="small"
-                                color={color}
-                                variant={cStatus === 'pending' ? 'outlined' : 'filled'}
-                                sx={{ minWidth: 180, justifyContent: 'flex-start' }}
-                            />
-                            <Typography variant="caption" color={cStatus === 'skipped' ? 'warning.main' : 'text.secondary'}>
-                                {cStatus === 'passed' ? '✓' : cStatus === 'failed' ? '✗' :
-                                    cStatus === 'skipped' ? '⚠' :
-                                        cStatus === 'running' ? '⏳' : '○'}{' '}
-                                {cStatus}
-                            </Typography>
-                            {testDur !== undefined && testDur !== null && (
-                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                                    {testDur}ms
+                        <Box key={testId}>
+                            <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
+                                <Chip
+                                    label={testId}
+                                    size="small"
+                                    color={color}
+                                    variant={cStatus === 'pending' ? 'outlined' : 'filled'}
+                                    sx={{ minWidth: 180, justifyContent: 'flex-start' }}
+                                />
+                                <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }} color={cStatus === 'skipped' ? 'warning.main' : 'text.secondary'}>
+                                    {cStatus === 'passed' ? <CheckCircleIcon sx={{ fontSize: 14 }} color="success" /> :
+                                        cStatus === 'failed' ? <CancelIcon sx={{ fontSize: 14 }} color="error" /> :
+                                            cStatus === 'skipped' ? <WarningAmberIcon sx={{ fontSize: 14 }} color="warning" /> :
+                                                cStatus === 'running' ? <HourglassBottomIcon sx={{ fontSize: 14 }} color="info" /> :
+                                                    <RadioButtonUncheckedIcon sx={{ fontSize: 14 }} color="disabled" />}
+                                    {cStatus}
                                 </Typography>
+                                {testDur !== undefined && testDur !== null && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                                        {testDur}ms
+                                    </Typography>
+                                )}
+                            </Stack>
+
+                            {/* Display expected outcomes if this is the open-load-diag test */}
+                            {testId === 'open-load-diag' && logs.length > 0 && (
+                                <OpenLoadDiagProgress logs={logs} />
                             )}
-                        </Stack>
+                        </Box>
                     )
                 })}
             </Stack>
         </Paper>
+    )
+}
+
+function OpenLoadDiagProgress({ logs }: { logs: Array<{ message: string }> }) {
+    const modules = new Map<string, { addr: string, name: string, numChannels: number, expected: Set<number>, actual: number | 'none' | null }>();
+
+    for (const l of logs) {
+        if (l.message.startsWith('OPEN_LOAD_INIT|')) {
+            const [, addr, name, numStr] = l.message.split('|')
+            if (!modules.has(addr)) {
+                modules.set(addr, { addr, name, numChannels: parseInt(numStr, 10), expected: new Set(), actual: null });
+            }
+        } else if (l.message.startsWith('OPEN_LOAD_EXPECTED|')) {
+            const [, addr, chStr] = l.message.split('|')
+            modules.get(addr)?.expected.add(parseInt(chStr, 10))
+        } else if (l.message.startsWith('OPEN_LOAD_ACTUAL|')) {
+            const [, addr, chStr] = l.message.split('|')
+            const mod = modules.get(addr)
+            if (mod) {
+                mod.actual = chStr === 'none' ? 'none' : parseInt(chStr, 10)
+            }
+        }
+    }
+
+    if (modules.size === 0) return null;
+
+    return (
+        <Box sx={{ pl: 4, pt: 0.5, pb: 0.5 }}>
+            {Array.from(modules.values()).map(mod => {
+                const expectedList = Array.from(mod.expected).sort((a, b) => a - b);
+                const unexpectedList = [];
+                for (let i = 0; i < mod.numChannels; i++) {
+                    if (!mod.expected.has(i)) unexpectedList.push(i);
+                }
+
+                return (
+                    <Box key={mod.addr} sx={{ mb: 1 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>module {mod.addr} ({mod.name})</Typography>
+
+                        {expectedList.length > 0 && (
+                            <Box sx={{ ml: 1 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontStyle: 'italic' }}>Expected diag</Typography>
+                                {expectedList.map(ch => {
+                                    let statusText = "waiting...";
+                                    let color = "text.secondary";
+                                    let icon = <HourglassBottomIcon sx={{ fontSize: 12, mr: 0.5 }} color="disabled" />;
+                                    if (mod.actual !== null) {
+                                        if (mod.actual === ch) {
+                                            statusText = "got diag";
+                                            color = "success.main";
+                                            icon = <CheckCircleIcon sx={{ fontSize: 12, mr: 0.5 }} color="success" />;
+                                        } else {
+                                            statusText = "did not get";
+                                            color = "error.main";
+                                            icon = <CancelIcon sx={{ fontSize: 12, mr: 0.5 }} color="error" />;
+                                        }
+                                    }
+                                    return (
+                                        <Typography key={ch} variant="caption" color={color} sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+                                            <span style={{ marginRight: 4 }}>- Channel {ch} →</span>
+                                            {icon} {statusText}
+                                        </Typography>
+                                    )
+                                })}
+                            </Box>
+                        )}
+
+                        {unexpectedList.length > 0 && (
+                            <Box sx={{ ml: 1, mt: 0.5 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontStyle: 'italic' }}>No diag expected</Typography>
+                                {unexpectedList.map(ch => {
+                                    let statusText = "waiting...";
+                                    let color = "text.secondary";
+                                    let icon = <HourglassBottomIcon sx={{ fontSize: 12, mr: 0.5 }} color="disabled" />;
+                                    if (mod.actual !== null) {
+                                        if (mod.actual === ch) {
+                                            statusText = "got diag";
+                                            color = "error.main";
+                                            icon = <CancelIcon sx={{ fontSize: 12, mr: 0.5 }} color="error" />;
+                                        } else {
+                                            statusText = "ok";
+                                            color = "success.main";
+                                            icon = <CheckCircleIcon sx={{ fontSize: 12, mr: 0.5 }} color="success" />;
+                                        }
+                                    }
+                                    return (
+                                        <Typography key={ch} variant="caption" color={color} sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+                                            <span style={{ marginRight: 4 }}>- Channel {ch} →</span>
+                                            {icon} {statusText}
+                                        </Typography>
+                                    )
+                                })}
+                            </Box>
+                        )}
+                    </Box>
+                )
+            })}
+        </Box>
     )
 }

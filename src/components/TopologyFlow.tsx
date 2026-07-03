@@ -124,7 +124,7 @@ export default function TopologyFlow({
     const [showApCables, setShowApCables] = useState(true)
     const [showIoCables, setShowIoCables] = useState(true)
     const [ioEdges, setIoEdges] = useState<Edge[]>([])
-    const alerts = useContext(AlertsContext)
+    useContext(AlertsContext)
 
     // ── Derive ioEdges from rawConfig (no need to fetch again) ────────────
     useEffect(() => {

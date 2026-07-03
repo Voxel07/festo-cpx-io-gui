@@ -93,7 +93,7 @@ export function useModifiedSvg(svgUrl: string, hiddenIds: string[], numValves?: 
                     // Trigger next effect run by setting displayUrl to fallback, 
                     // or just let a re-render handle it if it was tied to state.
                     // Actually, setting displayUrl to fallback is fine, but we can also manually call the builder here.
-                    const timer = setTimeout(() => {
+                    void setTimeout(() => {
                         const next = buildDataUrl(fetchedText, hiddenIds, numValves)
                         dataUrlCache.set(cacheKey, next)
                         if (!cancelled) setDisplayUrl(next)

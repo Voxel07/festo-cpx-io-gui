@@ -67,16 +67,8 @@ export type WireData = {
     cpOffsetY?: number
 }
 
-function getDeterministicOffset(id: string): number {
-    let hash = 0
-    for (let i = 0; i < id.length; i++) {
-        hash = id.charCodeAt(i) + ((hash << 5) - hash)
-    }
-    return (Math.abs(hash) % 7) * 6 - 18
-}
-
 function buildRoutedPath(
-    id: string,
+    _id: string,
     sx: number, sy: number,
     tx: number, ty: number,
     waypoints: Array<{ x: number; y: number }>,
@@ -160,7 +152,7 @@ export function WireEdge({
     }
     const nodes = getNodes()
 
-    const { path, points } = buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraightProp || forceStraight)
+    const { points } = buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraightProp || forceStraight)
 
     // Calculate offset for overlapping redundant wires
     const edges = useReactFlow().getEdges()

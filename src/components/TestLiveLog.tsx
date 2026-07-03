@@ -51,7 +51,9 @@ export default function TestLiveLog({ displayLogs, sseLogsActive, hasLogs }: Tes
                             No log entries yet. Start a test run to see output here.
                         </Box>
                     )}
-                    {displayLogs.map((entry, i) => (
+                    {displayLogs
+                        .filter(entry => !entry.message.startsWith('OPEN_LOAD_'))
+                        .map((entry, i) => (
                         <div key={`${entry.timestamp}-${i}`} style={{
                             color: entry.level === 'error' ? '#f44747' :
                                 entry.level === 'warning' ? '#cca700' : '#d4d4d4',

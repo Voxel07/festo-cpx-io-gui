@@ -1,5 +1,6 @@
 import { lazy, Suspense, useReducer, useRef, useEffect, useMemo } from 'react'
-import { Box, Tabs, Tab, CircularProgress, Typography } from '@mui/material'
+import { Box, Tabs, Tab, CircularProgress, Typography, IconButton, Tooltip } from '@mui/material'
+import DashboardIcon from '@mui/icons-material/Dashboard'
 import AppHeader from './components/AppHeader'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig } from './types'
 import { AlertsManager, AlertsContext } from './utils/AlertsManager'
@@ -431,8 +432,8 @@ export default function App() {
 
                 {/* ── Tab bar ── */}
                 {!fullscreen && (
-                    <Box sx={{ background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
-                        <Tabs value={tab} onChange={(_, v) => dispatch({ type: 'SET_TAB', tab: v })} sx={{ minHeight: 38 }}
+                    <Box sx={{ background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                        <Tabs value={tab} onChange={(_, v) => dispatch({ type: 'SET_TAB', tab: v })} sx={{ minHeight: 38, flex: 1 }}
                             variant="scrollable" scrollButtons="auto">
                             <Tab label="Topology" sx={{ minHeight: 38 }} />
                             <Tab label="Connections" sx={{ minHeight: 38 }} />
@@ -440,6 +441,15 @@ export default function App() {
                             <Tab label="Raw Mode" sx={{ minHeight: 38 }} />
                             <Tab label="History" sx={{ minHeight: 38 }} />
                         </Tabs>
+                        <Tooltip title="Open Analytics Dashboard">
+                            <IconButton
+                                size="small"
+                                sx={{ mr: 1, color: 'primary.main' }}
+                                onClick={() => window.open('/#/dashboard', '_blank')}
+                            >
+                                <DashboardIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                 )}
 

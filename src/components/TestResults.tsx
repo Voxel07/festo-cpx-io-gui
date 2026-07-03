@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { Box, Paper, Typography, Chip } from '@mui/material'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import CancelIcon from '@mui/icons-material/Cancel'
+import HourglassBottomIcon from '@mui/icons-material/HourglassBottom'
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 
 interface TestResultsProps {
     status: 'idle' | 'starting' | 'running' | 'completed' | 'error'
@@ -19,11 +23,11 @@ function modStatus(mr: Record<string, unknown>, isCurrent: boolean): 'running' |
     return 'pending'
 }
 
-const MOD_ICON: Record<string, string> = {
-    running: '⏳',
-    passed: '✓',
-    failed: '✗',
-    pending: '○',
+const MOD_ICON: Record<string, JSX.Element> = {
+    running: <HourglassBottomIcon sx={{ fontSize: 14 }} color="info" />,
+    passed: <CheckCircleIcon sx={{ fontSize: 14 }} color="success" />,
+    failed: <CancelIcon sx={{ fontSize: 14 }} color="error" />,
+    pending: <RadioButtonUncheckedIcon sx={{ fontSize: 14 }} color="disabled" />,
 }
 
 const MOD_COLOR: Record<string, string> = {
@@ -71,11 +75,10 @@ export default function TestResults({ status, results = [], currentModule }: Tes
                                     sx={{ fontSize: '0.65rem', height: 20 }}
                                 />
                             )}
-                            <span style={{
-                                fontWeight: 700, fontSize: '0.85rem',
-                                color: passed ? '#2e7d32' : passed === false ? '#d32f2f' : '#888',
-                            }}>
-                                {passed ? '✓' : passed === false ? '✗' : '○'}
+                            <span style={{ display: 'flex', alignItems: 'center' }}>
+                                {passed ? <CheckCircleIcon sx={{ fontSize: 16 }} color="success" /> : 
+                                 passed === false ? <CancelIcon sx={{ fontSize: 16 }} color="error" /> : 
+                                 <RadioButtonUncheckedIcon sx={{ fontSize: 16 }} color="disabled" />}
                             </span>
                         </Box>
 
@@ -91,7 +94,9 @@ export default function TestResults({ status, results = [], currentModule }: Tes
                                     return (
                                                         <Box key={si}>
                                                             <Typography variant="caption" sx={{
-                                                                display: 'block',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: 0.5,
                                                                 fontSize: '0.62rem',
                                                                 color: MOD_COLOR[ms] as string,
                                                             }}>

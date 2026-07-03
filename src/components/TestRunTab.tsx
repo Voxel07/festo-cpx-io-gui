@@ -262,6 +262,7 @@ export default function TestRunTab({ ip }: Props) {
                         tests={displayTests}
                         checkpoints={runState.checkpoints ?? []}
                         results={runState.results}
+                        logs={displayLogs}
                         onRefresh={fetchStatus}
                     />
                 )}

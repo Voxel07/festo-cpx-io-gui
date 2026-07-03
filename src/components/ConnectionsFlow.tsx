@@ -527,7 +527,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
     // ── Validate: enforce input→output compatibility + block exact duplicates ──
     const isValidConnection = useCallback((conn: Connection | Edge): boolean => {
-        const c = conn as Connection
+        const c = conn as Connection & { data?: Record<string, unknown> }
         const sh = c.sourceHandle ?? ''
         const th = c.targetHandle ?? ''
         if (!sh.startsWith('src-') || !th.startsWith('tgt-')) return false
