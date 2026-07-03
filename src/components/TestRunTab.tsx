@@ -14,7 +14,7 @@ import TestLiveLog from './TestLiveLog'
 
 const POLL_MS = 2000
 
-const CONFIG_PATH = 'bench_config.json'
+const CONFIG_PATH = 'data/bench_config.json'
 
 export interface Checkpoint {
     test: string

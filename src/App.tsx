@@ -58,7 +58,7 @@ const initialAppState: AppState = {
     rawSelectedAddr: null,
     diagOpen: false,
     rawConfig: null,
-    configPath: 'bench_config.json',
+    configPath: 'data/bench_config.json',
 }
 
 type AppAction =
@@ -278,10 +278,11 @@ export default function App() {
         return () => clearInterval(timer)
     }, [])
 
-    // Auto-load bench_config.json on startup
+    // Auto-load data/bench_config.json on startup
     useEffect(() => {
+        if (!configPath) return
         let cancelled = false
-        fetch('/config?file_path=bench_config.json')
+        fetch(`/config?file_path=${encodeURIComponent(configPath)}`)
             .then(r => {
                 if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`)
                 return r.json()
@@ -293,9 +294,12 @@ export default function App() {
             })
             .catch(err => {
                 console.error("Auto-load config failed:", err)
+                if (!cancelled) {
+                    alertsRef.current?.showAlert('info', `Config file '${configPath}' not found. Please generate it in the Topology tab.`)
+                }
             })
         return () => { cancelled = true }
-    }, [])
+    }, [configPath])
 
     // Drag-to-resize height handle
     const dragRef = useRef({ active: false, startY: 0, startH: 0 })

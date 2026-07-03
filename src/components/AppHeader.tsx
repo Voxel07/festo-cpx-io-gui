@@ -109,7 +109,7 @@ export default function AppHeader({
                     label="Config File" value={configPath}
                     onChange={e => onConfigPathChange(e.target.value)}
                     size="small" variant="outlined"
-                    placeholder="bench_config.json"
+                    placeholder="data/bench_config.json"
                     sx={{ ...appBarFieldSx, width: 160 }}
                 />
                 <Stack direction="row" spacing={1} sx={{ ml: 'auto', alignItems: 'center' }}>

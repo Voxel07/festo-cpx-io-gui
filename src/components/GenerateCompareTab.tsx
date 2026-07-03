@@ -87,6 +87,24 @@ function WriteStep({ busy, savedTo, disabled, onWrite }: WriteStepProps) {
     )
 }
 
+interface DeleteStepProps {
+    busy: boolean
+    disabled: boolean
+    onDelete: () => void
+}
+function DeleteStep({ busy, disabled, onDelete }: DeleteStepProps) {
+    return (
+        <Button
+            variant="outlined" color="error"
+            onClick={onDelete} disabled={busy || disabled}
+            startIcon={busy ? <CircularProgress size={14} color="inherit" /> : undefined}
+            sx={{ height: 36, whiteSpace: 'nowrap', ml: 'auto' }}
+        >
+            {busy ? 'Deleting…' : 'Delete File'}
+        </Button>
+    )
+}
+
 interface LiveConfigPreviewProps {
     topology: Topology
 }
@@ -132,6 +150,8 @@ interface TabState {
     writeBusy: boolean
     writeError: string | null
     savedTo: string | null
+    delBusy: boolean
+    delError: string | null
 }
 
 const initialTabState: TabState = {
@@ -145,6 +165,8 @@ const initialTabState: TabState = {
     writeBusy: false,
     writeError: null,
     savedTo: null,
+    delBusy: false,
+    delError: null,
 }
 
 type TabAction =
@@ -158,6 +180,9 @@ type TabAction =
     | { type: 'WRITE_SUCCESS'; savedTo: string }
     | { type: 'WRITE_FAIL'; error: string }
     | { type: 'RESET_SAVED' }
+    | { type: 'DELETE_START' }
+    | { type: 'DELETE_SUCCESS' }
+    | { type: 'DELETE_FAIL'; error: string }
 
 function tabReducer(state: TabState, action: TabAction): TabState {
     switch (action.type) {
@@ -181,6 +206,12 @@ function tabReducer(state: TabState, action: TabAction): TabState {
             return { ...state, writeBusy: false, writeError: action.error }
         case 'RESET_SAVED':
             return { ...state, savedTo: null }
+        case 'DELETE_START':
+            return { ...state, delBusy: true, delError: null }
+        case 'DELETE_SUCCESS':
+            return { ...state, delBusy: false, savedTo: null, cmpData: null }
+        case 'DELETE_FAIL':
+            return { ...state, delBusy: false, delError: action.error }
         default:
             return state
     }
@@ -200,6 +231,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult, configPath }
         writeBusy,
         writeError,
         savedTo,
+        delBusy,
     } = state
 
     async function readLive() {
@@ -292,6 +324,26 @@ export default function GenerateCompareTab({ ip, timeout, onResult, configPath }
         }
     }
 
+    async function deleteFile() {
+        if (!configPath) return
+        if (!window.confirm(`Delete configuration file ${configPath}?`)) return
+        dispatch({ type: 'DELETE_START' })
+        try {
+            const r = await fetch(`/config?file_path=${encodeURIComponent(configPath)}`, { method: 'DELETE' })
+            const d = await r.json()
+            if (!r.ok) {
+                dispatch({ type: 'DELETE_FAIL', error: d.detail ?? 'Unknown error' })
+                alerts?.showAlert('error', d.detail ?? 'Unknown error')
+                return
+            }
+            dispatch({ type: 'DELETE_SUCCESS' })
+            alerts?.showAlert('success', `Deleted configuration file ${configPath}`)
+        } catch (e) {
+            dispatch({ type: 'DELETE_FAIL', error: (e as Error).message })
+            alerts?.showAlert('error', (e as Error).message)
+        }
+    }
+
     const hasContent = readError || liveConfig || cmpError || cmpData || writeError || savedTo
 
     return (
@@ -316,6 +368,8 @@ export default function GenerateCompareTab({ ip, timeout, onResult, configPath }
 
                 <Divider orientation="vertical" flexItem sx={{ my: 0.25 }} />
                 <WriteStep busy={writeBusy} savedTo={savedTo} disabled={!liveTopology} onWrite={writeToFile} />
+                
+                <DeleteStep busy={delBusy} disabled={!configPath} onDelete={deleteFile} />
             </Box>
 
             {/* ── Results area ──────────────────────────────────── */}

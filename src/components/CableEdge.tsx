@@ -22,8 +22,9 @@ export function CableEdge({ sourceX, sourceY, targetX, targetY, label, style, ma
     let labelY = 0
 
     if (isStraight) {
-        path = `M ${sourceX},${sourceY} L ${targetX},${targetY}`
-        labelX = (sourceX + targetX) / 2
+        const mx = (sourceX + targetX) / 2
+        path = `M ${sourceX},${sourceY} L ${mx},${sourceY} L ${mx},${targetY} L ${targetX},${targetY}`
+        labelX = mx
         labelY = (sourceY + targetY) / 2
     } else {
         const STUB = 50   // horizontal stub before going vertical

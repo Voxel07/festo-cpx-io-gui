@@ -49,6 +49,23 @@ function handleKind(handleId: string): PortKind {
     return 'inout'
 }
 
+const COLOR_PALETTE = [
+    '#d81b60', // Pink/Red
+    '#00897b', // Teal
+    '#f57c00', // Orange
+    '#8e24aa', // Purple
+    '#1e88e5', // Blue
+    '#c0ca33', // Lime
+    '#546e7a', // Blue Grey
+]
+
+function getWireColor(handleId: string, portEdgeCount: number): string {
+    const outKind = handleKind(handleId)
+    const baseColor = outKind === 'out' ? '#2e7d32' : outKind === 'in' ? '#1565c0' : IO_COLOR
+    if (portEdgeCount === 0) return baseColor
+    return COLOR_PALETTE[(portEdgeCount - 1) % COLOR_PALETTE.length]
+}
+
 /** Extract port ID from handle: 'src-out-X0' → 'X0', 'src-X0' (legacy) → 'X0' */
 function portId(handleId: string): string {
     const parts = handleId.split('-')
@@ -310,6 +327,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         }
 
         const loaded: WiringConnection[] = d.wiring ?? []
+        const portEdgeCounts: Record<string, number> = {}
         const newIo: Edge[] = loaded.map(c => {
             const srcAddrStr = c.source_instance_id.replace(/^mod-0*/, '')
             const tgtAddrStr = c.target_instance_id.replace(/^mod-0*/, '')
@@ -317,6 +335,12 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             const tgtAddr = tgtAddrStr === '' ? 0 : parseInt(tgtAddrStr)
             const resolvedSrcHandle = c.source_handle || `src-${srcKind(srcAddr)}-${c.source_channel}`
             const resolvedTgtHandle = c.target_handle || `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`
+
+            const portKey = `${srcAddr}-${resolvedSrcHandle}`
+            const count = portEdgeCounts[portKey] || 0
+            portEdgeCounts[portKey] = count + 1
+            const wireColor = getWireColor(resolvedSrcHandle, count)
+
             return {
                 id: c.id,
                 source: String(srcAddr),
@@ -326,7 +350,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 type: 'wire',
                 animated: true,
                 zIndex: 1000,
-                style: { stroke: IO_COLOR, strokeWidth: 2.5 },
+                style: { stroke: wireColor, strokeWidth: 2.5 },
                 label: c.label ?? `#${srcAddr}:${c.source_channel} → #${tgtAddr}:${c.target_channel}`,
                 data: {
                     kind: 'io',
@@ -336,6 +360,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                     subTgt: c.target_subchannel,
                     waypoints: c.waypoints ?? undefined,
                     straight: c.straight ?? false,
+                    wireColor,
                 },
             }
         })
@@ -446,26 +471,9 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             ? `io-${srcNode}-${pSrc}.${subSrc}-${tgtNode}-${pTgt}.${subTgt}`
             : `io-${srcNode}-${pSrc}-${tgtNode}-${pTgt}`
 
-        // Wire colour by source port kind
-        const outKind = handleKind(sh)
-        let wireColor = outKind === 'out' ? '#2e7d32' : outKind === 'in' ? '#1565c0' : IO_COLOR
-
-        // Multi-color logic for multiple edges to same device
-        // Count existing edges between these two nodes
-        const existingEdges = edges.filter(e => e.source === srcNode && e.target === tgtNode)
-        const colorPalette = [
-            wireColor,
-            '#d81b60', // Pink/Red
-            '#00897b', // Teal
-            '#f57c00', // Orange
-            '#8e24aa', // Purple
-            '#1e88e5', // Blue
-            '#c0ca33', // Lime
-            '#546e7a', // Blue Grey
-        ]
-        if (existingEdges.length > 0) {
-            wireColor = colorPalette[existingEdges.length % colorPalette.length]
-        }
+        // Multi-color logic: count existing edges leaving the same source port
+        const existingEdges = edges.filter(e => e.source === srcNode && e.sourceHandle === sh)
+        const wireColor = getWireColor(sh, existingEdges.length)
 
         const newEdge: Edge = {
             id: edgeId,

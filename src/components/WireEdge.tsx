@@ -130,13 +130,13 @@ export function WireEdge({
 
     const isStraightProp = d?.straight ?? false
 
-    // Hide label and force straight line on short AP-A runs
     let hideLabel = false
-    let forceStraight = false
+    let isAdjacent = false
     const srcAddr = parseInt(source, 10)
     const tgtAddr = parseInt(target, 10)
     if (!isNaN(srcAddr) && !isNaN(tgtAddr)) {
         if (Math.abs(srcAddr - tgtAddr) === 1) {
+            isAdjacent = true
             const nodes = getNodes()
             const srcNode = nodes.find(n => n.id === source)
             const tgtNode = nodes.find(n => n.id === target)
@@ -145,14 +145,13 @@ export function WireEdge({
                 const isTgtApa = (tgtNode.data as any).mod?.Name?.startsWith('CPX-AP-A')
                 if (isSrcApa && isTgtApa) {
                     hideLabel = true
-                    forceStraight = true
                 }
             }
         }
     }
     const nodes = getNodes()
 
-    const { points } = buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraightProp || forceStraight)
+    const { points } = buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraightProp || isAdjacent)
 
     // Calculate offset for overlapping redundant wires
     const edges = useReactFlow().getEdges()
@@ -291,7 +290,7 @@ export function WireEdge({
             <BaseEdge id={id} path={svgPath}
                 style={{
                     stroke: color, strokeWidth,
-                    strokeDasharray: isStraightProp || forceStraight ? 'none' : '6 6',
+                    strokeDasharray: isStraightProp ? 'none' : '6 6',
                     strokeLinejoin: 'round'
                 }}
             />
