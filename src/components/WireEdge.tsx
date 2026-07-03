@@ -137,7 +137,7 @@ export function WireEdge({
     )
 
     const isStraightProp = d?.straight ?? false
-    
+
     // Hide label and force straight line on short AP-A runs
     let hideLabel = false
     let forceStraight = false
@@ -166,7 +166,7 @@ export function WireEdge({
     const edges = useReactFlow().getEdges()
     const siblingEdges = edges.filter(e => e.source === source && e.target === target && (e.data as any)?.kind === 'io')
     const myIndex = siblingEdges.findIndex(e => e.id === id)
-    
+
     const offsetMag = Math.ceil(myIndex / 2) * 6
     const offsetSign = myIndex % 2 === 0 ? 1 : -1
     const offset = myIndex <= 0 ? 0 : offsetMag * offsetSign

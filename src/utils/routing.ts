@@ -143,9 +143,9 @@ export function findSmartPath(
 
     // Generate a simple cache key based on obstacles to reuse the grid across multiple edges in the same render
     const currentObstaclesKey = obstacles.map(o => `${o.left},${o.right},${o.top},${o.bottom}`).join('|')
-    
+
     let grid: Uint8Array
-    
+
     if (cachedGrid && lastObstaclesKey === currentObstaclesKey && cachedGridCols === cols && cachedGridRows === rows && cachedMinX === minX && cachedMinY === minY) {
         grid = new Uint8Array(cachedGrid) // fast copy
     } else {
@@ -162,7 +162,7 @@ export function findSmartPath(
                 }
             }
         }
-        
+
         cachedGrid = new Uint8Array(grid)
         cachedGridCols = cols
         cachedGridRows = rows
@@ -271,7 +271,7 @@ export function findSmartPath(
             const nr = r + dirs[d].dr
 
             if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue
-            
+
             const nIdx = getIdx(nc, nr)
             if (grid[nIdx] === 1) continue // Blocked
 
@@ -302,14 +302,14 @@ export function findSmartPath(
 
     const path: Point[] = []
     let curr = getIdx(targetC, targetR)
-    
+
     while (cameFrom.has(curr)) {
         const c = curr % cols
         const r = Math.floor(curr / cols)
         path.push({ x: minX + c * GRID_SIZE, y: minY + r * GRID_SIZE })
         curr = cameFrom.get(curr)!.p
     }
-    
+
     path.push({ x: sx, y: sy })
     path.reverse()
     path[path.length - 1] = { x: tx, y: ty }
@@ -317,19 +317,19 @@ export function findSmartPath(
     // Simplify to corners
     const simplified: Point[] = [path[0]]
     let lastDir = { dx: 0, dy: 0 }
-    
+
     for (let i = 1; i < path.length; i++) {
         const prev = path[i - 1]
         const curr = path[i]
-        
+
         const dx = Math.sign(curr.x - prev.x)
         const dy = Math.sign(curr.y - prev.y)
-        
+
         if (i === 1) {
             lastDir = { dx, dy }
             continue
         }
-        
+
         if (dx !== lastDir.dx || dy !== lastDir.dy) {
             simplified.push(prev)
             lastDir = { dx, dy }

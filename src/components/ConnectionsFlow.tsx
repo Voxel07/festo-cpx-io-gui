@@ -294,9 +294,9 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         }
 
         const catByAddr: Record<number, string> = {}
-        ; (d.module_instances ?? []).forEach(inst => {
-            catByAddr[inst.address] = inst.category
-        })
+            ; (d.module_instances ?? []).forEach(inst => {
+                catByAddr[inst.address] = inst.category
+            })
 
         function srcKind(addr: number): string {
             const cat = catByAddr[addr] ?? 'inout'
@@ -436,11 +436,11 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     ) => {
         const pSrc = portId(sh)
         const pTgt = portId(th)
-        
+
         // Block same-port self-loop (same module AND same port ID) but allow
         // cross-port connections on the same module (DIDO / DIO loopback).
         if (srcNode === tgtNode && pSrc === pTgt) return
-        
+
         // If subchannels are provided, append them to the edge ID to make it unique per channel.
         const edgeId = subSrc !== undefined && subTgt !== undefined
             ? `io-${srcNode}-${pSrc}.${subSrc}-${tgtNode}-${pTgt}.${subTgt}`
@@ -508,7 +508,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             const tgtMod = topology?.Topology?.find(m => String(m.Adress) === tgtNode)
             const srcIsM12 = isM12(srcMod?.Name)
             const tgtIsM12 = isM12(tgtMod?.Name)
-            
+
             if (srcIsM12 || tgtIsM12) {
                 setPendingConn({ conn: connection, srcIsM12, tgtIsM12, sh, th, srcNode, tgtNode })
             } else {
@@ -552,7 +552,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
         // Block same-port self-loop; allow cross-port same-module connections (DIDO / DIO loopback).
         if (srcNode === tgtNode && portId(nsh) === portId(nth)) return false
-        
+
         const edgeId = subSrc !== undefined && subTgt !== undefined
             ? `io-${srcNode}-${portId(nsh)}.${subSrc}-${tgtNode}-${portId(nth)}.${subTgt}`
             : `io-${srcNode}-${portId(nsh)}-${tgtNode}-${portId(nth)}`
@@ -968,7 +968,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                         } else {
                             processConnection(srcNode, tgtNode, sh, th, srcSub as number, tgtSub as number)
                         }
-                        
+
                         setPendingConn(null)
                     }
                 }}
