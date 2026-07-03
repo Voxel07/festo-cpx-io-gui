@@ -27,8 +27,8 @@ export default defineConfig({
         },
     },
     build: {
-        // Write compiled assets into festo-cpx-io/dist so FastAPI can serve them
-        outDir: '../../festo-cpx-io/dist',
+        // Write compiled assets into festo-cpx-io-api/dist so FastAPI can serve them
+        outDir: '../festo-cpx-io-api/dist',
         emptyOutDir: true,
     },
 })
