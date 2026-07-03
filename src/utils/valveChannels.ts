@@ -19,6 +19,9 @@ const VALVE_CHANNEL_CONFIG: Array<[string, number]> = [
 
     // VP (proportional): 2 channels per valve
     ['VABX-A-VP-*', 2],
+
+    // VMPAL (valve terminal with link): 2 channels per valve, 4 valves
+    ['VMPAL-*', 2],
 ]
 
 /** Default channels-per-valve for unmatched VABX bodies */

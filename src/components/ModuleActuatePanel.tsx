@@ -31,7 +31,7 @@ interface Props {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const isM12 = (name?: string) => !!(name ?? '').includes('M12')
-const isValveBody = (name?: string) => /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(name ?? '')
+const isValveBody = (name?: string) => /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(name ?? '') || /VMPAL-/.test(name ?? '') // add modules that should use the valve controle pannel here
 const isValveInterface = (name?: string) => !!(name ?? '').startsWith('VABX-A') && /-E[LP][-_]/.test(name ?? '')
 
 function buildChannels(
