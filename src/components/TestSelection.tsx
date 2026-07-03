@@ -1,4 +1,4 @@
-import { Button, Checkbox, FormControlLabel, Paper, Stack, Typography, Chip, CircularProgress } from '@mui/material'
+import { Button, Checkbox, FormControlLabel, Paper, Stack, Typography, Chip, CircularProgress, Box } from '@mui/material'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 
 export interface AvailableTest {
@@ -34,7 +34,7 @@ export default function TestSelection({
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                 Select Tests
             </Typography>
-            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: 1, rowGap: 0.5, mb: 2 }}>
                 {availableTests.map(t => (
                     <FormControlLabel
                         key={t.id}
@@ -47,10 +47,10 @@ export default function TestSelection({
                             />
                         }
                         label={<Typography variant="caption">{t.label}</Typography>}
-                        sx={{ mr: 1 }}
+                        sx={{ m: 0 }}
                     />
                 ))}
-            </Stack>
+            </Box>
             <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
                 <Button
                     variant="contained"
