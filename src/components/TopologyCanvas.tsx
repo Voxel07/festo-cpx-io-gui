@@ -4,6 +4,7 @@
  */
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
+import { useTheme } from '@mui/material/styles'
 import {
     ReactFlow,
     Background,
@@ -39,7 +40,7 @@ interface Props {
 function FitViewTrigger({ nodesStr, padding }: { nodesStr: string, padding: number }) {
     const { fitView } = useReactFlow()
     const initialized = useNodesInitialized()
-    
+
     useEffect(() => {
         if (nodesStr && initialized) {
             const timer = setTimeout(() => {
@@ -65,8 +66,11 @@ export default function TopologyCanvas({
     elementsSelectable = editMode,
     children,
 }: Props) {
+    const theme = useTheme()
+
     return (
         <ReactFlow
+            colorMode={theme.palette.mode}
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
@@ -87,7 +91,7 @@ export default function TopologyCanvas({
             minZoom={0.1}
             maxZoom={4}
         >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+            <Background variant={BackgroundVariant.Dots} gap={16} size={1} color={theme.palette.mode === 'dark' ? '#555' : '#81818a'} />
             <Controls />
             {fitView && <FitViewTrigger nodesStr={nodes.map(n => n.id).join(',')} padding={fitViewPadding} />}
             {children}

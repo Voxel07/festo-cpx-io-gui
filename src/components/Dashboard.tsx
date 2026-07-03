@@ -15,13 +15,17 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import CancelIcon from '@mui/icons-material/Cancel'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import StorageIcon from '@mui/icons-material/Storage'
 import TerminalIcon from '@mui/icons-material/Terminal'
 import MonitorIcon from '@mui/icons-material/Monitor'
 import TimerIcon from '@mui/icons-material/Timer'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import { DataGrid } from '@mui/x-data-grid'
+import {
+    AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+    Tooltip as RechartsTooltip, ResponsiveContainer
+} from 'recharts'
 
 /* ── Types ────────────────────────────────────────────────────────── */
 
@@ -98,7 +102,7 @@ function fmtDate(iso: string): string {
     }
 }
 
-/* ── Trend area chart (inline SVG, viewBox-based for responsiveness) ── */
+/* ── Charts (Recharts) ── */
 
 function TrendAreaChart({ data, color = '#1976d2' }: {
     data: { date: string; rate: number }[]
@@ -106,63 +110,54 @@ function TrendAreaChart({ data, color = '#1976d2' }: {
 }) {
     if (!data.length) return <Typography variant="caption" color="text.secondary">No trend data</Typography>
 
-    const W = 900, H = 280
-    const pad = { top: 16, right: 20, bottom: 32, left: 44 }
-    const plotW = W - pad.left - pad.right
-    const plotH = H - pad.top - pad.bottom
+    return (
+        <Box sx={{ width: '100%', height: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data} margin={{ top: 16, right: 20, bottom: 0, left: 0 }}>
+                    <defs>
+                        <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+                            <stop offset="95%" stopColor={color} stopOpacity={0} />
+                        </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
+                    <XAxis dataKey="date" tickFormatter={t => t.slice(5)} tick={{ fontSize: 12 }} strokeOpacity={0.2} />
+                    <YAxis domain={['dataMin - 5', 100]} tick={{ fontSize: 12 }} strokeOpacity={0.2} tickFormatter={t => `${t}%`} />
+                    <RechartsTooltip
+                        contentStyle={{ borderRadius: 8, backgroundColor: 'var(--mui-palette-background-paper)', border: '1px solid var(--mui-palette-divider)', color: 'var(--mui-palette-text-primary)' }}
+                        itemStyle={{ color: 'var(--mui-palette-text-primary)' }}
+                        formatter={(val: any) => [`${val}%`, 'Success Rate']}
+                        labelStyle={{ color: 'var(--mui-palette-text-secondary)', marginBottom: 4 }}
+                    />
+                    <Area type="monotone" dataKey="rate" stroke={color} strokeWidth={3} fillOpacity={1} fill="url(#colorRate)" />
+                </AreaChart>
+            </ResponsiveContainer>
+        </Box>
+    )
+}
 
-    const rates = data.map(d => d.rate)
-    const minVal = Math.min(...rates, 90)
-    const maxVal = Math.max(...rates, 100)
-    const range = maxVal - minVal || 1
-
-    const points = data.map((d, i) => {
-        const x = pad.left + (i / Math.max(data.length - 1, 1)) * plotW
-        const y = pad.top + plotH - ((d.rate - minVal) / range) * plotH
-        return `${x},${y}`
-    })
-
-    const areaPath = points.length
-        ? `M${points[0]} L${points.join(' L')} L${pad.left + plotW},${pad.top + plotH} L${pad.left},${pad.top + plotH} Z`
-        : ''
-
-    const linePath = points.length ? `M${points.join(' L')}` : ''
-
-    const labelStep = Math.max(1, Math.floor(data.length / 10))
+function RunsBarChart({ data, color = '#7b1fa2' }: {
+    data: { date: string; total: number }[]
+    color?: string
+}) {
+    if (!data.length) return <Typography variant="caption" color="text.secondary">No historical data yet</Typography>
 
     return (
-        <Box sx={{ width: '100%', overflow: 'hidden' }}>
-            <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', width: '100%', height: 'auto', minHeight: 200 }}
-                preserveAspectRatio="xMidYMid meet">
-                {/* Grid lines */}
-                {[0, 0.25, 0.5, 0.75, 1].map(f => {
-                    const y = pad.top + plotH - f * plotH
-                    const val = minVal + f * range
-                    return (
-                        <g key={f}>
-                            <line x1={pad.left} y1={y} x2={pad.left + plotW} y2={y}
-                                stroke="#e0e0e0" strokeWidth={1.5} />
-                            <text x={pad.left - 8} y={y + 5} textAnchor="end"
-                                fill="#757575" fontSize={13} fontWeight={500}>{Math.round(val)}%</text>
-                        </g>
-                    )
-                })}
-                {/* Area fill */}
-                <path d={areaPath} fill={color} opacity={0.12} />
-                {/* Line */}
-                <path d={linePath} fill="none" stroke={color} strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
-                {/* Dots */}
-                {data.map((d, i) => {
-                    const [x, y] = points[i].split(',').map(Number)
-                    return <circle key={i} cx={x} cy={y} r={4} fill={color} stroke="white" strokeWidth={1.5}><title>{d.date}: {d.rate}%</title></circle>
-                })}
-                {/* X-axis labels */}
-                {data.map((d, i) => {
-                    if (i % labelStep !== 0 && i !== data.length - 1) return null
-                    const [x] = points[i].split(',').map(Number)
-                    return <text key={i} x={x} y={H - 6} textAnchor="middle" fill="#757575" fontSize={12}>{d.date.slice(5)}</text>
-                })}
-            </svg>
+        <Box sx={{ width: '100%', height: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data} margin={{ top: 16, right: 20, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
+                    <XAxis dataKey="date" tickFormatter={t => t.slice(5)} tick={{ fontSize: 12 }} strokeOpacity={0.2} />
+                    <YAxis tick={{ fontSize: 12 }} strokeOpacity={0.2} allowDecimals={false} />
+                    <RechartsTooltip
+                        contentStyle={{ borderRadius: 8, backgroundColor: 'var(--mui-palette-background-paper)', border: '1px solid var(--mui-palette-divider)', color: 'var(--mui-palette-text-primary)' }}
+                        itemStyle={{ color: 'var(--mui-palette-text-primary)' }}
+                        formatter={(val: any) => [val, 'Total Runs']}
+                        labelStyle={{ color: 'var(--mui-palette-text-secondary)', marginBottom: 4 }}
+                    />
+                    <Bar dataKey="total" fill={color} radius={[4, 4, 0, 0]} />
+                </BarChart>
+            </ResponsiveContainer>
         </Box>
     )
 }
@@ -256,7 +251,7 @@ export default function Dashboard() {
     const s = data?.summary
 
     return (
-        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, width: '100%', maxWidth: '100%', height: '100%', overflow: 'auto', background: '#f5f5f5' }}>
+        <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, width: '100%', maxWidth: '100%', height: '100%', overflow: 'auto', bgcolor: 'background.default' }}>
             {/* ── Header ── */}
             <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
@@ -341,22 +336,43 @@ export default function Dashboard() {
                 </Grid>
             </Grid>
 
-            {/* ── Charts: Success Rate Trend (full width) ── */}
-            <Paper elevation={1} sx={{ p: 2, mb: 1.5 }}>
-                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
-                    Success Rate Over Time
-                </Typography>
-                {data?.daily_trend && data.daily_trend.length > 0 ? (
-                    <TrendAreaChart
-                        data={data.daily_trend.map(d => ({ date: d.date, rate: d.rate }))}
-                        color="#1976d2"
-                    />
-                ) : (
-                    <Box sx={{ height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Typography variant="body2" color="text.secondary">No historical data yet</Typography>
-                    </Box>
-                )}
-            </Paper>
+            {/* ── Charts: Success Rate Trend & Number of Runs ── */}
+            <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <Paper elevation={1} sx={{ p: 2, height: '100%' }}>
+                        <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                            Success Rate Over Time
+                        </Typography>
+                        {data?.daily_trend && data.daily_trend.length > 0 ? (
+                            <TrendAreaChart
+                                data={data.daily_trend.map(d => ({ date: d.date, rate: d.rate }))}
+                                color="#1976d2"
+                            />
+                        ) : (
+                            <Box sx={{ height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Typography variant="body2" color="text.secondary">No historical data yet</Typography>
+                            </Box>
+                        )}
+                    </Paper>
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <Paper elevation={1} sx={{ p: 2, height: '100%' }}>
+                        <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                            Number of Runs Over Time
+                        </Typography>
+                        {data?.daily_trend && data.daily_trend.length > 0 ? (
+                            <RunsBarChart
+                                data={data.daily_trend.map(d => ({ date: d.date, total: d.total }))}
+                                color="#7b1fa2"
+                            />
+                        ) : (
+                            <Box sx={{ height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Typography variant="body2" color="text.secondary">No historical data yet</Typography>
+                            </Box>
+                        )}
+                    </Paper>
+                </Grid>
+            </Grid>
 
             {/* ── Source Distribution + Pass Rate Gauge ── */}
             <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
@@ -432,96 +448,87 @@ export default function Dashboard() {
 
             {/* ── Daily Breakdown + Most Run/Failing ── */}
             {data?.daily_trend && data.daily_trend.length > 0 && (
-            <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
-                <Grid size={{ xs: 12, lg: 6 }}>
-                    <Paper elevation={1} sx={{ p: 2 }}>
-                        <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
-                            Daily Breakdown
-                        </Typography>
-                        <TableContainer>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>Date</TableCell>
-                                        <TableCell align="right">Total</TableCell>
-                                        <TableCell align="right">Passed</TableCell>
-                                        <TableCell align="right">Failed</TableCell>
-                                        <TableCell align="right">Rate</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {(data?.daily_trend ?? []).slice(-30).reverse().map(d => (
-                                        <TableRow key={d.date} hover>
-                                            <TableCell><Typography variant="caption">{d.date}</Typography></TableCell>
-                                            <TableCell align="right"><Typography variant="caption">{d.total}</Typography></TableCell>
-                                            <TableCell align="right">
-                                                <Chip size="small" label={d.passed} color="success" variant="outlined" sx={{ height: 20, '& .MuiChip-label': { fontSize: 11 } }} />
-                                            </TableCell>
-                                            <TableCell align="right">
-                                                <Chip size="small" label={d.failed} color={d.failed > 0 ? 'error' : 'default'} variant="outlined" sx={{ height: 20, '& .MuiChip-label': { fontSize: 11 } }} />
-                                            </TableCell>
-                                            <TableCell align="right">
-                                                <Typography variant="caption"
-                                                    sx={{ fontWeight: 600 }}
-                                                    color={d.rate >= 90 ? 'success.main' : d.rate >= 70 ? 'warning.main' : 'error.main'}>
-                                                    {d.rate}%
-                                                </Typography>
-                                            </TableCell>
+                <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
+                    <Grid size={{ xs: 12, lg: 6 }}>
+                        <Paper elevation={1} sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                                Daily Breakdown
+                            </Typography>
+                            <TableContainer>
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell>Date</TableCell>
+                                            <TableCell align="right">Total</TableCell>
+                                            <TableCell align="right">Passed</TableCell>
+                                            <TableCell align="right">Failed</TableCell>
+                                            <TableCell align="right">Rate</TableCell>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </Paper>
-                </Grid>
+                                    </TableHead>
+                                    <TableBody>
+                                        {(data?.daily_trend ?? []).slice(-30).reverse().map(d => (
+                                            <TableRow key={d.date} hover>
+                                                <TableCell><Typography variant="caption">{d.date}</Typography></TableCell>
+                                                <TableCell align="right"><Typography variant="caption">{d.total}</Typography></TableCell>
+                                                <TableCell align="right">
+                                                    <Chip size="small" label={d.passed} color="success" variant="outlined" sx={{ height: 20, '& .MuiChip-label': { fontSize: 11 } }} />
+                                                </TableCell>
+                                                <TableCell align="right">
+                                                    <Chip size="small" label={d.failed} color={d.failed > 0 ? 'error' : 'default'} variant="outlined" sx={{ height: 20, '& .MuiChip-label': { fontSize: 11 } }} />
+                                                </TableCell>
+                                                <TableCell align="right">
+                                                    <Typography variant="caption"
+                                                        sx={{ fontWeight: 600 }}
+                                                        color={d.rate >= 90 ? 'success.main' : d.rate >= 70 ? 'warning.main' : 'error.main'}>
+                                                        {d.rate}%
+                                                    </Typography>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </Paper>
+                    </Grid>
 
-                <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-                    <Paper elevation={1} sx={{ p: 2, height: '100%' }}>
-                        <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
-                            Most Run Tests
-                        </Typography>
-                        <Stack spacing={0.5}>
-                            {(data?.top_modules ?? []).map((m, i) => (
-                                <Box key={m.test_id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, flex: 1, mr: 1 }}>
-                                        <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, width: 16 }}>#{i + 1}</Typography>
-                                        <Typography variant="caption" sx={{ fontWeight: 500 }} noWrap>{m.test_id}</Typography>
-                                    </Box>
-                                    <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0, minWidth: 48, justifyContent: 'flex-end' }}>
-                                        <Chip size="small" label={m.count} variant="outlined" sx={{ height: 20, minWidth: 28, '& .MuiChip-label': { px: 0.75, fontSize: 10 } }} />
-                                        {m.failures > 0 ? (
-                                            <Chip size="small" label={m.failures} color="error" variant="outlined" sx={{ height: 20, minWidth: 24, '& .MuiChip-label': { px: 0.75, fontSize: 10 } }} />
-                                        ) : <Box sx={{ width: 28 }} />}
-                                    </Box>
-                                </Box>
-                            ))}
-                        </Stack>
-                    </Paper>
+                    <Grid size={{ xs: 12, lg: 6 }}>
+                        <Paper elevation={1} sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+                                Test Statistics
+                            </Typography>
+                            <Box sx={{ flex: 1, minHeight: 300, width: '100%' }}>
+                                <DataGrid
+                                    rows={Array.from(new Map(
+                                        [...(data?.top_modules ?? []), ...(data?.most_failing ?? [])]
+                                            .map(m => [m.test_id, { id: m.test_id, ...m }])
+                                    ).values())}
+                                    columns={[
+                                        { field: 'test_id', headerName: 'Test ID', flex: 1, minWidth: 200 },
+                                        { field: 'count', headerName: 'Runs', type: 'number', width: 90 },
+                                        {
+                                            field: 'failures',
+                                            headerName: 'Failures',
+                                            type: 'number',
+                                            width: 90,
+                                            renderCell: (params) => (
+                                                params.value > 0 ? (
+                                                    <Chip size="small" label={params.value} color="error" variant="outlined" sx={{ height: 20, minWidth: 24, '& .MuiChip-label': { px: 0.75, fontSize: 10 } }} />
+                                                ) : <Typography variant="caption" color="text.secondary">0</Typography>
+                                            )
+                                        }
+                                    ]}
+                                    density="compact"
+                                    disableRowSelectionOnClick
+                                    initialState={{
+                                        pagination: { paginationModel: { pageSize: 10 } },
+                                        sorting: { sortModel: [{ field: 'count', sort: 'desc' }] }
+                                    }}
+                                    pageSizeOptions={[5, 10, 25]}
+                                />
+                            </Box>
+                        </Paper>
+                    </Grid>
                 </Grid>
-
-                <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-                    <Paper elevation={1} sx={{ p: 2, height: '100%' }}>
-                        <Typography variant="subtitle2" gutterBottom color="error" sx={{ fontWeight: 600 }}>
-                            Most Failures
-                        </Typography>
-                        {(data?.most_failing ?? []).length === 0 ? (
-                            <Typography variant="caption" color="text.secondary">All tests passing 🎉</Typography>
-                        ) : (
-                            <Stack spacing={0.5}>
-                                {(data?.most_failing ?? []).map((m, _i) => (
-                                    <Box key={m.test_id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, flex: 1, mr: 1 }}>
-                                            <CancelIcon sx={{ fontSize: 14, color: 'error.main', flexShrink: 0 }} />
-                                            <Typography variant="caption" sx={{ fontWeight: 500 }} noWrap>{m.test_id}</Typography>
-                                        </Box>
-                                        <Chip size="small" label={m.failures} color="error" sx={{ height: 20, minWidth: 24, flexShrink: 0, '& .MuiChip-label': { px: 0.75, fontSize: 10 } }} />
-                                    </Box>
-                                ))}
-                            </Stack>
-                        )}
-                    </Paper>
-                </Grid>
-            </Grid>
             )}
 
             {/* ── Recent Runs Table ── */}

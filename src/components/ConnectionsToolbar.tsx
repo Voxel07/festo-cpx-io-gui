@@ -62,8 +62,8 @@ export default function ConnectionsToolbar({
         <>
             {/* ── Top Controls Bar ─────────────────────────────────── */}
             <Box sx={{
-                background: '#fff',
-                borderBottom: '1px solid #e0e0e0',
+                bgcolor: 'background.paper',
+                borderBottom: 1, borderColor: 'divider',
                 px: 2, py: 0.75,
                 display: 'flex',
                 flexDirection: 'row',
@@ -72,8 +72,8 @@ export default function ConnectionsToolbar({
                 flexWrap: 'wrap',
                 flexShrink: 0,
             }}>
-                <Typography sx={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem', fontWeight: 700, color: '#e65100', whiteSpace: 'nowrap' }}>
-                    <SettingsInputComponentIcon sx={{ fontSize: '1rem', mr: 0.5 }} /> I/O Connection Editor
+                <Typography sx={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>
+                    I/O Connection Editor
                 </Typography>
 
                 {ioCount > 0 && (
@@ -89,18 +89,12 @@ export default function ConnectionsToolbar({
                 {/* Cable visibility toggle */}
                 <TooltipButton
                     size="small"
-                    variant={showCables ? 'contained' : 'outlined'}
+                    variant="text"
                     color="inherit"
                     onClick={onToggleCables}
                     tooltip={showCables ? 'Hide backplane connections and AP cables' : 'Show backplane connections and AP cables'}
                     icon={<CableIcon />}
-                    sx={{
-                        fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
-                        color: showCables ? '#fff' : '#546e7a',
-                        background: showCables ? '#546e7a' : 'transparent',
-                        borderColor: '#546e7a',
-                        '&:hover': { borderColor: '#455a64', background: showCables ? '#455a64' : 'rgba(84,110,122,0.08)' },
-                    }}
+                    sx={{ fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap' }}
                 >
                     {showCables ? 'Hide AP Cables' : 'Show AP Cables'}
                 </TooltipButton>
@@ -110,18 +104,12 @@ export default function ConnectionsToolbar({
                 {/* Wiring display mode selection */}
                 <TooltipButton
                     size="small"
-                    variant={showWires ? 'contained' : 'outlined'}
+                    variant="text"
                     color="inherit"
                     onClick={onToggleWires}
                     tooltip={showWires ? 'Hide I/O wiring lines' : 'Show I/O wiring lines'}
                     icon={<TimelineIcon />}
-                    sx={{
-                        fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
-                        color: showWires ? '#fff' : '#546e7a',
-                        background: showWires ? '#546e7a' : 'transparent',
-                        borderColor: '#546e7a',
-                        '&:hover': { borderColor: '#455a64', background: showWires ? '#455a64' : 'rgba(84,110,122,0.08)' },
-                    }}
+                    sx={{ fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap' }}
                 >
                     {showWires ? 'Hide I/O Wires' : 'Show I/O Wires'}
                 </TooltipButton>
@@ -131,18 +119,12 @@ export default function ConnectionsToolbar({
                 {/* Connection Mode toggle */}
                 <TooltipButton
                     size="small"
-                    variant={connectionMode === 'channel' ? 'contained' : 'outlined'}
+                    variant="text"
                     color="inherit"
                     onClick={() => onConnectionModeChange(connectionMode === 'port' ? 'channel' : 'port')}
                     tooltip={connectionMode === 'channel' ? 'Channel Mode: connect specific channels within a port' : 'Port Mode: connect all channels on a port simultaneously'}
                     icon={<SettingsInputComponentIcon />}
-                    sx={{
-                        fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
-                        color: connectionMode === 'channel' ? '#fff' : '#1976d2',
-                        background: connectionMode === 'channel' ? '#1976d2' : 'transparent',
-                        borderColor: '#1976d2',
-                        '&:hover': { borderColor: '#115293', background: connectionMode === 'channel' ? '#115293' : 'rgba(25,118,210,0.08)' },
-                    }}
+                    sx={{ fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap' }}
                 >
                     {connectionMode === 'channel' ? 'Mode: Channel' : 'Mode: Port'}
                 </TooltipButton>
@@ -152,17 +134,12 @@ export default function ConnectionsToolbar({
                 {/* Power Supply toggle */}
                 <TooltipButton
                     size="small"
-                    variant={showPsConfig ? 'contained' : 'outlined'}
+                    variant="text"
+                    color="inherit"
                     onClick={onTogglePsConfig}
                     tooltip={showPsConfig ? 'Hide power supply configuration panel' : 'Show power supply configuration panel'}
                     icon={<PowerIcon />}
-                    sx={{
-                        fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
-                        color: showPsConfig ? '#fff' : '#673ab7',
-                        background: showPsConfig ? '#673ab7' : 'transparent',
-                        borderColor: '#673ab7',
-                        '&:hover': { borderColor: '#5e35b1', background: showPsConfig ? '#5e35b1' : 'rgba(103,58,183,0.08)' },
-                    }}
+                    sx={{ fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap' }}
                 >
                     Power Supply
                 </TooltipButton>
@@ -173,8 +150,8 @@ export default function ConnectionsToolbar({
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                     <TooltipButton
                         size="small"
-                        variant="outlined"
-                        color="primary"
+                        variant="text"
+                        color="inherit"
                         onClick={onLoad}
                         tooltip="Load wiring and configuration from the JSON file"
                         icon={<FolderOpenIcon />}
@@ -184,11 +161,11 @@ export default function ConnectionsToolbar({
                     </TooltipButton>
                     <TooltipButton
                         size="small"
-                        variant="contained"
-                        color="success"
+                        variant="text"
+                        color="inherit"
                         onClick={onSave}
                         tooltip="Save wiring and configuration to the JSON file"
-                        icon={<SaveIcon />}
+                        icon={<SaveIcon color="success" />}
                         sx={{ fontSize: '0.72rem', py: 0.4, minWidth: 56, whiteSpace: 'nowrap' }}
                     >
                         Save
@@ -199,11 +176,11 @@ export default function ConnectionsToolbar({
                 {ioCount > 0 && (
                     <TooltipButton
                         size="small"
-                        variant="outlined"
-                        color="error"
+                        variant="text"
+                        color="inherit"
                         onClick={onClear}
                         tooltip="Delete all drawn I/O wires"
-                        icon={<DeleteIcon />}
+                        icon={<DeleteIcon color="error" />}
                         sx={{ fontSize: '0.72rem', py: 0.4, whiteSpace: 'nowrap' }}
                     >
                         Clear
@@ -216,15 +193,12 @@ export default function ConnectionsToolbar({
                         <Divider orientation="vertical" flexItem />
                         <TooltipButton
                             size="small"
-                            variant={showTestPanel ? 'contained' : 'outlined'}
-                            color={showTestPanel ? 'warning' : 'inherit'}
+                            variant="text"
+                            color="inherit"
                             onClick={onToggleTestPanel}
                             tooltip={showTestPanel ? 'Hide interactive wire test panel' : 'Open interactive wire test panel'}
                             icon={<PlayArrowIcon />}
-                            sx={{
-                                fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
-                                ...(showTestPanel ? {} : { color: '#546e7a', borderColor: '#546e7a' }),
-                            }}
+                            sx={{ fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap' }}
                         >
                             Test Wiring
                         </TooltipButton>
@@ -236,8 +210,8 @@ export default function ConnectionsToolbar({
 
             {showPsConfig && (
                 <Box sx={{
-                    background: '#f9f9f9',
-                    borderBottom: '1px solid #e0e0e0',
+                    bgcolor: 'action.hover',
+                    borderBottom: 1, borderColor: 'divider',
                     px: 3, py: 1.5,
                     display: 'flex',
                     flexDirection: 'row',
@@ -245,7 +219,7 @@ export default function ConnectionsToolbar({
                     gap: 2,
                     flexWrap: 'wrap',
                 }}>
-                    <Typography sx={{ display: 'flex', alignItems: 'center', fontSize: '0.78rem', fontWeight: 700, color: '#333' }}>
+                    <Typography sx={{ display: 'flex', alignItems: 'center', fontSize: '0.78rem', fontWeight: 700, color: 'text.primary' }}>
                         <PowerIcon sx={{ fontSize: '1rem', mr: 0.5 }} /> Power Supply Configuration:
                     </Typography>
                     <TextField
@@ -255,7 +229,7 @@ export default function ConnectionsToolbar({
                         onChange={e => onPsComPortChange(e.target.value)}
                         placeholder="e.g. COM3"
                         disabled={psIpAddr.trim().length > 0}
-                        sx={{ width: 120, background: '#fff' }}
+                        sx={{ width: 120 }}
                         slotProps={{ inputLabel: { sx: { fontSize: '0.75rem' } } }}
                     />
                     <TextField
@@ -265,7 +239,7 @@ export default function ConnectionsToolbar({
                         onChange={e => onPsIpAddrChange(e.target.value)}
                         placeholder="e.g. 192.168.0.20"
                         disabled={psComPort.trim().length > 0}
-                        sx={{ width: 150, background: '#fff' }}
+                        sx={{ width: 150 }}
                         slotProps={{ inputLabel: { sx: { fontSize: '0.75rem' } } }}
                     />
                     <TextField
@@ -275,7 +249,7 @@ export default function ConnectionsToolbar({
                         value={psPlChannel}
                         onChange={e => onPsPlChannelChange(e.target.value)}
                         placeholder="1"
-                        sx={{ width: 100, background: '#fff' }}
+                        sx={{ width: 100 }}
                         slotProps={{ inputLabel: { sx: { fontSize: '0.75rem' } } }}
                     />
                     <TextField
@@ -285,7 +259,7 @@ export default function ConnectionsToolbar({
                         value={psPsChannel}
                         onChange={e => onPsPsChannelChange(e.target.value)}
                         placeholder="2"
-                        sx={{ width: 100, background: '#fff' }}
+                        sx={{ width: 100 }}
                         slotProps={{ inputLabel: { sx: { fontSize: '0.75rem' } } }}
                     />
                     <Typography variant="caption" color="text.secondary">
@@ -296,8 +270,8 @@ export default function ConnectionsToolbar({
 
             {/* ── Legend Bar ───────────────────────────────────────── */}
             <Box sx={{
-                background: '#f8f9fa',
-                borderBottom: '1px solid #e0e0e0',
+                bgcolor: 'action.hover',
+                borderBottom: 1, borderColor: 'divider',
                 px: 2, py: 0.5,
                 display: 'flex',
                 flexDirection: 'row',
@@ -306,20 +280,20 @@ export default function ConnectionsToolbar({
                 flexWrap: 'wrap',
                 flexShrink: 0,
             }}>
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: '#333', whiteSpace: 'nowrap' }}>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, color: 'text.primary', whiteSpace: 'nowrap' }}>
                     Ports:
                 </Typography>
-                <Typography sx={{ fontSize: '0.78rem', color: '#1565c0', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                <Typography sx={{ fontSize: '0.78rem', color: 'primary.main', fontWeight: 600, whiteSpace: 'nowrap' }}>
                     ● Input
                 </Typography>
-                <Typography sx={{ fontSize: '0.78rem', color: '#2e7d32', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                <Typography sx={{ fontSize: '0.78rem', color: 'success.main', fontWeight: 600, whiteSpace: 'nowrap' }}>
                     ● Output
                 </Typography>
-                <Typography sx={{ fontSize: '0.78rem', color: '#ff9800', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                <Typography sx={{ fontSize: '0.78rem', color: 'warning.main', fontWeight: 600, whiteSpace: 'nowrap' }}>
                     ● Bidirectional
                 </Typography>
                 <Divider orientation="vertical" flexItem sx={{ my: 0.25 }} />
-                <Typography sx={{ fontSize: '0.75rem', color: '#888', whiteSpace: 'nowrap' }}>
+                <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>
                     Drag port to connect · Drag wire endpoint to reconnect
                 </Typography>
             </Box>

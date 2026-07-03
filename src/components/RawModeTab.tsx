@@ -402,7 +402,7 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
 
     return (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <Box sx={{ px: 3, py: 1, borderBottom: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ px: 3, py: 1, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <SettingsIcon fontSize="small" /> Raw Mode
                 </Typography>
@@ -419,7 +419,7 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
                 </Box>
             )}
 
-            <Box sx={{ flex: 1, overflowY: 'auto', p: 3, background: '#fafafa' }}>
+            <Box sx={{ flex: 1, overflowY: 'auto', p: 3, bgcolor: 'background.default' }}>
                 {!selectedModule ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', py: 8 }}>
                         <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
@@ -429,8 +429,8 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
                 ) : (
                     <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, alignItems: 'flex-start' }}>
                         {/* Actuation Control Section */}
-                        <Paper variant="outlined" sx={{ p: 2.5, background: '#fff', width: { xs: '100%', md: '35%' }, flexShrink: 0 }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, fontSize: '0.8rem', color: '#1976d2' }}>
+                        <Paper variant="outlined" sx={{ p: 2.5, bgcolor: 'background.paper', width: { xs: '100%', md: '35%' }, flexShrink: 0 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, fontSize: '0.8rem', color: (t) => t.palette.mode === 'dark' ? 'primary.light' : '#1976d2' }}>
                                 Output Control Panel
                             </Typography>
                             <ModuleActuatePanel
@@ -442,7 +442,7 @@ export default function RawModeTab({ topology, ip, selectedModuleAddr, onSelectM
                         </Paper>
 
                         {/* Parameters Section */}
-                        <Paper variant="outlined" sx={{ p: 2.5, background: '#fff', flex: 1 }}>
+                        <Paper variant="outlined" sx={{ p: 2.5, bgcolor: 'background.paper', flex: 1 }}>
                             <ParametersTable
                                 parameters={parameters}
                                 paramValues={paramValues}

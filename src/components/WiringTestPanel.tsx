@@ -43,12 +43,12 @@ export default function WiringTestPanel({
     return (
         <Box sx={{
             width: 360, flexShrink: 0,
-            borderLeft: '1px solid #e0e0e0',
+            borderLeft: 1, borderColor: 'divider',
             display: 'flex', flexDirection: 'column',
-            background: '#fafafa', overflow: 'hidden',
+            bgcolor: 'background.default', overflow: 'hidden',
         }}>
             {/* Panel header */}
-            <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid #e0e0e0', background: '#fff', flexShrink: 0 }}>
+            <Box sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper', flexShrink: 0 }}>
                 <Stack direction="row" spacing={1} sx={{ mb: 0.75, alignItems: 'center' }}>
                     <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', flex: 1 }}>
                         Wire Test
@@ -59,7 +59,7 @@ export default function WiringTestPanel({
                     }
                     {testAllBusy && <CircularProgress size={16} />}
                 </Stack>
-                <Typography variant="caption" sx={{ color: '#888', display: 'block', mb: 0.75, lineHeight: 1.3 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.75, lineHeight: 1.3 }}>
                     Toggle output ON to light the physical indicator.<br />
                     Input is read automatically. Output stays on until toggled off.
                 </Typography>
@@ -102,14 +102,14 @@ export default function WiringTestPanel({
                     return (
                         <Box key={conn.id} sx={{
                             px: 1.5, py: 0.75,
-                            borderBottom: '1px solid #f0f0f0',
-                            background: isOn ? '#fff8e1' : '#fff',
+                            borderBottom: 1, borderColor: 'divider',
+                            bgcolor: isOn ? 'action.selected' : 'background.paper',
                             transition: 'background 0.2s',
                         }}>
                             {/* Connection label */}
                             <Typography sx={{
                                 fontSize: '0.7rem', fontFamily: 'monospace',
-                                color: '#333', mb: 0.5, wordBreak: 'break-all',
+                                color: 'text.primary', mb: 0.5, wordBreak: 'break-all',
                             }}>
                                 {conn.label}
                             </Typography>
@@ -125,8 +125,8 @@ export default function WiringTestPanel({
                                     sx={{
                                         fontSize: '0.68rem', py: 0.2, px: 0.75,
                                         minWidth: 64, fontWeight: isOn ? 700 : 400,
-                                        color: isOn ? undefined : '#546e7a',
-                                        borderColor: isOn ? undefined : '#546e7a',
+                                        color: isOn ? undefined : 'text.secondary',
+                                        borderColor: isOn ? undefined : 'text.secondary',
                                     }}
                                 >
                                     {isBusy
@@ -170,7 +170,7 @@ export default function WiringTestPanel({
                                 )}
 
                                 <Typography variant="caption"
-                                    sx={{ color: '#bbb', fontSize: '0.6rem', ml: 'auto', whiteSpace: 'nowrap' }}>
+                                    sx={{ color: 'text.secondary', fontSize: '0.6rem', ml: 'auto', whiteSpace: 'nowrap' }}>
                                     #{conn.srcAddr}:{conn.srcCh}→#{conn.tgtAddr}:{conn.tgtCh}
                                 </Typography>
                             </Stack>

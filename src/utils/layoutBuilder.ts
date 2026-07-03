@@ -174,6 +174,8 @@ export function buildLayout(
                     label: seg.kind === 'apa'
                         ? `CPX-AP-A Terminal [${addrRange}]`
                         : `VABX Assembly [${addrRange}]`,
+                    status: 'unchanged',
+                    compareActive: diffStatus !== null,
                 },
                 selectable: false,
                 draggable: true,
@@ -200,6 +202,7 @@ export function buildLayout(
                 data: {
                     mod: m,
                     status: diffStatus?.[m.Adress] ?? 'unchanged',
+                    compareActive: diffStatus !== null,
                     editMode,
                     isBackplane: seg.kind === 'apa' || (seg.kind === 'valve' && !isFirst),
                     showLeftHandle: isFirst && !modIsApChain,

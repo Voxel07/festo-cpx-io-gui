@@ -49,7 +49,7 @@ export default function ValveEditorDialog({ open, svgUrl, hiddenValves, numValve
                             alt="Valve body preview"
                             style={{ width: 80, objectFit: 'contain', display: 'block', margin: '0 auto' }}
                         />
-                        <Typography variant="caption" sx={{ color: '#888', fontSize: '0.55rem' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.55rem' }}>
                             Live preview
                         </Typography>
                     </Box>
@@ -75,7 +75,7 @@ export default function ValveEditorDialog({ open, svgUrl, hiddenValves, numValve
                         </Box>
                         <Divider sx={{ mb: 1 }} />
                         {valveGroups.length === 0 && (
-                            <Typography variant="caption" sx={{ color: '#aaa' }}>
+                            <Typography variant="caption" sx={{ color: 'text.disabled' }}>
                                 No configurable valve slots found in this SVG.
                             </Typography>
                         )}
@@ -93,7 +93,7 @@ export default function ValveEditorDialog({ open, svgUrl, hiddenValves, numValve
                                 label={
                                     <Typography variant="caption">
                                         Valve {i + 1}
-                                        <span style={{ color: '#aaa', marginLeft: 4 }}>({id})</span>
+                                        <span style={{ color: 'var(--mui-palette-text-disabled, #aaa)', marginLeft: 4 }}>({id})</span>
                                     </Typography>
                                 }
                                 sx={{ display: 'flex', ml: 0.25, mb: 0.25 }}

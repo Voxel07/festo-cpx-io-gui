@@ -110,10 +110,10 @@ interface LiveConfigPreviewProps {
 }
 function LiveConfigPreview({ topology }: LiveConfigPreviewProps) {
     return (
-        <Box sx={{ width: '60%', border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
+        <Box sx={{ width: '60%', border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
             <Box sx={{
-                background: '#f5f5f5', color: '#1565c0',
-                px: 1.5, py: 0.75, borderBottom: '1px solid #e0e0e0',
+                bgcolor: 'action.hover', color: (t) => t.palette.mode === 'dark' ? 'primary.light' : '#1565c0',
+                px: 1.5, py: 0.75, borderBottom: 1, borderColor: 'divider',
                 fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 700,
                 display: 'flex', alignItems: 'center', gap: 1,
             }}>
@@ -121,8 +121,8 @@ function LiveConfigPreview({ topology }: LiveConfigPreviewProps) {
                 <Chip label={`${topology.Topology.length} modules`} size="small"
                     sx={{ height: 18, fontSize: '0.62rem' }} />
             </Box>
-            <Box sx={{ overflow: 'auto', maxHeight: '60vh', background: '#fafafa', p: 1.5 }}>
-                <pre style={{ margin: 0, fontSize: '0.72rem', color: '#333', fontFamily: 'monospace', lineHeight: 1.5 }}>
+            <Box sx={{ overflow: 'auto', maxHeight: '60vh', bgcolor: 'background.paper', p: 1.5 }}>
+                <pre style={{ margin: 0, fontSize: '0.72rem', color: 'inherit', fontFamily: 'monospace', lineHeight: 1.5 }}>
                     {JSON.stringify(topology, null, 2)}
                 </pre>
             </Box>
@@ -351,8 +351,8 @@ export default function GenerateCompareTab({ ip, timeout, onResult, configPath }
 
             {/* ── Action toolbar ─────────────────────────────────── */}
             <Box sx={{
-                background: '#fff',
-                borderBottom: '1px solid #e0e0e0',
+                bgcolor: 'background.paper',
+                borderBottom: 1, borderColor: 'divider',
                 px: 2.5, py: 1.25,
                 display: 'flex',
                 flexDirection: 'row',

@@ -101,7 +101,7 @@ export default function ParametersTable({
             ) : (
                 <TableContainer sx={{ maxHeight: 600, overflowY: 'auto' }}>
                     <Table size="small">
-                        <TableHead sx={{ background: '#f5f5f5' }}>
+                        <TableHead sx={{ bgcolor: 'action.hover' }}>
                             <TableRow>
                                 <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700 }}>Parameter Name</TableCell>
                                 <TableCell sx={{ fontSize: '0.7rem', fontWeight: 700 }}>Value</TableCell>
@@ -135,7 +135,7 @@ export default function ParametersTable({
                                                         <Typography sx={{ fontSize: '0.72rem', fontWeight: 600 }}>
                                                             {p.name}
                                                         </Typography>
-                                                        <Typography sx={{ fontSize: '0.62rem', color: '#888' }}>
+                                                        <Typography sx={{ fontSize: '0.62rem', color: 'text.secondary' }}>
                                                             ID: {p.parameter_id} · Type: {p.data_type} {p.unit ? `· Unit: ${p.unit}` : ''}
                                                             {hasMultiple ? ` · [${p.num_instances} channels]` : ''}
                                                         </Typography>
@@ -144,7 +144,7 @@ export default function ParametersTable({
                                             </TableCell>
                                             <TableCell sx={{ py: 1, minWidth: 140 }}>
                                                 {hasMultiple ? (
-                                                    <Typography sx={{ fontSize: '0.68rem', color: '#666', fontStyle: 'italic' }}>
+                                                    <Typography sx={{ fontSize: '0.68rem', color: 'text.secondary', fontStyle: 'italic' }}>
                                                         Expand to configure channels
                                                     </Typography>
                                                 ) : p.enums ? (
@@ -232,12 +232,12 @@ export default function ParametersTable({
                                             <TableRow>
                                                 <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={3}>
                                                     <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                                                        <Box sx={{ margin: 1, pl: 4, pb: 1, borderLeft: '2px dashed #e0e0e0' }}>
-                                                            <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: 'block', color: '#666', fontSize: '0.65rem' }}>
+                                                        <Box sx={{ margin: 1, pl: 4, pb: 1, borderLeft: 2, borderColor: 'divider', borderStyle: 'dashed' }}>
+                                                            <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: 'block', color: 'text.secondary', fontSize: '0.65rem' }}>
                                                                 Channel Parameters
                                                             </Typography>
                                                             {p.is_writable && (
-                                                                <Box sx={{ mb: 1.5, p: 1, background: '#f0f7ff', borderRadius: 1, border: '1px dashed #90caf9' }}>
+                                                                <Box sx={{ mb: 1.5, p: 1, bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(25, 118, 210, 0.08)' : '#f0f7ff', borderRadius: 1, border: 1, borderColor: (t) => t.palette.mode === 'dark' ? 'rgba(25, 118, 210, 0.5)' : '#90caf9', borderStyle: 'dashed' }}>
                                                                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                                                         <Typography sx={{ fontSize: '0.62rem', color: '#1976d2', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                                                             Write all:
@@ -302,7 +302,7 @@ export default function ParametersTable({
 
                                                                         return (
                                                                             <TableRow key={instanceIdx} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-                                                                                <TableCell sx={{ py: 0.5, fontSize: '0.7rem', color: '#555' }}>
+                                                                                <TableCell sx={{ py: 0.5, fontSize: '0.7rem', color: 'text.secondary' }}>
                                                                                     Channel {instanceIdx}
                                                                                 </TableCell>
                                                                                 <TableCell sx={{ py: 0.5, minWidth: 120 }}>

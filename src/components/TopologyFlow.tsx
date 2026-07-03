@@ -1,14 +1,8 @@
 import { useEffect, useState, useContext } from 'react'
-import { Box, Typography, Divider } from '@mui/material'
-import CableIcon from '@mui/icons-material/Cable'
-import LinkIcon from '@mui/icons-material/Link'
-import FullscreenIcon from '@mui/icons-material/Fullscreen'
-import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
-import { TooltipButton } from './TooltipButton'
+import { Box, Typography } from '@mui/material'
 import {
     useNodesState,
     useEdgesState,
-    Panel,
 } from '@xyflow/react'
 import type { Node, Edge, NodeTypes, EdgeTypes, EdgeChange } from '@xyflow/react'
 import TopologyCanvas from './TopologyCanvas'
@@ -17,7 +11,7 @@ import BackplaneNode from './BackplaneNode'
 import { CableEdge } from './CableEdge'
 import { WireEdge } from './WireEdge'
 import { buildLayout } from '../utils/layoutBuilder'
-import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnection, ModuleInstance } from '../types'
+import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnection, ModuleInstance, DiagnosisEntry } from '../types'
 import { AlertsContext } from '../utils/AlertsManager'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,7 +47,7 @@ function wiringToEdges(wiring: WiringConnection[], instances: ModuleInstance[]):
     }
 
     const edges: Edge[] = []
-    
+
     wiring.forEach(c => {
         const srcAddrStr = c.source_instance_id.replace(/^mod-0*/, '') || '0'
         const tgtAddrStr = c.target_instance_id.replace(/^mod-0*/, '') || '0'
@@ -102,27 +96,26 @@ interface Props {
     topology: Topology | null
     diffStatus: DiffStatus | null
     removedModules?: TopologyModule[]
-    fullscreen: boolean
-    onToggleFullscreen: () => void
     /** Module address currently being tested (for highlighting) */
     activeModuleAddr?: number | null
     /** Module address currently selected in Raw Mode (for highlighting) */
     selectedModuleAddr?: number | null
     onSelectModuleAddr?: (addr: number | null) => void
     rawConfig?: BenchConfig | null
+    showApCables: boolean
+    showIoCables: boolean
+    diagnoses: DiagnosisEntry[]
 }
 
 
 
 export default function TopologyFlow({
-    topology, diffStatus, removedModules = [], fullscreen, onToggleFullscreen,
+    topology, diffStatus, removedModules = [],
     activeModuleAddr = null, selectedModuleAddr = null, onSelectModuleAddr,
-    rawConfig
+    rawConfig, showApCables, showIoCables, diagnoses,
 }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
-    const [showApCables, setShowApCables] = useState(true)
-    const [showIoCables, setShowIoCables] = useState(true)
     const [ioEdges, setIoEdges] = useState<Edge[]>([])
     useContext(AlertsContext)
 
@@ -152,14 +145,23 @@ export default function TopologyFlow({
             setEdges([])
             return
         }
+        // Build address → diagnoses map for quick lookup
+        const diagByAddr: Record<number, DiagnosisEntry[]> = {}
+        for (const d of diagnoses) {
+            if (!diagByAddr[d.address]) diagByAddr[d.address] = []
+            diagByAddr[d.address].push(d)
+        }
         // Append removed modules (from stored file but absent in live) so they
         // appear in the canvas with a red border, placed after the live modules.
         const allMods = [...topology.Topology]
         for (const rm of removedModules) {
             if (!allMods.find(m => m.Adress === rm.Adress)) allMods.push(rm)
         }
-        const mergedStatus: DiffStatus = { ...(diffStatus ?? {}) }
-        for (const rm of removedModules) mergedStatus[rm.Adress] = 'removed'
+        let mergedStatus: DiffStatus | null = null
+        if (diffStatus || removedModules.length > 0) {
+            mergedStatus = { ...(diffStatus ?? {}) }
+            for (const rm of removedModules) mergedStatus[rm.Adress] = 'removed'
+        }
         const { nodes: newNodes, edges: chainEdges } = buildLayout(allMods, mergedStatus, false)
 
         setNodes(prevNodes => {
@@ -175,6 +177,7 @@ export default function TopologyFlow({
                     || (selectedModuleAddr != null && n.id === String(selectedModuleAddr) && n.type === 'mod')
                 const prev = prevNodeMap.get(n.id)
                 const prevHidden = prev ? (prev.data as Record<string, unknown>).hiddenValves : undefined
+                const addr = mod?.Adress
                 return {
                     ...n,
                     data: {
@@ -183,12 +186,13 @@ export default function TopologyFlow({
                         // Preserve hiddenValves across rebuilds only for valve bodies
                         ...(prevHidden != null && isValveBody ? { hiddenValves: prevHidden } : {}),
                         active,
+                        diagnoses: addr != null ? (diagByAddr[addr] ?? []) : [],
                     },
                 }
             })
         })
         setEdges([...chainEdges, ...ioEdges])
-    }, [topology, diffStatus, removedModules, activeModuleAddr, selectedModuleAddr, ioEdges, setNodes, setEdges])
+    }, [topology, diffStatus, removedModules, activeModuleAddr, selectedModuleAddr, ioEdges, diagnoses, setNodes, setEdges])
 
     const onEdgesChange = (changes: EdgeChange[]) => {
         _onEdgesChange(changes.filter(c => c.type !== 'remove'))
@@ -234,60 +238,7 @@ export default function TopologyFlow({
                 fitView
                 onNodeClick={handleNodeClick}
                 elementsSelectable={!!onSelectModuleAddr}
-            >
-                <Panel position="top-right">
-                    <Box sx={{
-                        background: 'rgba(255,255,255,0.96)', border: '1px solid #e0e0e0',
-                        borderRadius: 1.5, p: 1, boxShadow: 2,
-                        display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 200,
-                    }}>
-                        {/* AP Cable toggle */}
-                        <TooltipButton
-                            size="small"
-                            variant={showApCables ? 'contained' : 'outlined'}
-                            color="primary"
-                            onClick={() => setShowApCables(s => !s)}
-                            tooltip={showApCables ? 'Hide AP transmission cables' : 'Show AP transmission cables'}
-                            icon={<CableIcon />}
-                            sx={{ fontSize: '0.65rem', py: 0.25 }}
-                        >
-                            {showApCables ? 'AP Cables ON' : 'AP Cables OFF'}
-                        </TooltipButton>
-
-                        {/* IO Cable toggle */}
-                        <TooltipButton
-                            size="small"
-                            variant={showIoCables ? 'contained' : 'outlined'}
-                            color="warning"
-                            onClick={() => setShowIoCables(s => !s)}
-                            tooltip={showIoCables ? 'Hide IO connection wires' : 'Show IO connection wires'}
-                            icon={<LinkIcon />}
-                            sx={{ fontSize: '0.65rem', py: 0.25 }}
-                        >
-                            {showIoCables ? 'IO Wires ON' : 'IO Wires OFF'}
-                        </TooltipButton>
-
-                        {/* Fullscreen toggle */}
-                        <TooltipButton
-                            size="small"
-                            variant="outlined"
-                            onClick={onToggleFullscreen}
-                            tooltip={fullscreen ? 'Exit fullscreen mode' : 'Enter fullscreen mode'}
-                            icon={fullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
-                            sx={{ minWidth: 32, px: 0.5 }}
-                        >
-                            {fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                        </TooltipButton>
-                        <Divider />
-                        <Typography sx={{ fontSize: '0.54rem', color: '#888', lineHeight: 1.7 }}>
-                            <span style={{ color: '#1976d2' }}>■</span> unchanged&nbsp;
-                            <span style={{ color: '#ed6c02' }}>■</span> changed<br />
-                            <span style={{ color: '#2e7d32' }}>■</span> added&nbsp;&nbsp;
-                            <span style={{ color: '#d32f2f' }}>■</span> removed
-                        </Typography>
-                    </Box>
-                </Panel>
-            </TopologyCanvas>
+            />
         </Box>
     )
 }

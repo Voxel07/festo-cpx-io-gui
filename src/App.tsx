@@ -1,8 +1,8 @@
-import { lazy, Suspense, useReducer, useRef, useEffect, useMemo } from 'react'
-import { Box, Tabs, Tab, CircularProgress, Typography, IconButton, Tooltip } from '@mui/material'
-import DashboardIcon from '@mui/icons-material/Dashboard'
+import { lazy, Suspense, useReducer, useRef, useEffect, useMemo, useCallback } from 'react'
+import { Box, Tabs, Tab, CircularProgress, Typography } from '@mui/material'
 import AppHeader from './components/AppHeader'
-import type { Topology, DiffStatus, TopologyModule, BenchConfig } from './types'
+import TopologyToolbar from './components/TopologyToolbar'
+import type { Topology, DiffStatus, TopologyModule, BenchConfig, DiagnosisEntry } from './types'
 import { AlertsManager, AlertsContext } from './utils/AlertsManager'
 import type { AlertsManagerRef } from './utils/AlertsManager'
 
@@ -39,6 +39,9 @@ interface AppState {
     diagOpen: boolean
     rawConfig: BenchConfig | null
     configPath: string
+    showApCables: boolean
+    showIoCables: boolean
+    diagnoses: DiagnosisEntry[]
 }
 
 const initialAppState: AppState = {
@@ -59,6 +62,9 @@ const initialAppState: AppState = {
     diagOpen: false,
     rawConfig: null,
     configPath: 'data/bench_config.json',
+    showApCables: true,
+    showIoCables: true,
+    diagnoses: [] as DiagnosisEntry[],
 }
 
 type AppAction =
@@ -82,6 +88,9 @@ type AppAction =
     | { type: 'CONFIG_LOAD'; config: BenchConfig }
     | { type: 'MODULE_VALVE_CHANGE'; addr: number; mountedValves: number[]; valveSlots?: number }
     | { type: 'SET_CONFIG_PATH'; path: string }
+    | { type: 'TOGGLE_AP_CABLES' }
+    | { type: 'TOGGLE_IO_CABLES' }
+    | { type: 'SET_DIAGNOSES'; diagnoses: DiagnosisEntry[] }
 
 export function configToTopology(config: BenchConfig): Topology {
     return {
@@ -116,6 +125,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
             }
         case 'SET_CONFIG_PATH':
             return { ...state, configPath: action.path }
+        case 'TOGGLE_AP_CABLES':
+            return { ...state, showApCables: !state.showApCables }
+        case 'TOGGLE_IO_CABLES':
+            return { ...state, showIoCables: !state.showIoCables }
+        case 'SET_DIAGNOSES':
+            return { ...state, diagnoses: action.diagnoses }
         case 'SET_IP':
             return { ...state, ip: action.ip }
         case 'SET_TIMEOUT':
@@ -242,20 +257,31 @@ export default function App() {
         diagOpen,
         rawConfig,
         configPath,
+        showApCables,
+        showIoCables,
+        diagnoses,
     } = state
 
     const alertsRef = useRef<AlertsManagerRef>(null)
 
-    async function checkPocketBase() {
+    async function checkPocketBase(showFeedback = false) {
         dispatch({ type: 'SET_PB_CHECKING', checking: true })
         try {
             const r = await fetch('/pocketbase/health')
             const d = await r.json()
-            dispatch({ type: 'SET_PB_STATUS', status: d.status === 'ok' ? 'ok' : 'error' })
+            const isOk = d.status === 'ok'
+            dispatch({ type: 'SET_PB_STATUS', status: isOk ? 'ok' : 'error' })
             dispatch({ type: 'SET_PB_CHECKING', checking: false })
+            if (showFeedback) {
+                if (isOk) alertsRef.current?.showAlert('success', 'PocketBase connected successfully')
+                else alertsRef.current?.showAlert('error', 'PocketBase connection failed')
+            }
         } catch {
             dispatch({ type: 'SET_PB_STATUS', status: 'error' })
             dispatch({ type: 'SET_PB_CHECKING', checking: false })
+            if (showFeedback) {
+                alertsRef.current?.showAlert('error', 'PocketBase is unreachable')
+            }
         }
     }
 
@@ -277,6 +303,23 @@ export default function App() {
         }, 2000)
         return () => clearInterval(timer)
     }, [])
+
+    // Poll system diagnoses for topology indicators
+    const refreshDiagnoses = useCallback(async () => {
+        if (!ip) return
+        try {
+            const r = await fetch(`/io/diagnoses?ip_address=${encodeURIComponent(ip)}`)
+            if (!r.ok) return
+            const d: DiagnosisEntry[] = await r.json()
+            dispatch({ type: 'SET_DIAGNOSES', diagnoses: d })
+        } catch { /* ignore */ }
+    }, [ip])
+
+    useEffect(() => {
+        refreshDiagnoses()
+        const timer = setInterval(refreshDiagnoses, 5000)
+        return () => clearInterval(timer)
+    }, [refreshDiagnoses])
 
     // Auto-load data/bench_config.json on startup
     useEffect(() => {
@@ -377,35 +420,61 @@ export default function App() {
                     onConfigPathChange={path => dispatch({ type: 'SET_CONFIG_PATH', path })}
                 />
 
+                {/* ── Topology toolbar (below AppHeader) ── */}
+                {showTopology && (
+                    <TopologyToolbar
+                        showApCables={showApCables}
+                        onToggleApCables={() => dispatch({ type: 'TOGGLE_AP_CABLES' })}
+                        showIoCables={showIoCables}
+                        onToggleIoCables={() => dispatch({ type: 'TOGGLE_IO_CABLES' })}
+                        fullscreen={fullscreen}
+                        onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
+                        showLegend={!!diffStatus}
+                    />
+                )}
+
                 {/* ── Topology canvas (collapsible) ── */}
                 {showTopology && (
                     <Box sx={fullscreen
-                        ? { position: 'fixed', inset: 0, zIndex: 1300, background: '#fafafa' }
+                        ? { position: 'fixed', inset: 0, zIndex: 1300, bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }
                         : {
                             display: 'flex', flexDirection: 'row',
                             height: canvasH, flexShrink: 0,
-                            borderBottom: '1px solid #ddd', background: '#fafafa',
+                            borderBottom: 1, borderColor: 'divider', bgcolor: 'background.default',
                         }
                     }>
+                        {/* Toolbar overlay in fullscreen mode */}
+                        {fullscreen && (
+                            <TopologyToolbar
+                                showApCables={showApCables}
+                                onToggleApCables={() => dispatch({ type: 'TOGGLE_AP_CABLES' })}
+                                showIoCables={showIoCables}
+                                onToggleIoCables={() => dispatch({ type: 'TOGGLE_IO_CABLES' })}
+                                fullscreen={fullscreen}
+                                onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
+                                showLegend={tab === 1 && !!diffStatus}
+                            />
+                        )}
                         {/* Canvas area (width-constrained when user has dragged) */}
                         <Box sx={{
-                            flex: canvasW ? 'none' : 1,
                             width: canvasW ?? undefined,
-                            height: '100%',
+                            height: fullscreen ? undefined : '100%',
+                            flex: fullscreen ? 1 : (canvasW ? 'none' : 1),
                             overflow: 'hidden',
                             position: 'relative',
                         }}>
                             <Suspense fallback={<LoadingChunk label="Loading topology…" />}>
                                 <TopologyFlow
                                     topology={topology}
-                                    diffStatus={diffStatus}
-                                    removedModules={removedModules}
-                                    fullscreen={fullscreen}
-                                    onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
+                                    diffStatus={tab === 1 ? diffStatus : null}
+                                    removedModules={tab === 1 ? removedModules : []}
                                     activeModuleAddr={activeModuleAddr}
                                     selectedModuleAddr={tab === 3 ? rawSelectedAddr : null}
                                     onSelectModuleAddr={tab === 3 ? (addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })) : undefined}
                                     rawConfig={rawConfig}
+                                    showApCables={showApCables}
+                                    showIoCables={showIoCables}
+                                    diagnoses={diagnoses}
                                 />
                             </Suspense>
                         </Box>
@@ -414,9 +483,9 @@ export default function App() {
                         {!fullscreen && (
                             <Box onMouseDown={onWidthDragStart} sx={{
                                 width: 6, flexShrink: 0, cursor: 'col-resize',
-                                background: 'linear-gradient(to right, #e0e0e0 0%, #bdbdbd 50%, #e0e0e0 100%)',
-                                '&:hover': { background: '#1976d2' },
-                                transition: 'background 0.15s',
+                                bgcolor: 'divider',
+                                '&:hover': { bgcolor: 'primary.main' },
+                                transition: 'background-color 0.15s',
                                 userSelect: 'none',
                             }} />
                         )}
@@ -427,16 +496,16 @@ export default function App() {
                 {!fullscreen && showTopology && (
                     <Box onMouseDown={onDragStart} sx={{
                         height: 6, flexShrink: 0, cursor: 'row-resize',
-                        background: 'linear-gradient(to bottom, #e0e0e0 0%, #bdbdbd 50%, #e0e0e0 100%)',
-                        '&:hover': { background: '#1976d2' },
-                        transition: 'background 0.15s',
+                        bgcolor: 'divider',
+                        '&:hover': { bgcolor: 'primary.main' },
+                        transition: 'background-color 0.15s',
                         userSelect: 'none',
                     }} />
                 )}
 
                 {/* ── Tab bar ── */}
                 {!fullscreen && (
-                    <Box sx={{ background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                    <Box sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                         <Tabs value={tab} onChange={(_, v) => dispatch({ type: 'SET_TAB', tab: v })} sx={{ minHeight: 38, flex: 1 }}
                             variant="scrollable" scrollButtons="auto">
                             <Tab label="Topology" sx={{ minHeight: 38 }} />
@@ -445,21 +514,12 @@ export default function App() {
                             <Tab label="Raw Mode" sx={{ minHeight: 38 }} />
                             <Tab label="History" sx={{ minHeight: 38 }} />
                         </Tabs>
-                        <Tooltip title="Open Analytics Dashboard">
-                            <IconButton
-                                size="small"
-                                sx={{ mr: 1, color: 'primary.main' }}
-                                onClick={() => window.open('/#/dashboard', '_blank')}
-                            >
-                                <DashboardIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
                     </Box>
                 )}
 
                 {/* ── Tab content ── */}
                 {!fullscreen && (
-                    <Box sx={{ flex: 1, overflow: 'hidden', background: '#fafafa', display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ flex: 1, overflow: 'hidden', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
                         {tab === 0 && (
                             <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
                                 <Suspense fallback={<LoadingChunk label="Loading topology tools…" />}>
@@ -508,7 +568,7 @@ export default function App() {
                 )}
                 {diagOpen && (
                     <Suspense fallback={null}>
-                        <DiagnosticsModal open={diagOpen} onClose={() => dispatch({ type: 'SET_DIAG_OPEN', open: false })} ip={ip} />
+                        <DiagnosticsModal open={diagOpen} onClose={() => dispatch({ type: 'SET_DIAG_OPEN', open: false })} ip={ip} diagnoses={diagnoses} onRefresh={refreshDiagnoses} />
                     </Suspense>
                 )}
             </Box>

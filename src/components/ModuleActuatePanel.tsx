@@ -320,7 +320,7 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
                                 </Button>
                             </Stack>
 
-                            <Box sx={{ maxHeight: 280, overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: 1, p: 1 }}>
+                            <Box sx={{ maxHeight: 280, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
                                 {valveSlots.map(slotIdx => {
                                     const full = isSlotFullySelected(slotIdx)
                                     const partial = isSlotPartiallySelected(slotIdx)
@@ -328,9 +328,10 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
                                     return (
                                         <Box key={slotIdx} sx={{
                                             mb: 1, pl: 1, py: 0.5,
-                                            borderLeft: `3px solid ${full ? '#1976d2' : partial ? '#ff9800' : '#e0e0e0'}`,
+                                            borderLeft: 3,
+                                            borderColor: full ? 'primary.main' : partial ? 'warning.main' : 'divider',
                                             borderRadius: '0 4px 4px 0',
-                                            background: full ? '#f5f8ff' : partial ? '#fff8e1' : 'transparent',
+                                            bgcolor: full ? 'action.selected' : partial ? 'action.hover' : 'transparent',
                                         }}>
                                             {/* Valve slot header */}
                                             <FormControlLabel
@@ -349,7 +350,7 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
                                                         {!isMounted && (
                                                             <span style={{ color: '#e65100', marginLeft: 3, fontWeight: 400 }}>(unmounted)</span>
                                                         )}
-                                                        <span style={{ color: '#bbb', marginLeft: 6, fontWeight: 400 }}>
+                                                        <span style={{ color: 'text.secondary', marginLeft: 6, fontWeight: 400 }}>
                                                             ch{slotIdx * cpv}–{slotIdx * cpv + cpv - 1}
                                                         </span>
                                                     </Typography>
@@ -374,7 +375,7 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
                                                                 label={
                                                                     <Typography variant="caption" sx={{ fontSize: '0.62rem' }}>
                                                                         {ch.label}
-                                                                        <span style={{ color: '#bbb', marginLeft: 2 }}>[{ch.index}]</span>
+                                                                        <span style={{ color: 'text.secondary', marginLeft: 2 }}>[{ch.index}]</span>
                                                                     </Typography>
                                                                 }
                                                                 sx={{ display: 'flex', ml: 0, mr: 0 }}
@@ -406,7 +407,7 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
                                 </Button>
                             </Stack>
 
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, maxHeight: 150, overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: 1, p: 1 }}>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, maxHeight: 150, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
                                 {channels.map(ch => {
                                     const sel = activeChannels.has(ch.index)
                                     return (
@@ -423,7 +424,7 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
                                             label={
                                                 <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
                                                     {ch.label}
-                                                    <span style={{ color: '#bbb', marginLeft: 4 }}>ch{ch.index}</span>
+                                                    <span style={{ color: 'text.secondary', marginLeft: 4 }}>ch{ch.index}</span>
                                                 </Typography>
                                             }
                                             sx={{ display: 'flex', ml: 0, mr: 0, minWidth: 100 }}

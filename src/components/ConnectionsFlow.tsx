@@ -12,6 +12,8 @@ import {
     useEdgesState,
     reconnectEdge,
 } from '@xyflow/react'
+import { useTheme } from '@mui/material/styles'
+import type { Theme } from '@mui/material/styles'
 import type { Node, Edge, EdgeChange, Connection, NodeTypes, EdgeTypes } from '@xyflow/react'
 import TopologyCanvas from './TopologyCanvas'
 import ModuleNode from './ModuleNode'
@@ -35,10 +37,17 @@ const NODE_TYPES: NodeTypes = {
 }
 const EDGE_TYPES: EdgeTypes = { wire: WireEdge as EdgeTypes[string], cable: CableEdge as EdgeTypes[string] }
 
-// Colour for IO wiring edges
-const IO_COLOR = '#e65100'
-
-// ─── Port-kind utilities ──────────────────────────────────────────────────────
+function getColorPalette(theme: Theme) {
+    return [
+        theme.palette.secondary.main, // Pink/Red ish
+        theme.palette.info.main, // Teal / Light Blue
+        theme.palette.warning.main, // Orange
+        theme.palette.primary.dark, // Purple / Dark Blue
+        theme.palette.primary.main, // Blue
+        theme.palette.success.main, // Lime / Green
+        theme.palette.text.secondary, // Blue Grey
+    ]
+}
 
 type PortKind = 'in' | 'out' | 'inout'
 
@@ -49,21 +58,12 @@ function handleKind(handleId: string): PortKind {
     return 'inout'
 }
 
-const COLOR_PALETTE = [
-    '#d81b60', // Pink/Red
-    '#00897b', // Teal
-    '#f57c00', // Orange
-    '#8e24aa', // Purple
-    '#1e88e5', // Blue
-    '#c0ca33', // Lime
-    '#546e7a', // Blue Grey
-]
-
-function getWireColor(handleId: string, portEdgeCount: number): string {
+function getWireColor(handleId: string, portEdgeCount: number, theme: Theme): string {
     const outKind = handleKind(handleId)
-    const baseColor = outKind === 'out' ? '#2e7d32' : outKind === 'in' ? '#1565c0' : IO_COLOR
+    const baseColor = outKind === 'out' ? theme.palette.success.dark : outKind === 'in' ? theme.palette.primary.dark : theme.palette.warning.dark
     if (portEdgeCount === 0) return baseColor
-    return COLOR_PALETTE[(portEdgeCount - 1) % COLOR_PALETTE.length]
+    const palette = getColorPalette(theme)
+    return palette[(portEdgeCount - 1) % palette.length]
 }
 
 /** Extract port ID from handle: 'src-out-X0' → 'X0', 'src-X0' (legacy) → 'X0' */
@@ -225,6 +225,7 @@ function connectionsFlowReducer(state: ConnectionsFlowState, action: Connections
 export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValveChange, onConfigLoad, rawConfig, configPath }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])  // ModuleNode | BackplaneNode
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
+    const theme = useTheme()
 
     const [state, dispatch] = useReducer(connectionsFlowReducer, initialConnectionsFlowState)
     const {
@@ -339,7 +340,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             const portKey = `${srcAddr}-${resolvedSrcHandle}`
             const count = portEdgeCounts[portKey] || 0
             portEdgeCounts[portKey] = count + 1
-            const wireColor = getWireColor(resolvedSrcHandle, count)
+            const wireColor = getWireColor(resolvedSrcHandle, count, theme)
 
             return {
                 id: c.id,
@@ -473,7 +474,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
         // Multi-color logic: count existing edges leaving the same source port
         const existingEdges = edges.filter(e => e.source === srcNode && e.sourceHandle === sh)
-        const wireColor = getWireColor(sh, existingEdges.length)
+        const wireColor = getWireColor(sh, existingEdges.length, theme)
 
         const newEdge: Edge = {
             id: edgeId,

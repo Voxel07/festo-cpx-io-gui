@@ -1,25 +1,19 @@
 import { memo, Fragment, useState, useEffect, useMemo } from 'react'
 import { Handle, Position, useUpdateNodeInternals } from '@xyflow/react'
 import type { NodeProps, Node } from '@xyflow/react'
-import { Box, Typography, Tooltip, IconButton } from '@mui/material'
-import type { ChipOwnProps } from '@mui/material'
+import { Box, Typography, Tooltip, IconButton, useTheme, Chip } from '@mui/material'
 import Stack from '@mui/material/Stack'
 import { useSvgMap, resolveIcon } from '../hooks/useSvgMap'
 import { useSvgPorts } from '../hooks/useSvgPorts'
 import type { PortKind } from '../hooks/useSvgPorts'
 import { useValveGroups } from '../hooks/useValveGroups'
 import { useModifiedSvg } from '../hooks/useModifiedSvg'
-import type { TopologyModule, DiffStatusKind, ConnectionEntry } from '../types'
+import type { TopologyModule, DiffStatusKind, ConnectionEntry, DiagnosisEntry } from '../types'
 import ValveEditorDialog from './ValveEditorDialog'
+import TopologyNodeWrapper from './TopologyNodeWrapper'
 
-// ─── Status styles ────────────────────────────────────────────────────────────
+// STATUS_STYLE moved into component to use theme
 
-export const STATUS_STYLE: Record<DiffStatusKind, { border: string; bg: string; chip: ChipOwnProps['color'] }> = {
-    unchanged: { border: '#1976d2', bg: '#e3f2fd', chip: 'primary' },
-    changed: { border: '#ed6c02', bg: '#fff3e0', chip: 'warning' },
-    added: { border: '#2e7d32', bg: '#e8f5e9', chip: 'success' },
-    removed: { border: '#d32f2f', bg: '#ffebee', chip: 'error' },
-}
 
 // ─── Port kind colours ────────────────────────────────────────────────────────
 
@@ -63,6 +57,10 @@ export type ModuleNodeData = {
     active?: boolean
     /** Show VABX module inputs based on parameter 20201 */
     hasVabxInputs?: boolean
+    /** True if a comparison is currently active */
+    compareActive?: boolean
+    /** Active diagnoses for this module (from system diagnostics) */
+    diagnoses?: DiagnosisEntry[]
 }
 
 export type ModuleNodeType = Node<ModuleNodeData, 'mod'>
@@ -206,6 +204,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         onValveChange,
         active = false,
         hasVabxInputs = false,
+        compareActive = false,
+        diagnoses = [],
     } = data
 
     const svgMaps = useSvgMap()
@@ -220,6 +220,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const isVtux = mod.Name.toUpperCase().startsWith('VTUX')
     const canConfigureValves = supportsMountedValves(mod.Name, mod.Type)
     const numValves = defaultValveSlots(mod.Name, mod.ValveSlots)
+    const theme = useTheme()
 
     let dispW = DISP_W
     if (isVmpal && numValves !== undefined) {
@@ -246,7 +247,6 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     }, [hiddenValves, mod.MountedValves, valveGroups, wantsValves])
     const displayUrl = useModifiedSvg(svgUrl, effectiveHiddenValves, numValves)
 
-    const st = STATUS_STYLE[status] ?? STATUS_STYLE.unchanged
     const hasPorts = ports.length > 0
     const numOut = mod.NumOfOutputs
     const numIn = mod.NumOfInputs
@@ -280,24 +280,44 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         }
     }
 
+    const STATUS_BORDER: Record<DiffStatusKind, string> = {
+        unchanged: theme.palette.primary.main,
+        changed: theme.palette.warning.main,
+        added: theme.palette.success.main,
+        removed: theme.palette.error.main,
+    }
+    const statusBarColor = STATUS_BORDER[status] ?? theme.palette.primary.main
+
     return (
-        <Box sx={{
-            border: isBackplane ? 'none' : `2px solid ${st.border}`,
-            background: isBackplane ? 'transparent' : st.bg,
-            boxShadow: isBackplane ? 'none' : active
-                ? '0 0 12px 4px rgba(255,152,0,0.6), 0 2px 6px rgba(0,0,0,0.14)'
-                : '0 2px 6px rgba(0,0,0,0.14)',
-            borderRadius: 1.5,
-            p: isBackplane ? '2px 0' : '4px 4px 6px',
-            width: dispW + (isBackplane ? 0 : 8),
-            textAlign: 'center',
-            position: 'relative',
-            animation: active ? 'pulse 1.2s ease-in-out infinite' : 'none',
-            '@keyframes pulse': {
-                '0%, 100%': { boxShadow: '0 0 8px 2px rgba(255,152,0,0.4), 0 2px 6px rgba(0,0,0,0.14)' },
-                '50%': { boxShadow: '0 0 16px 6px rgba(255,152,0,0.7), 0 2px 6px rgba(0,0,0,0.14)' },
-            },
-        }}>
+        <TopologyNodeWrapper
+            status={status}
+            compareActive={compareActive}
+            active={active}
+            noBorder={isBackplane}
+            width={dispW + (isBackplane ? 0 : 8)}
+            padding={isBackplane ? '2px 0' : '4px 4px 6px'}
+        >
+            {/* ── Status Chip (if not unchanged) ── */}
+            {status !== 'unchanged' && !isBackplane && (
+                <Chip
+                    label={status.toUpperCase()}
+                    color={
+                        status === 'changed' ? 'warning' :
+                        status === 'added' ? 'success' :
+                        status === 'removed' ? 'error' : 'default'
+                    }
+                    size="small"
+                    sx={{
+                        position: 'absolute',
+                        top: -10,
+                        right: -10,
+                        height: 20,
+                        fontSize: '0.65rem',
+                        fontWeight: 'bold',
+                        zIndex: 20,
+                    }}
+                />
+            )}
 
             {/* ── Left / Right cable handles (standard AP-I) ── */}
             {showLeftHandle && (
@@ -351,14 +371,14 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
             >
                 <Typography sx={{
-                    fontSize: '0.48rem', fontWeight: 700, color: '#1565c0',
+                    fontSize: '0.48rem', fontWeight: 700, color: theme.palette.mode === 'dark' ? theme.palette.primary.light : '#1565c0',
                     lineHeight: 1, letterSpacing: '0.02em',
                 }}>
                     #{mod.Adress}
                 </Typography>
 
                 {(numIn > 0 || numOut > 0 || numInOut > 0) && (
-                    <Typography sx={{ fontSize: '0.44rem', color: '#666', lineHeight: 1, whiteSpace: 'nowrap' }}>
+                    <Typography sx={{ fontSize: '0.44rem', color: theme.palette.text.secondary, lineHeight: 1, whiteSpace: 'nowrap' }}>
                         {numIn > 0 && <span style={{ color: PORT_COLOR.in }}>↓{numIn}</span>}
                         {numOut > 0 && <span style={{ color: PORT_COLOR.out }}>↑{numOut}</span>}
                         {numInOut > 0 && <span style={{ color: PORT_COLOR.inout }}>⇅{numInOut}</span>}
@@ -381,11 +401,69 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     />
                 </Tooltip>
 
+                {/* ── Diagnosis severity indicator ── */}
+                {diagnoses.length > 0 && (() => {
+                    const hasError = diagnoses.some(d => d.severity === 'error')
+                    const hasWarning = diagnoses.some(d => d.severity === 'warning')
+                    const hasMaintenance = diagnoses.some(d => d.severity === 'maintenance')
+                    const sevColor = hasError ? '#d32f2f' : hasWarning ? '#ed6c02' : hasMaintenance ? '#0288d1' : '#4caf50'
+                    const sevLabel = hasError ? '!' : hasWarning ? '!' : hasMaintenance ? 'M' : 'i'
+                    const tooltipContent = (
+                        <Box sx={{ maxWidth: 260 }}>
+                            {diagnoses.map((d, i) => (
+                                <Box key={i} sx={{ mb: i < diagnoses.length - 1 ? 0.75 : 0, pb: i < diagnoses.length - 1 ? 0.5 : 0, borderBottom: i < diagnoses.length - 1 ? '1px solid rgba(255,255,255,0.2)' : 'none' }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', display: 'block', color: d.severity === 'error' ? '#ff8a80' : d.severity === 'warning' ? '#ffd54f' : '#81d4fa' }}>
+                                        {d.name}
+                                    </Typography>
+                                    {d.description && (
+                                        <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'grey.400', display: 'block' }}>
+                                            {d.description}
+                                        </Typography>
+                                    )}
+                                    {d.guideline && (
+                                        <Typography variant="caption" sx={{ fontSize: '0.58rem', fontStyle: 'italic', color: '#81c784', display: 'block' }}>
+                                            {d.guideline}
+                                        </Typography>
+                                    )}
+                                </Box>
+                            ))}
+                        </Box>
+                    )
+                    return (
+                        <Tooltip title={tooltipContent} placement="top" arrow
+                            slotProps={{ tooltip: { sx: { bgcolor: 'grey.900', color: '#fff', p: 1, maxWidth: 280, fontSize: '0.7rem' } } }}>
+                            <Box sx={{
+                                position: 'absolute',
+                                top: '50%',
+                                left: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                width: 22,
+                                height: 22,
+                                borderRadius: '50%',
+                                bgcolor: sevColor,
+                                color: '#fff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.75rem',
+                                fontWeight: 900,
+                                zIndex: 15,
+                                boxShadow: `0 0 8px 2px ${sevColor}80`,
+                                border: '2px solid #fff',
+                                cursor: 'help',
+                                pointerEvents: 'auto',
+                            }}>
+                                {sevLabel}
+                            </Box>
+                        </Tooltip>
+                    )
+                })()}
+
                 {/* ── Status bar (backplane modules only) ── */}
-                {isBackplane && (
+                {isBackplane && compareActive && (
                     <Box sx={{
                         position: 'absolute', bottom: 0, left: 0, right: 0, height: 3,
-                        background: st.border, borderRadius: '0 0 2px 2px',
+                        background: statusBarColor, borderRadius: '0 0 2px 2px',
                     }} />
                 )}
 
@@ -428,11 +506,10 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 })}
             </Box>
 
-            {/* ── Module name + I/O counts on same line ── */}
             <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>
                 <Typography sx={{
                     fontSize: '0.5rem', fontWeight: 700, wordBreak: 'break-all',
-                    lineHeight: 1.15, color: isBackplane ? '#444' : 'inherit',
+                    lineHeight: 1.15, color: 'inherit',
                 }}>
                     {mod.Name}
                 </Typography>
@@ -498,7 +575,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     {valveGroups.length >= 0 && null}
                 </>
             )}
-        </Box>
+        </TopologyNodeWrapper>
     )
 }
 

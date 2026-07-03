@@ -194,3 +194,16 @@ export interface BenchConfig {
     test_definitions?: TestDefinition[]
     ui_metadata?: UIVisualizationMetadata
 }
+
+// ── Diagnostics ──────────────────────────────────────────────────────────────
+
+export interface DiagnosisEntry {
+    address: number
+    module_name: string
+    diagnosis_id: string
+    name: string
+    description: string
+    guideline: string
+    channel?: number
+    severity?: string
+}

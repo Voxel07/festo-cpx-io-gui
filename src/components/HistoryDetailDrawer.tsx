@@ -137,7 +137,7 @@ export default function HistoryDetailDrawer({
                         Raw Results
                     </Typography>
                     <Box sx={{
-                        background: '#f5f5f5', borderRadius: 1, p: 1.5,
+                        bgcolor: 'background.default', borderRadius: 1, p: 1.5,
                         maxHeight: 300, overflow: 'auto', fontSize: '0.7rem',
                         fontFamily: 'monospace', whiteSpace: 'pre-wrap',
                     }}>

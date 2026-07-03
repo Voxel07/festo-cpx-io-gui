@@ -1,47 +1,45 @@
 import { memo } from 'react'
 import type { NodeProps, Node } from '@xyflow/react'
+import { useTheme } from '@mui/material'
 
-export type BackplaneNodeData = { label?: string }
+import TopologyNodeWrapper from './TopologyNodeWrapper'
+import type { DiffStatusKind } from '../types'
+
+export type BackplaneNodeData = {
+    label?: string
+    status?: DiffStatusKind
+    compareActive?: boolean
+}
 export type BackplaneNodeType = Node<BackplaneNodeData, 'backplane'>
 
-const BACKPLANE_STYLE: React.CSSProperties = {
-    width: '100%',
-    height: '100%',
-    borderRadius: 6,
-    boxSizing: 'border-box',
-    overflow: 'visible',
-    cursor: 'grab',
-}
-
-const LABEL_STYLE: React.CSSProperties = {
-    position: 'absolute',
-    top: -13,
-    left: 6,
-    fontSize: 9,
-    color: '#1565c0',
-    fontWeight: 600,
-    background: '#f5f9ff',
-    padding: '0 4px',
-    borderRadius: 3,
-    whiteSpace: 'nowrap',
-    lineHeight: '13px',
-    border: '1px solid #bbdefb',
-    userSelect: 'none',
-}
-
 function BackplaneNode({ data, selected }: NodeProps<BackplaneNodeType>) {
+    const theme = useTheme()
     return (
-        <div style={{
-            ...BACKPLANE_STYLE,
-            border: selected ? '2px solid #1976d2' : '1.5px solid #bbdefb',
-            background: selected ? 'rgba(25, 118, 210, 0.08)' : 'rgba(25, 118, 210, 0.05)',
-        }}>
+        <TopologyNodeWrapper 
+            selected={selected}
+            status={data.status}
+            compareActive={data.compareActive}
+        >
             {data.label && (
-                <span style={LABEL_STYLE}>
+                <span style={{
+                    position: 'absolute',
+                    top: -13,
+                    left: 6,
+                    fontSize: 9,
+                    color: theme.palette.mode === 'dark' ? theme.palette.primary.light : '#1565c0',
+                    fontWeight: 600,
+                    background: theme.palette.background.paper,
+                    padding: '0 4px',
+                    borderRadius: 3,
+                    whiteSpace: 'nowrap',
+                    lineHeight: '13px',
+                    border: `1px solid ${theme.palette.divider}`,
+                    userSelect: 'none',
+                }}>
                     {data.label}
                 </span>
             )}
-        </div>
+        </TopologyNodeWrapper>
     )
 }
 
