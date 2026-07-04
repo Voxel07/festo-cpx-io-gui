@@ -37,16 +37,18 @@ const NODE_TYPES: NodeTypes = {
 }
 const EDGE_TYPES: EdgeTypes = { wire: WireEdge as EdgeTypes[string], cable: CableEdge as EdgeTypes[string] }
 
-function getColorPalette(theme: Theme) {
-    return [
-        theme.palette.secondary.main, // Pink/Red ish
-        theme.palette.info.main, // Teal / Light Blue
-        theme.palette.warning.main, // Orange
-        theme.palette.primary.dark, // Purple / Dark Blue
-        theme.palette.primary.main, // Blue
-        theme.palette.success.main, // Lime / Green
-        theme.palette.text.secondary, // Blue Grey
-    ]
+const HIGH_CONTRAST_COLORS = [
+    '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
+    '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe',
+    '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000',
+    '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080'
+]
+
+function getWireColor(handleId: string, portEdgeCount: number, theme: Theme): string {
+    const outKind = handleKind(handleId)
+    const baseColor = outKind === 'out' ? theme.palette.success.dark : outKind === 'in' ? theme.palette.primary.dark : theme.palette.warning.dark
+    if (portEdgeCount === 0) return baseColor
+    return HIGH_CONTRAST_COLORS[(portEdgeCount - 1) % HIGH_CONTRAST_COLORS.length]
 }
 
 type PortKind = 'in' | 'out' | 'inout'
@@ -56,14 +58,6 @@ function handleKind(handleId: string): PortKind {
     const k = handleId.split('-')[1]
     if (k === 'in' || k === 'out' || k === 'inout') return k
     return 'inout'
-}
-
-function getWireColor(handleId: string, portEdgeCount: number, theme: Theme): string {
-    const outKind = handleKind(handleId)
-    const baseColor = outKind === 'out' ? theme.palette.success.dark : outKind === 'in' ? theme.palette.primary.dark : theme.palette.warning.dark
-    if (portEdgeCount === 0) return baseColor
-    const palette = getColorPalette(theme)
-    return palette[(portEdgeCount - 1) % palette.length]
 }
 
 /** Extract port ID from handle: 'src-out-X0' → 'X0', 'src-X0' (legacy) → 'X0' */
@@ -337,7 +331,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             const resolvedSrcHandle = c.source_handle || `src-${srcKind(srcAddr)}-${c.source_channel}`
             const resolvedTgtHandle = c.target_handle || `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`
 
-            const portKey = `${srcAddr}-${resolvedSrcHandle}`
+            const portKey = `${srcAddr}-${tgtAddr}`
             const count = portEdgeCounts[portKey] || 0
             portEdgeCounts[portKey] = count + 1
             const wireColor = getWireColor(resolvedSrcHandle, count, theme)
@@ -351,7 +345,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 type: 'wire',
                 animated: true,
                 zIndex: 1000,
-                style: { stroke: wireColor, strokeWidth: 2.5 },
+                style: { stroke: wireColor, strokeWidth: 1.25 },
                 label: c.label ?? `#${srcAddr}:${c.source_channel} → #${tgtAddr}:${c.target_channel}`,
                 data: {
                     kind: 'io',
@@ -428,6 +422,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                         peerAddr: isSrc ? e.target : e.source,
                         peerPort: portId(peerHandle),
                         dir: isSrc ? ('src' as const) : ('tgt' as const),
+                        wireColor: (e.data as Record<string, unknown>)?.wireColor as string | undefined,
                     })
                 }
                 return acc
@@ -472,8 +467,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             ? `io-${srcNode}-${pSrc}.${subSrc}-${tgtNode}-${pTgt}.${subTgt}`
             : `io-${srcNode}-${pSrc}-${tgtNode}-${pTgt}`
 
-        // Multi-color logic: count existing edges leaving the same source port
-        const existingEdges = edges.filter(e => e.source === srcNode && e.sourceHandle === sh)
+        // Multi-color logic: count existing edges between the same source and target modules
+        const existingEdges = edges.filter(e => e.source === srcNode && e.target === tgtNode && (e.data as any)?.kind === 'io')
         const wireColor = getWireColor(sh, existingEdges.length, theme)
 
         const newEdge: Edge = {
@@ -485,7 +480,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             type: 'wire',
             animated: true,
             zIndex: 1000,
-            style: { stroke: wireColor, strokeWidth: 2 },
+            style: { stroke: wireColor, strokeWidth: 1.25 },
             label: subSrc !== undefined
                 ? `#${srcNode}:${pSrc}.${subSrc} \u2192 #${tgtNode}:${pTgt}.${subTgt}`
                 : `#${srcNode}:${pSrc} \u2192 #${tgtNode}:${pTgt}`,

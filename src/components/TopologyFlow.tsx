@@ -84,7 +84,7 @@ function wiringToEdges(wiring: WiringConnection[], instances: ModuleInstance[]):
             type: 'wire',
             animated: true,
             zIndex: 1000,
-            style: { stroke: wireColor, strokeWidth: 2.5 },
+            style: { stroke: wireColor, strokeWidth: 1.25 },
             data: { kind: 'io', portSrc: c.source_channel, portTgt: c.target_channel },
         })
     })

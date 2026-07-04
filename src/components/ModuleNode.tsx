@@ -485,6 +485,12 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                      invisible when not in edit mode per React Flow best-practice) ── */}
                 {!suppressIoHandles && hasPorts && ports.map(port => {
                     const portColor = PORT_COLOR[port.kind]
+                    const connectedSrc = connections.find(c => c.dir === 'src' && c.portId === port.id)
+                    const connectedTgt = connections.find(c => c.dir === 'tgt' && c.portId === port.id)
+                    
+                    const srcColor = connectedSrc?.wireColor || portColor
+                    const tgtColor = connectedTgt?.wireColor || 'transparent'
+
                     return (
                         <Fragment key={port.id}>
                             {/* Coloured source handle – kind encoded in ID for validation */}
@@ -492,14 +498,24 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                                 id={`src-${port.kind}-${port.id}`}
                                 type="source"
                                 position={port.side}
-                                style={getPortSrcStyle(port.cx, port.cy, portColor, editMode)}
+                                style={getPortSrcStyle(port.cx, port.cy, srcColor, editMode)}
                             />
                             {/* Transparent target hit-area – kind also encoded */}
                             <Handle
                                 id={`tgt-${port.kind}-${port.id}`}
                                 type="target"
                                 position={port.side}
-                                style={getPortTgtStyle(port.cx, port.cy, editMode)}
+                                style={{
+                                    ...getPortTgtStyle(port.cx, port.cy, editMode),
+                                    ...(connectedTgt ? {
+                                        background: tgtColor,
+                                        width: PORT_D,
+                                        height: PORT_D,
+                                        border: '2.5px solid #fff',
+                                        opacity: 1,
+                                        zIndex: 11,
+                                    } : {})
+                                }}
                             />
                         </Fragment>
                     )

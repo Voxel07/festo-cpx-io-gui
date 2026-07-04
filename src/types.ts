@@ -62,6 +62,7 @@ export interface IOConnection {
     /** For per-channel wiring: specific subchannel index (e.g., 0 or 1 for M12, 0 for M8) */
     source_subchannel?: number
     target_subchannel?: number
+    wireColor?: string
 }
 
 export interface ConnectionEntry {
@@ -69,6 +70,7 @@ export interface ConnectionEntry {
     peerAddr: string    // address of the peer module (node ID)
     peerPort: string    // port ID on the peer module
     dir: 'src' | 'tgt' // whether this module is the source (output end) or target (input end)
+    wireColor?: string
 }
 
 export interface ConnectionFile {
