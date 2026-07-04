@@ -1,3 +1,11 @@
+/**
+ * useSvgMap.ts
+ *
+ * This file provides hooks and utilities for mapping CPX-AP module names and OrderCodes
+ * to their corresponding SVG file assets. It processes a bundled JSON mapping at build time
+ * to allow instant, synchronous lookups for the topology and connections canvas, handling
+ * variants like wide modules for 16-channel devices and generic fallback SVGs.
+ */
 // Icon file mapping bundled at build time — no network fetch needed.
 import iconMapping from '../assets/IconFileMapping.json'
 

@@ -1,9 +1,14 @@
 /**
- * TopologyCanvas – shared ReactFlow canvas used by both the read-only
- * TopologyFlow (overview tab) and the interactive ConnectionsFlow (editor tab).
+ * TopologyCanvas.tsx
+ *
+ * This component provides the shared ReactFlow canvas foundation used across the application.
+ * It is utilized by both the read-only TopologyFlow (overview tab) and the interactive 
+ * ConnectionsFlow (editor tab). It handles the core ReactFlow setup, including viewport 
+ * controls, background rendering, and auto-fit view triggers, while delegating the specific
+ * node/edge rendering logic to its parent components.
  */
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTheme } from '@mui/material/styles'
 import {
     ReactFlow,
@@ -40,12 +45,14 @@ interface Props {
 function FitViewTrigger({ nodesStr, padding }: { nodesStr: string, padding: number }) {
     const { fitView } = useReactFlow()
     const initialized = useNodesInitialized()
+    const fitStrRef = useRef<string | null>(null)
 
     useEffect(() => {
-        if (nodesStr && initialized) {
+        if (nodesStr && initialized && fitStrRef.current !== nodesStr) {
             const timer = setTimeout(() => {
                 window.requestAnimationFrame(() => {
                     fitView({ padding, duration: 400 })
+                    fitStrRef.current = nodesStr
                 })
             }, 50)
             return () => clearTimeout(timer)

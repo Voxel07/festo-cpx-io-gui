@@ -1,3 +1,11 @@
+/**
+ * useSvgPorts.ts
+ *
+ * This hook fetches and parses module SVG files to extract the physical locations (cx, cy)
+ * of connector ports (identified by 'X0', 'X1', etc.). It then derives the logical port kind
+ * (input, output, or inout) based on the module's channel counts, properly mapping mixed
+ * modules (like 4DI4DO) where outputs are on the bottom connectors and inputs on the top.
+ */
 import { useState, useEffect } from 'react'
 import { Position } from '@xyflow/react'
 
@@ -31,7 +39,7 @@ export interface PortCounts {
  *
  * SVG data-kind attributes override this if present.
  */
-function deriveKind(portIndex: number, svgKind: PortKind | null, counts: PortCounts): PortKind {
+function deriveKind(portIndex: number, svgKind: PortKind | null, counts: PortCounts, numConnectors: number): PortKind {
     // Explicit SVG annotation wins
     if (svgKind !== null) return svgKind
 
@@ -46,7 +54,7 @@ function deriveKind(portIndex: number, svgKind: PortKind | null, counts: PortCou
     // Each M12-5P connector carries 2 channels; we assign by sorted port index.
     const inFraction  = numIn  / total
     // Ports are sorted X0…XN; outputs take the last slots (bottom connectors)
-    const outStart = Math.round(inFraction * total)
+    const outStart = Math.round(inFraction * numConnectors)
     if (portIndex >= outStart) return 'out'
     return 'in'
 }
@@ -96,6 +104,8 @@ async function fetchAndParseSvg(
                 found.push({ id: c.id, cx, cy, svgKind })
             }
         })
+        // Sort top-to-bottom so portIndex 0 is the physically highest connector
+        found.sort((a, b) => a.cy - b.cy)
         onSuccess(found)
     } catch {
         // keep empty
@@ -131,7 +141,7 @@ export function useSvgPorts(svgUrl: string, counts?: PortCounts): SvgPort[] {
         cx:   p.cx,
         cy:   p.cy,
         side: p.cx < 0.5 ? Position.Left : Position.Right,
-        kind: deriveKind(i, p.svgKind, defaultCounts),
+        kind: deriveKind(i, p.svgKind, defaultCounts, raw.length),
     }))
 }
 
