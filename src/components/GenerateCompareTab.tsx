@@ -245,14 +245,17 @@ export default function GenerateCompareTab({ ip, timeout, onResult, configPath }
             const d = await r.json()
             if (!r.ok) {
                 dispatch({ type: 'READ_FAIL', error: d.detail ?? 'Unknown error' })
+                alerts?.showAlert('error', d.detail ?? 'Unknown error')
                 return
             }
             const config: BenchConfig = d.config
             const topo = configToTopology(config)
             dispatch({ type: 'READ_SUCCESS', config, topology: topo })
             onResult(topo, null, [], config)
+            alerts?.showAlert('success', 'Read live configuration successfully')
         } catch (e) {
             dispatch({ type: 'READ_FAIL', error: (e as Error).message })
+            alerts?.showAlert('error', (e as Error).message)
         }
     }
 
@@ -287,7 +290,11 @@ export default function GenerateCompareTab({ ip, timeout, onResult, configPath }
             for (const m of (d.live?.Topology ?? [])) ds[m.Adress] = 'unchanged'
             for (const c of d.changes) ds[c.address] = 'changed'
             for (const m of d.added) ds[m.Adress] = 'added'
-            for (const m of d.removed) ds[m.Adress] = 'removed'
+            for (const m of d.removed) {
+                if (!ds[m.Adress]) {
+                    ds[m.Adress] = 'removed'
+                }
+            }
             onResult(d.live, ds, d.removed)
         } catch (e) {
             dispatch({ type: 'COMPARE_FAIL', error: (e as Error).message })

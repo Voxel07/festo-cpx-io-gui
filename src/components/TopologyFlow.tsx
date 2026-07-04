@@ -160,7 +160,11 @@ export default function TopologyFlow({
         let mergedStatus: DiffStatus | null = null
         if (diffStatus || removedModules.length > 0) {
             mergedStatus = { ...(diffStatus ?? {}) }
-            for (const rm of removedModules) mergedStatus[rm.Adress] = 'removed'
+            for (const rm of removedModules) {
+                if (!mergedStatus[rm.Adress]) {
+                    mergedStatus[rm.Adress] = 'removed'
+                }
+            }
         }
         const { nodes: newNodes, edges: chainEdges } = buildLayout(allMods, mergedStatus, false)
 

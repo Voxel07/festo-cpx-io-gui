@@ -25,10 +25,6 @@ export function buildRows(cmpData: CompareResult): DiffRow[] {
         if (!changedByAddr.has(c.address)) changedByAddr.set(c.address, new Set())
         changedByAddr.get(c.address)!.add(c.field)
     }
-    const addedSet   = new Set(cmpData.added.map(m => m.Adress))
-    const removedSet = new Set(cmpData.removed.map(m => m.Adress))
-    const storedMap  = new Map((stored.Topology ?? []).map(m => [m.Adress, m]))
-    const liveMap    = new Map((live.Topology   ?? []).map(m => [m.Adress, m]))
 
     const rows: DiffRow[] = []
     let lNo = 1, rNo = 1
@@ -71,36 +67,67 @@ export function buildRows(cmpData: CompareResult): DiffRow[] {
     ctx('    "Topology": [')
 
     // ── Modules ───────────────────────────────────────────────────────────────
-    const seen  = new Set<number>()
-    const order = [
-        ...(stored.Topology ?? []).map(m => m.Adress),
-        ...cmpData.added.map(m => m.Adress),
-    ].filter(a => !seen.has(a) && seen.add(a))
+    const storedTop = stored.Topology ?? []
+    const liveTop = live.Topology ?? []
 
-    for (const addr of order) {
-        const sm = storedMap.get(addr)
-        const lm = liveMap.get(addr)
+    // Use LCS to align modules by Name and Modulecode
+    const dp = Array(storedTop.length + 1).fill(null).map(() => Array(liveTop.length + 1).fill(0))
+    for (let i = 1; i <= storedTop.length; i++) {
+        for (let j = 1; j <= liveTop.length; j++) {
+            if (storedTop[i - 1].Name === liveTop[j - 1].Name && storedTop[i - 1].Modulecode === liveTop[j - 1].Modulecode) {
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            } else {
+                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1])
+            }
+        }
+    }
 
-        if (removedSet.has(addr) && sm) {
-            for (const ln of modLines(sm, () => 'del'))
+    type Op = { type: 'match' | 'insert' | 'delete', sm?: TopologyModule, lm?: TopologyModule }
+    const ops: Op[] = []
+    let i = storedTop.length, j = liveTop.length
+
+    while (i > 0 && j > 0) {
+        if (storedTop[i - 1].Name === liveTop[j - 1].Name && storedTop[i - 1].Modulecode === liveTop[j - 1].Modulecode) {
+            ops.push({ type: 'match', sm: storedTop[i - 1], lm: liveTop[j - 1] })
+            i--; j--
+        } else if (dp[i - 1][j] > dp[i][j - 1]) {
+            ops.push({ type: 'delete', sm: storedTop[i - 1] })
+            i--
+        } else {
+            ops.push({ type: 'insert', lm: liveTop[j - 1] })
+            j--
+        }
+    }
+    while (i > 0) { ops.push({ type: 'delete', sm: storedTop[i - 1] }); i-- }
+    while (j > 0) { ops.push({ type: 'insert', lm: liveTop[j - 1] }); j-- }
+    ops.reverse()
+
+    for (const op of ops) {
+        if (op.type === 'delete' && op.sm) {
+            for (const ln of modLines(op.sm, () => 'del'))
                 push(ln.t, ln.k, '', 'empty')
-        } else if (addedSet.has(addr) && lm) {
-            for (const ln of modLines(lm, () => 'add'))
+        } else if (op.type === 'insert' && op.lm) {
+            for (const ln of modLines(op.lm, () => 'add'))
                 push('', 'empty', ln.t, ln.k)
-        } else if (changedByAddr.has(addr) && sm && lm) {
-            const fd = changedByAddr.get(addr)!
-            push(`${ind}{`, 'ctx', `${ind}{`, 'ctx')
-            const keys = Object.keys(sm) as (keyof TopologyModule)[]
-            keys.forEach((k, i) => {
-                const comma = i < keys.length - 1 ? ',' : ''
-                const sl = `${indK}"${k}": ${JSON.stringify(sm[k])}${comma}`
-                const ll = `${indK}"${k}": ${JSON.stringify(lm[k])}${comma}`
-                fd.has(k as string) ? push(sl, 'del', ll, 'add') : push(sl, 'ctx', ll, 'ctx')
-            })
-            push(`${ind}},`, 'ctx', `${ind}},`, 'ctx')
-        } else if (sm) {
-            for (const ln of modLines(sm, () => 'ctx'))
-                push(ln.t, ln.k, ln.t, ln.k)
+        } else if (op.type === 'match' && op.sm && op.lm) {
+            const sm = op.sm
+            const lm = op.lm
+            const hasChanges = changedByAddr.has(lm.Adress)
+            if (hasChanges) {
+                const fd = changedByAddr.get(lm.Adress)!
+                push(`${ind}{`, 'ctx', `${ind}{`, 'ctx')
+                const keys = Object.keys(sm) as (keyof TopologyModule)[]
+                keys.forEach((k, idx) => {
+                    const comma = idx < keys.length - 1 ? ',' : ''
+                    const sl = `${indK}"${k}": ${JSON.stringify(sm[k])}${comma}`
+                    const ll = `${indK}"${k}": ${JSON.stringify(lm[k])}${comma}`
+                    fd.has(k as string) ? push(sl, 'del', ll, 'add') : push(sl, 'ctx', ll, 'ctx')
+                })
+                push(`${ind}},`, 'ctx', `${ind}},`, 'ctx')
+            } else {
+                for (const ln of modLines(sm, () => 'ctx'))
+                    push(ln.t, ln.k, ln.t, ln.k)
+            }
         }
     }
 
