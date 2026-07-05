@@ -13,117 +13,13 @@
  * Waypoints are stored in ``edge.data.waypoints`` and persisted to
  * connections.jsonc.
  */
-import { useRef, Fragment, useEffect, useMemo, useCallback, useContext } from 'react'
-import { findSmartPath } from '../utils/routing'
-import { BaseEdge, EdgeLabelRenderer, useReactFlow, Position } from '@xyflow/react'
-import type { EdgeProps, Node } from '@xyflow/react'
-import { AlertsContext } from '../utils/AlertsManager'
-
-const IO_COLOR = '#e65100'
-const SEL_COLOR = '#ff6d00'
-const WP_RADIUS = 5
-const WP_HIT = 12
-
-const LABEL_TEXT_BASE: React.CSSProperties = {
-    fontSize: 9,
-    whiteSpace: 'nowrap',
-    background: 'rgba(255,255,255,0.9)',
-    padding: '2px 6px',
-    borderRadius: 4,
-}
-
-const BUTTON_STYLE: React.CSSProperties = {
-    pointerEvents: 'all',
-    background: '#d84315',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '50%',
-    width: 18,
-    height: 18,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 10,
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-    transition: 'all 0.2s ease',
-    padding: 0,
-}
-
-const WP_BASE_STYLE: React.CSSProperties = {
-    position: 'absolute',
-    width: WP_RADIUS * 2,
-    height: WP_RADIUS * 2,
-    borderRadius: '50%',
-    border: '2px solid #fff',
-    boxShadow: '0 0 0 1px rgba(0,0,0,0.3)',
-    pointerEvents: 'none',
-    zIndex: 2001,
-}
-
-export type WireData = {
-    kind: 'io'
-    portSrc?: string
-    portTgt?: string
-    wireColor?: string
-    waypoints?: Array<{ x: number; y: number }>
-    straight?: boolean
-    cpOffsetX?: number
-    cpOffsetY?: number
-}
-
-function buildRoutedPath(
-    _id: string,
-    sx: number, sy: number,
-    tx: number, ty: number,
-    waypoints: Array<{ x: number; y: number }>,
-    nodes: Node[],
-    straight: boolean = false,
-): { path: string; points: Array<{ x: number; y: number }> } {
-    const clean = waypoints.filter(w => w != null && typeof w.x === 'number')
-    const pts: Array<{ x: number; y: number }> = [{ x: sx, y: sy }]
-
-    if (straight) {
-        pts.push({ x: tx, y: ty })
-    } else if (clean.length === 0) {
-        const smartPoints = findSmartPath(sx, sy, tx, ty, nodes)
-        for (let i = 1; i < smartPoints.length; i++) {
-            pts.push(smartPoints[i])
-        }
-    } else {
-        // Manual waypoints are literal corner positions — use them directly.
-        // This guarantees a 1:1 mapping between visual corners and waypoint indices.
-        for (const wp of clean) {
-            pts.push({ x: wp.x, y: wp.y })
-        }
-        pts.push({ x: tx, y: ty })
-    }
-
-    const deduped: Array<{ x: number; y: number }> = []
-    for (const p of pts) {
-        const last = deduped[deduped.length - 1]
-        if (!last || Math.abs(p.x - last.x) > 0.5 || Math.abs(p.y - last.y) > 0.5) {
-            deduped.push(p)
-        }
-    }
-    if (deduped.length < 2) deduped.push({ x: tx, y: ty })
-
-    const path = deduped.map((p, i) =>
-        i === 0 ? `M ${p.x},${p.y}` : `L ${p.x},${p.y}`,
-    ).join(' ')
-
-    return { path, points: deduped }
-}
-
-/** Read fresh waypoints from edge state - avoids stale closures */
-function readWaypoints(edgeData: unknown): Array<{ x: number; y: number }> {
-    const d = edgeData as Record<string, unknown> | undefined
-    const raw = (d?.waypoints ?? []) as Array<unknown>
-    return raw.filter(
-        (w): w is { x: number; y: number } => w != null && typeof (w as any).x === 'number',
-    )
-}
+import { useRef, useEffect, useMemo, useCallback, useContext } from 'react'
+import { BaseEdge, useReactFlow, Position } from '@xyflow/react'
+import type { EdgeProps } from '@xyflow/react'
+import { AlertsContext } from '../utils/AlertsContext'
+import { buildRoutedPath, readWaypoints, IO_COLOR, SEL_COLOR } from '../utils/wireEdgeHelpers'
+import type { WireData } from '../utils/wireEdgeHelpers'
+import { WireEdgeLabel } from './WireEdgeLabel'
 
 export function WireEdge({
     id, source, target, sourceX, sourceY, targetX, targetY,
@@ -166,7 +62,7 @@ export function WireEdge({
     const usesStubs = !isStraightProp && !isAdjacent
     const waypointsStr = JSON.stringify(waypoints)
 
-    const { routedPoints, stubStart, stubEnd } = useMemo(() => {
+    const { routedPoints } = useMemo(() => {
         if (!usesStubs) {
             return {
                 routedPoints: buildRoutedPath(id, sourceX, sourceY, targetX, targetY, waypoints, nodes, isStraightProp || isAdjacent).points,
@@ -381,67 +277,17 @@ export function WireEdge({
                     onClick={onSegmentClick(seg.index)}
                 />
             ))}
-            <EdgeLabelRenderer>
-                {(label || selected) && (
-                    <div style={{
-                        position: 'absolute',
-                        transform: `translate(-50%, calc(-100% - 4px)) translate(${labelPos.x}px, ${labelPos.y}px)`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        pointerEvents: 'none',
-                        zIndex: 1001,
-                    }}>
-                        {(!hideLabel && label) && (
-                            <div style={{
-                                ...LABEL_TEXT_BASE,
-                                color: color,
-                                fontWeight: 600,
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                                border: `1px solid ${color}`,
-                            }}>
-                                {label}
-                            </div>
-                        )}
-                        {selected && (
-                            <button
-                                onClick={onRemove}
-                                title="Remove connection"
-                                style={BUTTON_STYLE}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = '#bf360c'
-                                    e.currentTarget.style.transform = 'scale(1.15)'
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = '#d84315'
-                                    e.currentTarget.style.transform = 'scale(1)'
-                                }}
-                            >
-                                ✕
-                            </button>
-                        )}
-                    </div>
-                )}
-                {/* Draggable waypoint dots — only on routed corners, NOT stubs */}
-                {selected && routedCorners.map((wp, i) => (
-                    <Fragment key={`wp-${i}`}>
-                        <div onMouseDown={onWaypointMD(i)} onContextMenu={onWaypointCtx(i)}
-                            title="Drag to move · Right-click to remove"
-                            style={{
-                                position: 'absolute',
-                                transform: `translate(-50%,-50%) translate(${wp.x}px,${wp.y}px)`,
-                                width: WP_HIT * 2, height: WP_HIT * 2,
-                                cursor: 'grab', zIndex: 2000, pointerEvents: 'all',
-                            }}
-                        />
-                        <div style={{
-                            ...WP_BASE_STYLE,
-                            transform: `translate(-50%,-50%) translate(${wp.x}px,${wp.y}px)`,
-                            background: SEL_COLOR,
-                        }} />
-                    </Fragment>
-                ))}
-            </EdgeLabelRenderer>
+            <WireEdgeLabel
+                label={label}
+                selected={selected}
+                hideLabel={hideLabel}
+                color={color}
+                labelPos={labelPos}
+                routedCorners={routedCorners}
+                onRemove={onRemove}
+                onWaypointMD={onWaypointMD}
+                onWaypointCtx={onWaypointCtx}
+            />
         </>
     )
 }

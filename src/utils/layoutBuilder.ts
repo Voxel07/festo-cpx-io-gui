@@ -1,6 +1,6 @@
 import type { Edge } from '@xyflow/react'
 import type { TopologyModule, DiffStatus } from '../types'
-import type { ModuleNodeData } from '../components/ModuleNode'
+import type { ModuleNodeData } from '../components/moduleNodeTypes'
 import type { BackplaneNodeData } from '../components/BackplaneNode'
 import type { Node } from '@xyflow/react'
 

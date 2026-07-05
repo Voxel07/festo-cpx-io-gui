@@ -1,17 +1,16 @@
 import { lazy, Suspense, useReducer, useRef, useEffect, useMemo, useCallback } from 'react'
-import { Box, Tabs, Tab, CircularProgress, Typography } from '@mui/material'
+import { Box, Tabs, Tab } from '@mui/material'
 import AppHeader from './components/AppHeader'
 import TopologyToolbar from './components/TopologyToolbar'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig, DiagnosisEntry } from './types'
-import { AlertsManager, AlertsContext } from './utils/AlertsManager'
-import type { AlertsManagerRef } from './utils/AlertsManager'
+import { AlertsManager } from './utils/AlertsManager'
+import { AlertsContext } from './utils/AlertsContext'
+import type { AlertsManagerRef } from './utils/AlertsManagerTypes'
 
-const GenerateCompareTab = lazy(() => import('./components/GenerateCompareTab'))
-const TestRunTab = lazy(() => import('./components/TestRunTab'))
-const HistoryTab = lazy(() => import('./components/HistoryTab'))
+import AppTabContent from './components/AppTabContent'
+import { LoadingChunk } from './components/LoadingChunk'
+
 const TopologyFlow = lazy(() => import('./components/TopologyFlow'))
-const ConnectionsFlow = lazy(() => import('./components/ConnectionsFlow'))
-const RawModeTab = lazy(() => import('./components/RawModeTab'))
 const DiagnosticsModal = lazy(() => import('./components/DiagnosticsModal'))
 
 const MIN_CANVAS_H = 140
@@ -92,28 +91,7 @@ type AppAction =
     | { type: 'TOGGLE_IO_CABLES' }
     | { type: 'SET_DIAGNOSES'; diagnoses: DiagnosisEntry[] }
 
-export function configToTopology(config: BenchConfig): Topology {
-    return {
-        Name: config.test_bench.name || 'CPX-AP Bench',
-        Description: config.test_bench.description || '',
-        Version: config.test_bench.version || '1.0',
-        Topology: (config.module_instances || []).map(inst => {
-            const typeDef = config.module_types?.[inst.module_type_ref]
-            return {
-                Name: inst.display_name,
-                Modulecode: inst.module_code,
-                ProductKey: inst.product_key,
-                Adress: inst.address,
-                Type: inst.category, // Direct mapping from backend metadata!
-                NumOfInputs: inst.num_inputs ?? typeDef?.num_inputs ?? 0,
-                NumOfOutputs: inst.num_outputs ?? typeDef?.num_outputs ?? 0,
-                NumOfInOuts: inst.num_inouts ?? typeDef?.num_configurable ?? 0,
-                MountedValves: inst.mounted_valves ?? undefined,
-                ValveSlots: inst.valve_slots ?? typeDef?.valve_count ?? undefined,
-            }
-        })
-    }
-}
+import { configToTopology } from './utils/topology'
 
 function appReducer(state: AppState, action: AppAction): AppState {
     switch (action.type) {
@@ -228,14 +206,7 @@ async function pollTestRunStatus(onStatusUpdate: (active: boolean, currentModule
     } catch { /* ignore */ }
 }
 
-function LoadingChunk({ label = 'Loading…' }: { label?: string }) {
-    return (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5, color: 'text.secondary' }}>
-            <CircularProgress size={18} />
-            <Typography variant="body2">{label}</Typography>
-        </Box>
-    )
-}
+
 
 export default function App() {
     const [state, dispatch] = useReducer(appReducer, initialAppState)
@@ -519,52 +490,20 @@ export default function App() {
 
                 {/* ── Tab content ── */}
                 {!fullscreen && (
-                    <Box sx={{ flex: 1, overflow: 'hidden', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
-                        {tab === 0 && (
-                            <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-                                <Suspense fallback={<LoadingChunk label="Loading topology tools…" />}>
-                                    <GenerateCompareTab ip={ip} timeout={timeout} onResult={onResult} configPath={configPath} />
-                                </Suspense>
-                            </Box>
-                        )}
-                        {tab === 1 && (
-                            <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                                <Suspense fallback={<LoadingChunk label="Loading connection editor…" />}>
-                                    <ConnectionsFlow
-                                        topology={topology}
-                                        diffStatus={diffStatus}
-                                        ip={ip}
-                                        onModuleValveChange={onModuleValveChange}
-                                        onConfigLoad={onConfigLoad}
-                                        rawConfig={rawConfig}
-                                        configPath={configPath}
-                                    />
-                                </Suspense>
-                            </Box>
-                        )}
-                        {tab === 2 && (
-                            <Suspense fallback={<LoadingChunk label="Loading test runner…" />}>
-                                <TestRunTab ip={ip} />
-                            </Suspense>
-                        )}
-                        {tab === 3 && (
-                            <Suspense fallback={<LoadingChunk label="Loading raw mode…" />}>
-                                <RawModeTab
-                                    topology={topology}
-                                    ip={ip}
-                                    selectedModuleAddr={rawSelectedAddr}
-                                    onSelectModuleAddr={addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })}
-                                />
-                            </Suspense>
-                        )}
-                        {tab === 4 && (
-                            <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-                                <Suspense fallback={<LoadingChunk label="Loading history…" />}>
-                                    <HistoryTab />
-                                </Suspense>
-                            </Box>
-                        )}
-                    </Box>
+                    <AppTabContent
+                        tab={tab}
+                        ip={ip}
+                        timeout={timeout}
+                        topology={topology}
+                        diffStatus={diffStatus}
+                        rawSelectedAddr={rawSelectedAddr}
+                        rawConfig={rawConfig}
+                        configPath={configPath}
+                        onResult={onResult}
+                        onModuleValveChange={onModuleValveChange}
+                        onConfigLoad={onConfigLoad}
+                        onSetRawSelectedAddr={addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })}
+                    />
                 )}
                 {diagOpen && (
                     <Suspense fallback={null}>

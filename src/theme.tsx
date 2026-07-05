@@ -1,21 +1,10 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
 
-export type ColorMode = 'light' | 'dark'
+import { ThemeContext } from './themeContext'
+import type { ColorMode } from './themeContext'
 
-interface ThemeContextType {
-    mode: ColorMode
-    toggleColorMode: () => void
-}
-
-const ThemeContext = createContext<ThemeContextType>({
-    mode: 'light',
-    toggleColorMode: () => { },
-})
-
-export const useColorMode = () => useContext(ThemeContext)
-
-export const AppThemeProvider = ({ children }: { children: React.ReactNode }) => {
+export function AppThemeProvider({ children }: { children: React.ReactNode }) {
     // Check local storage or system preference
     const [mode, setMode] = useState<ColorMode>(() => {
         const savedMode = localStorage.getItem('theme-mode')

@@ -12,7 +12,7 @@ import { CableEdge } from './CableEdge'
 import { WireEdge } from './WireEdge'
 import { buildLayout } from '../utils/layoutBuilder'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnection, ModuleInstance, DiagnosisEntry } from '../types'
-import { AlertsContext } from '../utils/AlertsManager'
+import { AlertsContext } from '../utils/AlertsContext'
 
 // ─────────────────────────────────────────────────────────────────────────────
 

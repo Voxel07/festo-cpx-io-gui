@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import {
     Button, Typography, Box, Divider, Chip, CircularProgress,
-    Stack, FormControlLabel, Checkbox, Alert, Switch,
+    Stack, FormControlLabel, Alert, Switch,
 } from '@mui/material'
 import type { TopologyModule } from '../types'
-import { channelsPerValve, valveSlotToChannels } from '../utils/valveChannels'
+import { channelsPerValve } from '../utils/valveChannels'
+import ModuleActuateValveList from './ModuleActuateValveList'
+import ModuleActuateChannelList from './ModuleActuateChannelList'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,77 +30,7 @@ interface Props {
     mountedValves?: number[]
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const isM12 = (name?: string) => !!(name ?? '').includes('M12')
-const isValveBody = (name?: string) => /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(name ?? '') || /VMPAL-/.test(name ?? '') // add modules that should use the valve controle pannel here
-const isValveInterface = (name?: string) => !!(name ?? '').startsWith('VABX-A') && /-E[LP][-_]/.test(name ?? '')
-
-function buildChannels(
-    mod: TopologyModule,
-    mountedValves?: number[],
-    includeUnmounted = false,
-): ActuateChannel[] {
-    const name = mod.Name
-
-    // ── Valve body: each slot → N hardware channels ──
-    if (isValveBody(name)) {
-        const cpv = channelsPerValve(name)
-        // Determine number of valve slots from NumOfOutputs / cpv
-        const totalValves = mod.NumOfOutputs > 0
-            ? Math.floor(mod.NumOfOutputs / cpv)
-            : 4 // fallback: assume 4 valves
-
-        const slots = includeUnmounted
-            ? Array.from({ length: totalValves }, (_, i) => i)
-            : (mountedValves && mountedValves.length > 0
-                ? mountedValves
-                : Array.from({ length: totalValves }, (_, i) => i))
-
-        const channels: ActuateChannel[] = []
-        for (const slotIdx of slots) {
-            const hwChannels = valveSlotToChannels(slotIdx, cpv)
-            for (let sub = 0; sub < hwChannels.length; sub++) {
-                const coil = cpv > 1 ? (sub === 0 ? 'A' : 'B') : ''
-                channels.push({
-                    label: `Valve ${slotIdx + 1}${coil ? ` (coil ${coil})` : ''}`,
-                    index: hwChannels[sub],
-                    valveIndex: slotIdx,
-                    subChannel: sub,
-                })
-            }
-        }
-        return channels
-    }
-
-    // ── Regular output / inout module: enumerate by port ──
-    const cpp = isM12(name) ? 2 : 1
-    const channels: ActuateChannel[] = []
-
-    for (let i = 0; i < mod.NumOfOutputs; i++) {
-        const portIdx = Math.floor(i / cpp)
-        const sub = cpp > 1 ? i % cpp : 0
-        channels.push({
-            label: cpp > 1 ? `X${portIdx} ch${sub}` : `X${portIdx}`,
-            index: i,
-            valveIndex: -1,
-            subChannel: sub,
-        })
-    }
-    const inoutStart = mod.NumOfOutputs
-    for (let i = 0; i < mod.NumOfInOuts; i++) {
-        const portIdx = Math.floor((inoutStart + i) / cpp)
-        const sub = cpp > 1 ? (inoutStart + i) % cpp : 0
-        channels.push({
-            label: cpp > 1 ? `X${portIdx} ch${sub}` : `X${portIdx}`,
-            index: inoutStart + i,
-            valveIndex: -1,
-            subChannel: sub,
-        })
-    }
-
-    return channels
-}
+import { buildChannels, isValveBody, isValveInterface } from '../utils/moduleActuateHelpers'
 
 export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: Props) {
     const [busy, setBusy] = useState(false)
@@ -304,135 +236,27 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
             ) : (
                 <>
                     {isValve ? (
-                        <>
-                            {/* ── Valve slot + per-channel selection ───── */}
-                            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.72rem', flex: 1 }}>
-                                    Valve Slots ({valveSlots.length} slots, {cpv}c/valve)
-                                </Typography>
-                                <Button size="small" variant="text" onClick={selectAll}
-                                    sx={{ fontSize: '0.62rem', py: 0, px: 0.5, minWidth: 0 }}>
-                                    All
-                                </Button>
-                                <Button size="small" variant="text" onClick={deselectAll}
-                                    sx={{ fontSize: '0.62rem', py: 0, px: 0.5, minWidth: 0 }}>
-                                    None
-                                </Button>
-                            </Stack>
-
-                            <Box sx={{ maxHeight: 280, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
-                                {valveSlots.map(slotIdx => {
-                                    const full = isSlotFullySelected(slotIdx)
-                                    const partial = isSlotPartiallySelected(slotIdx)
-                                    const isMounted = mountedValves ? mountedValves.includes(slotIdx) : true
-                                    return (
-                                        <Box key={slotIdx} sx={{
-                                            mb: 1, pl: 1, py: 0.5,
-                                            borderLeft: 3,
-                                            borderColor: full ? 'primary.main' : partial ? 'warning.main' : 'divider',
-                                            borderRadius: '0 4px 4px 0',
-                                            bgcolor: full ? 'action.selected' : partial ? 'action.hover' : 'transparent',
-                                        }}>
-                                            {/* Valve slot header */}
-                                            <FormControlLabel
-                                                control={
-                                                    <Checkbox
-                                                        size="small"
-                                                        checked={full}
-                                                        indeterminate={partial}
-                                                        onChange={() => toggleValveSlot(slotIdx)}
-                                                        sx={{ p: 0.25 }}
-                                                    />
-                                                }
-                                                label={
-                                                    <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
-                                                        Valve {slotIdx + 1}
-                                                        {!isMounted && (
-                                                            <span style={{ color: '#e65100', marginLeft: 3, fontWeight: 400 }}>(unmounted)</span>
-                                                        )}
-                                                        <span style={{ color: 'text.secondary', marginLeft: 6, fontWeight: 400 }}>
-                                                            ch{slotIdx * cpv}–{slotIdx * cpv + cpv - 1}
-                                                        </span>
-                                                    </Typography>
-                                                }
-                                                sx={{ display: 'flex', ml: 0, mr: 0 }}
-                                            />
-                                            {/* Per-coil sub-checkboxes — always enabled, independent */}
-                                            <Box sx={{ ml: 4, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-                                                {channels.reduce<React.ReactNode[]>((acc, ch) => {
-                                                    if (ch.valveIndex === slotIdx) {
-                                                        acc.push(
-                                                            <FormControlLabel
-                                                                key={ch.index}
-                                                                control={
-                                                                    <Checkbox
-                                                                        size="small"
-                                                                        checked={activeChannels.has(ch.index)}
-                                                                        onChange={() => toggleChannel(ch.index)}
-                                                                        sx={{ p: 0.25 }}
-                                                                    />
-                                                                }
-                                                                label={
-                                                                    <Typography variant="caption" sx={{ fontSize: '0.62rem' }}>
-                                                                        {ch.label}
-                                                                        <span style={{ color: 'text.secondary', marginLeft: 2 }}>[{ch.index}]</span>
-                                                                    </Typography>
-                                                                }
-                                                                sx={{ display: 'flex', ml: 0, mr: 0 }}
-                                                            />
-                                                        )
-                                                    }
-                                                    return acc
-                                                }, [])}
-                                            </Box>
-                                        </Box>
-                                    )
-                                })}
-                            </Box>
-                        </>
+                        <ModuleActuateValveList
+                            valveSlots={valveSlots}
+                            channels={channels}
+                            activeChannels={activeChannels}
+                            cpv={cpv}
+                            mountedValves={mountedValves}
+                            selectAll={selectAll}
+                            deselectAll={deselectAll}
+                            toggleValveSlot={toggleValveSlot}
+                            toggleChannel={toggleChannel}
+                            isSlotFullySelected={isSlotFullySelected}
+                            isSlotPartiallySelected={isSlotPartiallySelected}
+                        />
                     ) : (
-                        <>
-                            {/* ── Non-valve channel selection ────────── */}
-                            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.72rem', flex: 1 }}>
-                                    Output Channels
-                                </Typography>
-                                <Button size="small" variant="text" onClick={selectAll}
-                                    sx={{ fontSize: '0.62rem', py: 0, px: 0.5, minWidth: 0 }}>
-                                    All
-                                </Button>
-                                <Button size="small" variant="text" onClick={deselectAll}
-                                    sx={{ fontSize: '0.62rem', py: 0, px: 0.5, minWidth: 0 }}>
-                                    None
-                                </Button>
-                            </Stack>
-
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, maxHeight: 150, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
-                                {channels.map(ch => {
-                                    const sel = activeChannels.has(ch.index)
-                                    return (
-                                        <FormControlLabel
-                                            key={ch.index}
-                                            control={
-                                                <Checkbox
-                                                    size="small"
-                                                    checked={sel}
-                                                    onChange={() => toggleChannel(ch.index)}
-                                                    sx={{ p: 0.25 }}
-                                                />
-                                            }
-                                            label={
-                                                <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                                                    {ch.label}
-                                                    <span style={{ color: 'text.secondary', marginLeft: 4 }}>ch{ch.index}</span>
-                                                </Typography>
-                                            }
-                                            sx={{ display: 'flex', ml: 0, mr: 0, minWidth: 100 }}
-                                        />
-                                    )
-                                })}
-                            </Box>
-                        </>
+                        <ModuleActuateChannelList
+                            channels={channels}
+                            activeChannels={activeChannels}
+                            selectAll={selectAll}
+                            deselectAll={deselectAll}
+                            toggleChannel={toggleChannel}
+                        />
                     )}
 
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.65rem' }}>

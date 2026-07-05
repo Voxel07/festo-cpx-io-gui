@@ -1,191 +1,31 @@
-import { memo, Fragment, useState, useEffect, useMemo } from 'react'
+import { memo, useState, useEffect, useMemo } from 'react'
 import { Handle, Position, useUpdateNodeInternals } from '@xyflow/react'
-import type { NodeProps, Node } from '@xyflow/react'
+import type { NodeProps } from '@xyflow/react'
 import { Box, Typography, Tooltip, IconButton, useTheme, Chip } from '@mui/material'
 import Stack from '@mui/material/Stack'
 import { useSvgMap, resolveIcon } from '../hooks/useSvgMap'
 import { useSvgPorts } from '../hooks/useSvgPorts'
-import type { PortKind } from '../hooks/useSvgPorts'
+
 import { useValveGroups } from '../hooks/useValveGroups'
 import { useModifiedSvg } from '../hooks/useModifiedSvg'
-import type { TopologyModule, DiffStatusKind, ConnectionEntry, DiagnosisEntry } from '../types'
+import type { DiffStatusKind } from '../types'
 import ValveEditorDialog from './ValveEditorDialog'
 import TopologyNodeWrapper from './TopologyNodeWrapper'
+import type { ModuleNodeType } from './moduleNodeTypes'
+import { ModuleNodeDiagnosis } from './ModuleNodeDiagnosis'
+import { ModuleNodePorts } from './ModuleNodePorts'
 
 // STATUS_STYLE moved into component to use theme
 
 
-// ─── Port kind colours ────────────────────────────────────────────────────────
 
-const PORT_COLOR: Record<PortKind, string> = {
-    in: '#1565c0',   // blue  – digital/analog input
-    out: '#2e7d32',   // green – digital/analog output
-    inout: '#ff9800',   // amber – bidirectional / unknown
-}
-
-// ─── Node data type ───────────────────────────────────────────────────────────
-
-export type ModuleNodeData = {
-    mod: TopologyModule
-    status: DiffStatusKind
-    editMode: boolean
-    /** AP-A backplane or VABX valve body – rendered without card border/shadow */
-    isBackplane: boolean
-    showLeftHandle: boolean
-    showRightHandle: boolean
-    /** EPLI module: show AP-in handle on top */
-    showApIn?: boolean
-    /** EPLI module: show AP-out handle on bottom */
-    showApOut?: boolean
-    /** Override handle position for AP-in (percentage within SVG image box); defaults to EPLI positions */
-    apInPos?: { top: string; left: string }
-    /** Override handle position for AP-out (percentage within SVG image box); defaults to EPLI positions */
-    apOutPos?: { top: string; left: string }
-    /** Show valve editor button (VABX body modules in ConnectionsFlow) */
-    showValveEditor?: boolean
-    /** Show mounted valves visually without editor UI (read-only topology view) */
-    showValves?: boolean
-    /** Valve slot group IDs that are hidden (empty, not mounted) */
-    hiddenValves?: string[]
-    /** IO connections for this module, populated by ConnectionsFlow */
-    connections?: ConnectionEntry[]
-    /** Suppress all IO port handles (valve bodies have no external M12 connectors) */
-    suppressIoHandles?: boolean
-    /** Called when the user changes which valves are mounted or total slots; indices are 0-based */
-    onValveChange?: (addr: number, mountedValves: number[], valveSlots?: number) => void
-    /** True when this module is currently being tested (pulse highlight) */
-    active?: boolean
-    /** Show VABX module inputs based on parameter 20201 */
-    hasVabxInputs?: boolean
-    /** True if a comparison is currently active */
-    compareActive?: boolean
-    /** Active diagnoses for this module (from system diagnostics) */
-    diagnoses?: DiagnosisEntry[]
-}
-
-export type ModuleNodeType = Node<ModuleNodeData, 'mod'>
-
-// ─── SVG dimensions ───────────────────────────────────────────────────────────
-
-const DISP_W = 60
-const DISP_H = Math.round(DISP_W * (107 / 50))   // proportional to viewBox 50×107
-
-const PORT_D = 11
-const PORT_HIT_D = 20
-
-function pct(i: number, total: number) {
-    return `${((i + 1) / (total + 1)) * 100}%`
-}
-
-function getGenericOutStyle(index: number, total: number, editMode: boolean): React.CSSProperties {
-    return {
-        left: pct(index, total),
-        background: editMode ? PORT_COLOR.out : 'transparent',
-        width: PORT_D,
-        height: PORT_D,
-        border: editMode ? '2px solid #fff' : 'none',
-        borderRadius: '50%',
-        top: -5,
-        opacity: editMode ? 1 : 0,
-        pointerEvents: editMode ? undefined : 'none',
-    }
-}
-
-function getGenericInStyle(index: number, total: number, editMode: boolean): React.CSSProperties {
-    return {
-        left: pct(index, total),
-        background: editMode ? PORT_COLOR.in : 'transparent',
-        width: PORT_D,
-        height: PORT_D,
-        border: editMode ? '2px solid #fff' : 'none',
-        borderRadius: '50%',
-        bottom: -5,
-        opacity: editMode ? 1 : 0,
-        pointerEvents: editMode ? undefined : 'none',
-    }
-}
-
-function getApInStyle(left?: string, top?: string): React.CSSProperties {
-    return {
-        position: 'absolute',
-        left: left ?? '50%',
-        top: top ?? '37.85%',
-        transform: 'translate(-50%,-50%)',
-        width: 10,
-        height: 10,
-        background: '#1565c0',
-        border: '2.5px solid #fff',
-        borderRadius: '50%',
-        boxShadow: '0 0 0 2px #1565c0',
-        zIndex: 10,
-    }
-}
-
-function getApOutStyle(left?: string, top?: string): React.CSSProperties {
-    return {
-        position: 'absolute',
-        left: left ?? '50%',
-        top: top ?? '52.8%',
-        transform: 'translate(-50%,-50%)',
-        width: 10,
-        height: 10,
-        background: '#2e7d32',
-        border: '2.5px solid #fff',
-        borderRadius: '50%',
-        boxShadow: '0 0 0 2px #2e7d32',
-        zIndex: 10,
-        cursor: 'crosshair',
-    }
-}
-
-function getPortSrcStyle(cx: number, cy: number, portColor: string, editMode: boolean): React.CSSProperties {
-    return {
-        position: 'absolute',
-        left: `${cx * 100}%`,
-        top: `${cy * 100}%`,
-        transform: 'translate(-50%,-50%)',
-        width: PORT_D,
-        height: PORT_D,
-        background: editMode ? portColor : 'transparent',
-        border: editMode ? '2.5px solid #fff' : 'none',
-        borderRadius: '50%',
-        boxShadow: editMode ? `0 0 0 2px ${portColor}` : 'none',
-        zIndex: 10,
-        cursor: editMode ? 'crosshair' : 'default',
-        opacity: editMode ? 1 : 0,
-        pointerEvents: editMode ? undefined : 'none',
-    }
-}
-
-function getPortTgtStyle(cx: number, cy: number, editMode: boolean): React.CSSProperties {
-    return {
-        position: 'absolute',
-        left: `${cx * 100}%`,
-        top: `${cy * 100}%`,
-        transform: 'translate(-50%,-50%)',
-        width: PORT_HIT_D,
-        height: PORT_HIT_D,
-        background: 'transparent',
-        border: 'none',
-        borderRadius: '50%',
-        opacity: 0,
-        pointerEvents: editMode ? undefined : 'none',
-    }
-}
-
-function supportsMountedValves(name: string, type: string): boolean {
-    const upName = name.toUpperCase()
-    if (/^VABX-A-(?:S-)?EL-E(?:12|34)-AP[IPA]\b/.test(upName)) return false
-    return type.toLowerCase() === 'valve' || upName.startsWith('VMPAL') || upName.startsWith('VAEM') || upName.startsWith('VTUX') || /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(upName)
-}
-
-function defaultValveSlots(name: string, explicitSlots?: number): number | undefined {
-    if (explicitSlots !== undefined) return explicitSlots
-    const upName = name.toUpperCase()
-    if (upName.startsWith('VTUX')) return 4
-    if (upName.startsWith('VMPAL')) return 16
-    return undefined
-}
+import {
+    DISP_W, DISP_H,
+    getGenericOutStyle, getGenericInStyle,
+    getApInStyle, getApOutStyle,
+    supportsMountedValves, defaultValveSlots,
+    PORT_COLOR
+} from './moduleNodeHelpers'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -402,62 +242,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 </Tooltip>
 
                 {/* ── Diagnosis severity indicator ── */}
-                {diagnoses.length > 0 && (() => {
-                    const hasError = diagnoses.some(d => d.severity === 'error')
-                    const hasWarning = diagnoses.some(d => d.severity === 'warning')
-                    const hasMaintenance = diagnoses.some(d => d.severity === 'maintenance')
-                    const sevColor = hasError ? '#d32f2f' : hasWarning ? '#ed6c02' : hasMaintenance ? '#0288d1' : '#4caf50'
-                    const sevLabel = hasError ? '!' : hasWarning ? '!' : hasMaintenance ? 'M' : 'i'
-                    const tooltipContent = (
-                        <Box sx={{ maxWidth: 260 }}>
-                            {diagnoses.map((d, i) => (
-                                <Box key={i} sx={{ mb: i < diagnoses.length - 1 ? 0.75 : 0, pb: i < diagnoses.length - 1 ? 0.5 : 0, borderBottom: i < diagnoses.length - 1 ? '1px solid rgba(255,255,255,0.2)' : 'none' }}>
-                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', display: 'block', color: d.severity === 'error' ? '#ff8a80' : d.severity === 'warning' ? '#ffd54f' : '#81d4fa' }}>
-                                        {d.name}
-                                    </Typography>
-                                    {d.description && (
-                                        <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'grey.400', display: 'block' }}>
-                                            {d.description}
-                                        </Typography>
-                                    )}
-                                    {d.guideline && (
-                                        <Typography variant="caption" sx={{ fontSize: '0.58rem', fontStyle: 'italic', color: '#81c784', display: 'block' }}>
-                                            {d.guideline}
-                                        </Typography>
-                                    )}
-                                </Box>
-                            ))}
-                        </Box>
-                    )
-                    return (
-                        <Tooltip title={tooltipContent} placement="top" arrow
-                            slotProps={{ tooltip: { sx: { bgcolor: 'grey.900', color: '#fff', p: 1, maxWidth: 280, fontSize: '0.7rem' } } }}>
-                            <Box sx={{
-                                position: 'absolute',
-                                top: '50%',
-                                left: '50%',
-                                transform: 'translate(-50%, -50%)',
-                                width: 22,
-                                height: 22,
-                                borderRadius: '50%',
-                                bgcolor: sevColor,
-                                color: '#fff',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.75rem',
-                                fontWeight: 900,
-                                zIndex: 15,
-                                boxShadow: `0 0 8px 2px ${sevColor}80`,
-                                border: '2px solid #fff',
-                                cursor: 'help',
-                                pointerEvents: 'auto',
-                            }}>
-                                {sevLabel}
-                            </Box>
-                        </Tooltip>
-                    )
-                })()}
+                <ModuleNodeDiagnosis diagnoses={diagnoses} />
 
                 {/* ── Status bar (backplane modules only) ── */}
                 {isBackplane && compareActive && (
@@ -483,43 +268,9 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
                 {/* ── SVG-port handles (always rendered so edges can resolve handle IDs;
                      invisible when not in edit mode per React Flow best-practice) ── */}
-                {!suppressIoHandles && hasPorts && ports.map(port => {
-                    const portColor = PORT_COLOR[port.kind]
-                    const connectedSrc = connections.find(c => c.dir === 'src' && c.portId === port.id)
-                    const connectedTgt = connections.find(c => c.dir === 'tgt' && c.portId === port.id)
-                    
-                    const srcColor = connectedSrc?.wireColor || portColor
-                    const tgtColor = connectedTgt?.wireColor || 'transparent'
-
-                    return (
-                        <Fragment key={port.id}>
-                            {/* Coloured source handle – kind encoded in ID for validation */}
-                            <Handle
-                                id={`src-${port.kind}-${port.id}`}
-                                type="source"
-                                position={port.side}
-                                style={getPortSrcStyle(port.cx, port.cy, srcColor, editMode)}
-                            />
-                            {/* Transparent target hit-area – kind also encoded */}
-                            <Handle
-                                id={`tgt-${port.kind}-${port.id}`}
-                                type="target"
-                                position={port.side}
-                                style={{
-                                    ...getPortTgtStyle(port.cx, port.cy, editMode),
-                                    ...(connectedTgt ? {
-                                        background: tgtColor,
-                                        width: PORT_D,
-                                        height: PORT_D,
-                                        border: '2.5px solid #fff',
-                                        opacity: 1,
-                                        zIndex: 11,
-                                    } : {})
-                                }}
-                            />
-                        </Fragment>
-                    )
-                })}
+                {!suppressIoHandles && hasPorts && (
+                    <ModuleNodePorts ports={ports} connections={connections} editMode={editMode} />
+                )}
             </Box>
 
             <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>

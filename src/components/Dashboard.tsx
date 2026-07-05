@@ -7,79 +7,23 @@
  */
 import { useState, useEffect, useCallback } from 'react'
 import {
-    Box, Card, CardContent, Typography, Grid, Chip, Stack,
-    CircularProgress, Alert, Paper, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, LinearProgress,
-    IconButton, Tooltip,
+    Box, Typography, Grid, CircularProgress, Alert, Paper,
+    LinearProgress, IconButton, Tooltip, Stack
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
-import TrendingUpIcon from '@mui/icons-material/TrendingUp'
-import TrendingDownIcon from '@mui/icons-material/TrendingDown'
-import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import StorageIcon from '@mui/icons-material/Storage'
 import TerminalIcon from '@mui/icons-material/Terminal'
 import MonitorIcon from '@mui/icons-material/Monitor'
 import TimerIcon from '@mui/icons-material/Timer'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import { DataGrid } from '@mui/x-data-grid'
-import {
-    AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-    Tooltip as RechartsTooltip, ResponsiveContainer
-} from 'recharts'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 
-/* ── Types ────────────────────────────────────────────────────────── */
-
-interface DailyPoint {
-    date: string
-    total: number
-    passed: number
-    failed: number
-    rate: number
-}
-
-interface TopModule {
-    test_id: string
-    count: number
-    failures: number
-}
-
-interface RecentRun {
-    run_id: string
-    source: string
-    ip_address: string
-    status: string
-    test_count: number
-    passed: number
-    failed: number
-    started_at: string
-    completed_at: string
-    branch: string
-    pipeline_id: string
-}
-
-interface DashboardData {
-    summary: {
-        total_runs: number
-        completed_runs: number
-        failed_runs: number
-        running: number
-        success_rate: number
-        ci_runs: number
-        web_runs: number
-        ci_success_rate: number
-        web_success_rate: number
-        total_tests_run: number
-        total_tests_passed: number
-        overall_pass_rate: number
-        avg_duration_seconds: number
-        max_duration_seconds: number
-        min_duration_seconds: number
-    }
-    daily_trend: DailyPoint[]
-    top_modules: TopModule[]
-    most_failing: TopModule[]
-    recent_runs: RecentRun[]
-}
+import type { DashboardData } from './dashboard/types'
+import { KpiCard } from './dashboard/KpiCard'
+import { TrendAreaChart, RunsBarChart } from './dashboard/DashboardCharts'
+import { DailyBreakdownTable } from './dashboard/DailyBreakdownTable'
+import { TestStatisticsGrid } from './dashboard/TestStatisticsGrid'
+import { RecentRunsTable } from './dashboard/RecentRunsTable'
 
 /* ── Helpers ──────────────────────────────────────────────────────── */
 
@@ -89,121 +33,6 @@ function fmtDuration(sec: number): string {
     const h = Math.floor(sec / 3600)
     const m = Math.floor((sec % 3600) / 60)
     return `${h}h ${m}m`
-}
-
-function fmtDate(iso: string): string {
-    if (!iso) return '—'
-    try {
-        return new Date(iso).toLocaleDateString('en-US', {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-        })
-    } catch {
-        return iso.slice(0, 16)
-    }
-}
-
-/* ── Charts (Recharts) ── */
-
-function TrendAreaChart({ data, color = '#1976d2' }: {
-    data: { date: string; rate: number }[]
-    color?: string
-}) {
-    if (!data.length) return <Typography variant="caption" color="text.secondary">No trend data</Typography>
-
-    return (
-        <Box sx={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data} margin={{ top: 16, right: 20, bottom: 0, left: 0 }}>
-                    <defs>
-                        <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                            <stop offset="95%" stopColor={color} stopOpacity={0} />
-                        </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
-                    <XAxis dataKey="date" tickFormatter={t => t.slice(5)} tick={{ fontSize: 12 }} strokeOpacity={0.2} />
-                    <YAxis domain={['dataMin - 5', 100]} tick={{ fontSize: 12 }} strokeOpacity={0.2} tickFormatter={t => `${t}%`} />
-                    <RechartsTooltip
-                        contentStyle={{ borderRadius: 8, backgroundColor: 'var(--mui-palette-background-paper)', border: '1px solid var(--mui-palette-divider)', color: 'var(--mui-palette-text-primary)' }}
-                        itemStyle={{ color: 'var(--mui-palette-text-primary)' }}
-                        formatter={(val: any) => [`${val}%`, 'Success Rate']}
-                        labelStyle={{ color: 'var(--mui-palette-text-secondary)', marginBottom: 4 }}
-                    />
-                    <Area type="monotone" dataKey="rate" stroke={color} strokeWidth={3} fillOpacity={1} fill="url(#colorRate)" />
-                </AreaChart>
-            </ResponsiveContainer>
-        </Box>
-    )
-}
-
-function RunsBarChart({ data, color = '#7b1fa2' }: {
-    data: { date: string; total: number }[]
-    color?: string
-}) {
-    if (!data.length) return <Typography variant="caption" color="text.secondary">No historical data yet</Typography>
-
-    return (
-        <Box sx={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data} margin={{ top: 16, right: 20, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
-                    <XAxis dataKey="date" tickFormatter={t => t.slice(5)} tick={{ fontSize: 12 }} strokeOpacity={0.2} />
-                    <YAxis tick={{ fontSize: 12 }} strokeOpacity={0.2} allowDecimals={false} />
-                    <RechartsTooltip
-                        contentStyle={{ borderRadius: 8, backgroundColor: 'var(--mui-palette-background-paper)', border: '1px solid var(--mui-palette-divider)', color: 'var(--mui-palette-text-primary)' }}
-                        itemStyle={{ color: 'var(--mui-palette-text-primary)' }}
-                        formatter={(val: any) => [val, 'Total Runs']}
-                        labelStyle={{ color: 'var(--mui-palette-text-secondary)', marginBottom: 4 }}
-                    />
-                    <Bar dataKey="total" fill={color} radius={[4, 4, 0, 0]} />
-                </BarChart>
-            </ResponsiveContainer>
-        </Box>
-    )
-}
-
-/* ── KPI Card ─────────────────────────────────────────────────────── */
-
-function KpiCard({ title, value, subtitle, icon, color, trend, loading }: {
-    title: string
-    value: string | number
-    subtitle?: string
-    icon?: React.JSX.Element
-    color?: string
-    trend?: 'up' | 'down' | 'neutral'
-    loading?: boolean
-}) {
-    const trendEl = trend === 'up' ? <TrendingUpIcon sx={{ fontSize: 16, color: 'success.main' }} />
-        : trend === 'down' ? <TrendingDownIcon sx={{ fontSize: 16, color: 'error.main' }} />
-            : null
-
-    return (
-        <Card sx={{ height: '100%', minWidth: 160 }} elevation={1}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                <Stack direction="row" sx={{ mb: 0.5, alignItems: 'center', gap: 1 }}>
-                    {icon && <Box sx={{ color: color ?? 'primary.main', opacity: 0.7 }}>{icon}</Box>}
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 500 }}>
-                        {title}
-                    </Typography>
-                </Stack>
-                {loading ? (
-                    <CircularProgress size={24} sx={{ mt: 1 }} />
-                ) : (
-                    <Stack direction="row" sx={{ alignItems: 'baseline', gap: 1 }}>
-                        <Typography variant="h4" sx={{ fontWeight: 700 }} color={color ?? 'text.primary'}>
-                            {value}
-                        </Typography>
-                        {trendEl}
-                    </Stack>
-                )}
-                {subtitle && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.25, display: 'block' }}>
-                        {subtitle}
-                    </Typography>
-                )}
-            </CardContent>
-        </Card>
-    )
 }
 
 /* ── Main Dashboard ────────────────────────────────────────────────── */
@@ -450,168 +279,17 @@ export default function Dashboard() {
             {data?.daily_trend && data.daily_trend.length > 0 && (
                 <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
                     <Grid size={{ xs: 12, lg: 6 }}>
-                        <Paper elevation={1} sx={{ p: 2 }}>
-                            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
-                                Daily Breakdown
-                            </Typography>
-                            <TableContainer>
-                                <Table size="small">
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell>Date</TableCell>
-                                            <TableCell align="right">Total</TableCell>
-                                            <TableCell align="right">Passed</TableCell>
-                                            <TableCell align="right">Failed</TableCell>
-                                            <TableCell align="right">Rate</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {(data?.daily_trend ?? []).slice(-30).reverse().map(d => (
-                                            <TableRow key={d.date} hover>
-                                                <TableCell><Typography variant="caption">{d.date}</Typography></TableCell>
-                                                <TableCell align="right"><Typography variant="caption">{d.total}</Typography></TableCell>
-                                                <TableCell align="right">
-                                                    <Chip size="small" label={d.passed} color="success" variant="outlined" sx={{ height: 20, '& .MuiChip-label': { fontSize: 11 } }} />
-                                                </TableCell>
-                                                <TableCell align="right">
-                                                    <Chip size="small" label={d.failed} color={d.failed > 0 ? 'error' : 'default'} variant="outlined" sx={{ height: 20, '& .MuiChip-label': { fontSize: 11 } }} />
-                                                </TableCell>
-                                                <TableCell align="right">
-                                                    <Typography variant="caption"
-                                                        sx={{ fontWeight: 600 }}
-                                                        color={d.rate >= 90 ? 'success.main' : d.rate >= 70 ? 'warning.main' : 'error.main'}>
-                                                        {d.rate}%
-                                                    </Typography>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                        </Paper>
+                        <DailyBreakdownTable data={data} />
                     </Grid>
 
                     <Grid size={{ xs: 12, lg: 6 }}>
-                        <Paper elevation={1} sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
-                                Test Statistics
-                            </Typography>
-                            <Box sx={{ flex: 1, minHeight: 300, width: '100%' }}>
-                                <DataGrid
-                                    rows={Array.from(new Map(
-                                        [...(data?.top_modules ?? []), ...(data?.most_failing ?? [])]
-                                            .map(m => [m.test_id, { id: m.test_id, ...m }])
-                                    ).values())}
-                                    columns={[
-                                        { field: 'test_id', headerName: 'Test ID', flex: 1, minWidth: 200 },
-                                        { field: 'count', headerName: 'Runs', type: 'number', width: 90 },
-                                        {
-                                            field: 'failures',
-                                            headerName: 'Failures',
-                                            type: 'number',
-                                            width: 90,
-                                            renderCell: (params) => (
-                                                params.value > 0 ? (
-                                                    <Chip size="small" label={params.value} color="error" variant="outlined" sx={{ height: 20, minWidth: 24, '& .MuiChip-label': { px: 0.75, fontSize: 10 } }} />
-                                                ) : <Typography variant="caption" color="text.secondary">0</Typography>
-                                            )
-                                        }
-                                    ]}
-                                    density="compact"
-                                    disableRowSelectionOnClick
-                                    initialState={{
-                                        pagination: { paginationModel: { pageSize: 10 } },
-                                        sorting: { sortModel: [{ field: 'count', sort: 'desc' }] }
-                                    }}
-                                    pageSizeOptions={[5, 10, 25]}
-                                />
-                            </Box>
-                        </Paper>
+                        <TestStatisticsGrid data={data} />
                     </Grid>
                 </Grid>
             )}
 
             {/* ── Recent Runs Table ── */}
-            <Paper elevation={1} sx={{ p: 2, mb: 2, width: '100%', overflow: 'hidden' }}>
-                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
-                    Recent Test Runs
-                </Typography>
-                <TableContainer sx={{ maxHeight: 400 }}>
-                    <Table size="small">
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Run ID</TableCell>
-                                <TableCell>Source</TableCell>
-                                <TableCell>IP</TableCell>
-                                <TableCell>Status</TableCell>
-                                <TableCell align="right">Tests</TableCell>
-                                <TableCell align="right">Pass / Fail</TableCell>
-                                <TableCell>Started</TableCell>
-                                <TableCell>Branch / Pipeline</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {data?.recent_runs?.length ? data.recent_runs.map(run => (
-                                <TableRow key={run.run_id} hover>
-                                    <TableCell>
-                                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 11 }}>
-                                            {run.run_id}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            size="small"
-                                            icon={run.source === 'ci' ? <TerminalIcon sx={{ fontSize: 14 }} /> : <MonitorIcon sx={{ fontSize: 14 }} />}
-                                            label={run.source === 'ci' ? 'CI' : 'Web'}
-                                            color={run.source === 'ci' ? 'secondary' : 'primary'}
-                                            variant="outlined"
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 11 }}>{run.ip_address}</Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            size="small"
-                                            label={run.status}
-                                            color={run.status === 'completed' ? 'success' : run.status === 'failed' ? 'error' : run.status === 'running' ? 'info' : 'default'}
-                                            icon={run.status === 'completed' ? <CheckCircleIcon sx={{ fontSize: 14 }} /> : undefined}
-                                        />
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        <Typography variant="caption">{run.test_count}</Typography>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
-                                            <Chip size="small" label={run.passed} color="success" variant="outlined" />
-                                            {run.failed > 0 && (
-                                                <Chip size="small" label={run.failed} color="error" variant="outlined" />
-                                            )}
-                                        </Stack>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography variant="caption">{fmtDate(run.started_at)}</Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        {run.branch && (
-                                            <Chip size="small" label={run.branch} variant="outlined" sx={{ mr: 0.5 }} />
-                                        )}
-                                        {run.pipeline_id && (
-                                            <Chip size="small" label={`#${run.pipeline_id}`} variant="outlined" color="secondary" />
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            )) : (
-                                <TableRow>
-                                    <TableCell colSpan={8} align="center">
-                                        <Typography variant="caption" color="text.secondary">No runs recorded yet</Typography>
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            </Paper>
+            <RecentRunsTable data={data} />
         </Box>
     )
 }

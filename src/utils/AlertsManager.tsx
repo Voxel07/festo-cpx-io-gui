@@ -1,8 +1,8 @@
-import { useState, useEffect, useImperativeHandle, createContext, forwardRef } from 'react';
+import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Alert, Slide, LinearProgress, Box } from '@mui/material';
 import type { AlertColor } from '@mui/material';
 
-export const AlertsContext = createContext<any>(null);
+
 
 /**
  * Format alert messages: handle strings, objects with .message, and fallback to JSON.
@@ -15,16 +15,7 @@ function formatAlertMessage(msg: any): string {
     return String(msg);
 }
 
-export interface AlertMessage {
-    id: number;
-    severity: AlertColor;
-    message: any;
-    remainingTime: number;
-}
-
-export interface AlertsManagerRef {
-    showAlert: (severity: AlertColor, message: any) => void;
-}
+import type { AlertMessage, AlertsManagerRef } from './AlertsManagerTypes';
 
 const AlertsManager = forwardRef<AlertsManagerRef, {}>((_props, ref) => {
     const [alerts, setAlerts] = useState<AlertMessage[]>([]);

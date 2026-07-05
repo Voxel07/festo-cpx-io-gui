@@ -10,7 +10,7 @@ import LightModeIcon from '@mui/icons-material/LightMode'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import { TooltipButton } from './TooltipButton'
-import { useColorMode } from '../theme'
+import { useColorMode } from '../themeContext'
 
 const appBarFieldSx = {
     '& label': { color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem' },
