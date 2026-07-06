@@ -53,6 +53,7 @@ export type WireData = {
     straight?: boolean
     cpOffsetX?: number
     cpOffsetY?: number
+    labelOffset?: { x: number; y: number }
 }
 
 export function buildRoutedPath(

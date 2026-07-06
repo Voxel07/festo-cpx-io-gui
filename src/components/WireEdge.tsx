@@ -159,6 +159,10 @@ export function WireEdge({
         currentLength += seg.len
     }
 
+    const labelOffset = d?.labelOffset ?? { x: 0, y: 0 }
+    labelPos.x += labelOffset.x
+    labelPos.y += labelOffset.y
+
     // ── Interaction Handlers ──────────────────────────────────────────────────
     // All handlers read FRESH state from edge data to avoid stale closures.
 
@@ -251,6 +255,34 @@ export function WireEdge({
         }))
     }, [id, setEdges, snapshotOrCopy, alerts])
 
+    /** Drag the label to a new offset */
+    const onLabelMD = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation()
+        e.preventDefault()
+        
+        const startClientX = e.clientX
+        const startClientY = e.clientY
+        const allEdges = getEdges()
+        const edge = allEdges.find(e => e.id === id)
+        const currentOffset = (edge?.data as WireData | undefined)?.labelOffset ?? { x: 0, y: 0 }
+
+        const onMove = (ev: MouseEvent) => {
+            const z = getZoom()
+            const dx = (ev.clientX - startClientX) / z
+            const dy = (ev.clientY - startClientY) / z
+            setEdges(prev => prev.map(edge => {
+                if (edge.id !== id) return edge
+                return { ...edge, data: { ...edge.data, labelOffset: { x: currentOffset.x + dx, y: currentOffset.y + dy } } }
+            }))
+        }
+        const onUp = () => {
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+        }
+        window.addEventListener('mousemove', onMove)
+        window.addEventListener('mouseup', onUp)
+    }, [id, setEdges, getZoom, getEdges])
+
     /** Delete the entire edge */
     const onRemove = useCallback((e: React.MouseEvent) => {
         e.stopPropagation()
@@ -287,6 +319,7 @@ export function WireEdge({
                 onRemove={onRemove}
                 onWaypointMD={onWaypointMD}
                 onWaypointCtx={onWaypointCtx}
+                onLabelMD={onLabelMD}
             />
         </>
     )

@@ -48,6 +48,7 @@ export function useConnectionsFlowPersist(
                     label: typeof e.label === 'string' ? e.label : '',
                     waypoints: (d.waypoints as Array<{ x: number; y: number }>) ?? undefined,
                     straight: d.straight === true ? true : undefined,
+                    label_offset: (d.labelOffset as { x: number; y: number }) ?? undefined,
                     source_subchannel: typeof d.subSrc === 'number' ? d.subSrc : undefined,
                     target_subchannel: typeof d.subTgt === 'number' ? d.subTgt : undefined,
                 }
@@ -66,13 +67,44 @@ export function useConnectionsFlowPersist(
                 }
             })
 
+            const portDirectionsMap: Record<string, Record<string, boolean>> = {}
+            ioEdgesRef.current.forEach(e => {
+                const d = e.data as Record<string, unknown>
+                if (d.srcIsOutput !== undefined) {
+                    const srcAddr = e.source
+                    const tgtAddr = e.target
+                    
+                    const srcNode = nodes.find(n => n.id === srcAddr)
+                    const tgtNode = nodes.find(n => n.id === tgtAddr)
+                    const srcIsM12 = srcNode ? (srcNode.data as ModuleNodeData).mod.Name.includes('M12') : false
+                    const tgtIsM12 = tgtNode ? (tgtNode.data as ModuleNodeData).mod.Name.includes('M12') : false
+
+                    const srcPortStr = String(d.portSrc ?? portId(String(e.sourceHandle ?? '')))
+                    const tgtPortStr = String(d.portTgt ?? portId(String(e.targetHandle ?? '')))
+
+                    const subSrc = typeof d.subSrc === 'number' ? d.subSrc : 0
+                    const subTgt = typeof d.subTgt === 'number' ? d.subTgt : 0
+
+                    const srcCh = (parseInt(srcPortStr.replace(/\D/g, '') || '0') * (srcIsM12 ? 2 : 1)) + subSrc
+                    const tgtCh = (parseInt(tgtPortStr.replace(/\D/g, '') || '0') * (tgtIsM12 ? 2 : 1)) + subTgt
+
+                    if (!portDirectionsMap[srcAddr]) portDirectionsMap[srcAddr] = {}
+                    if (!portDirectionsMap[tgtAddr]) portDirectionsMap[tgtAddr] = {}
+                    
+                    portDirectionsMap[srcAddr][String(srcCh)] = d.srcIsOutput as boolean
+                    portDirectionsMap[tgtAddr][String(tgtCh)] = !(d.srcIsOutput as boolean)
+                }
+            })
+
             config.wiring = wiring
             config.module_instances = (config.module_instances || []).map(inst => {
                 const mv = mountedValvesMap[String(inst.address)]
                 const vs = valveSlotsMap[String(inst.address)]
+                const pd = portDirectionsMap[String(inst.address)]
                 let next = inst
                 if (mv !== undefined) next = { ...next, mounted_valves: mv }
                 if (vs !== undefined) next = { ...next, valve_slots: vs }
+                if (pd !== undefined) next = { ...next, port_directions: { ...(next.port_directions || {}), ...pd } }
                 return next
             })
 

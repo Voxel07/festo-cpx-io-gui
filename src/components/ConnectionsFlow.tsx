@@ -181,7 +181,12 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 open={pendingConn !== null}
                 sourceIsM12={pendingConn?.srcIsM12 ?? false}
                 targetIsM12={pendingConn?.tgtIsM12 ?? false}
-                onConfirm={(srcSub, tgtSub) => {
+                sourceKind={pendingConn?.sh.split('-')[1]}
+                targetKind={pendingConn?.th.split('-')[1]}
+                isPortMode={connectionMode === 'port'}
+                sourceLabel={pendingConn ? `#${pendingConn.srcNode}:${pendingConn.sh.split('-')[2]}` : undefined}
+                targetLabel={pendingConn ? `#${pendingConn.tgtNode}:${pendingConn.th.split('-')[2]}` : undefined}
+                onConfirm={(srcSub, tgtSub, direction) => {
                     if (pendingConn) {
                         const { srcNode, tgtNode, sh, th, srcIsM12, tgtIsM12 } = pendingConn
 
@@ -193,10 +198,10 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                             for (let i = 0; i < maxLen; i++) {
                                 const s = srcChannels[i % srcChannels.length]
                                 const t = tgtChannels[i % tgtChannels.length]
-                                processConnection(srcNode, tgtNode, sh, th, s as number, t as number)
+                                processConnection(srcNode, tgtNode, sh, th, s as number, t as number, direction)
                             }
                         } else {
-                            processConnection(srcNode, tgtNode, sh, th, srcSub as number, tgtSub as number)
+                            processConnection(srcNode, tgtNode, sh, th, srcSub as number, tgtSub as number, direction)
                         }
 
                         setPendingConn(null)

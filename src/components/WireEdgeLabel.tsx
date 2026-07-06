@@ -12,22 +12,26 @@ interface Props {
     onRemove: (e: React.MouseEvent) => void
     onWaypointMD: (idx: number) => (e: React.MouseEvent) => void
     onWaypointCtx: (idx: number) => (e: React.MouseEvent) => void
+    onLabelMD: (e: React.MouseEvent) => void
 }
 
 export function WireEdgeLabel({
     label, selected, hideLabel, color, labelPos,
-    routedCorners, onRemove, onWaypointMD, onWaypointCtx
+    routedCorners, onRemove, onWaypointMD, onWaypointCtx, onLabelMD
 }: Props) {
     return (
         <EdgeLabelRenderer>
             {(label || selected) && (
-                <div style={{
+                <div 
+                    onMouseDown={selected ? onLabelMD : undefined}
+                    style={{
                     position: 'absolute',
                     transform: `translate(-50%, calc(-100% - 4px)) translate(${labelPos.x}px, ${labelPos.y}px)`,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    pointerEvents: 'none',
+                    pointerEvents: selected ? 'all' : 'none',
+                    cursor: selected ? 'grab' : 'default',
                     zIndex: 1001,
                 }}>
                     {(!hideLabel && label) && (
@@ -43,7 +47,7 @@ export function WireEdgeLabel({
                     )}
                     {selected && (
                         <button
-                            onClick={onRemove}
+                            onClick={(e) => { e.stopPropagation(); onRemove(e); }}
                             title="Remove connection"
                             style={BUTTON_STYLE}
                             onMouseEnter={(e) => {

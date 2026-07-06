@@ -154,6 +154,7 @@ export function useConnectionsFlowLayout(
                     subTgt: c.target_subchannel,
                     waypoints: c.waypoints ?? undefined,
                     straight: c.straight ?? false,
+                    labelOffset: c.label_offset ?? undefined,
                     wireColor,
                 },
             }
@@ -171,7 +172,7 @@ export function useConnectionsFlowLayout(
         topologyName.current = topology.Name
 
         const { nodes: newNodes, edges: chainEdges } = buildLayout(
-            topology.Topology, diffStatus, true /* editMode */,
+            topology.Topology, null, true /* editMode */,
         )
 
         setNodes(prevNodes => {
@@ -244,7 +245,7 @@ export function useConnectionsFlowLayout(
 
     const processConnection = useCallback((
         srcNode: string, tgtNode: string, sh: string, th: string,
-        subSrc?: number, subTgt?: number
+        subSrc?: number, subTgt?: number, direction?: 'forward' | 'reverse'
     ) => {
         const pSrc = portId(sh)
         const pTgt = portId(th)
@@ -257,6 +258,38 @@ export function useConnectionsFlowLayout(
 
         const existingEdges = edges.filter(e => e.source === srcNode && e.target === tgtNode && (e.data as any)?.kind === 'io')
         const wireColor = getWireColor(sh, existingEdges.length, theme)
+
+        const sk = handleKind(sh)
+        const tk = handleKind(th)
+        let srcIsOutput = false
+        if (sk === 'out' || (sk === 'inout' && tk === 'in') || (sk === 'inout' && tk === 'inout' && direction === 'forward')) {
+            srcIsOutput = true
+        }
+
+        if (ip) {
+            const srcMod = topology?.Topology?.find(m => String(m.Adress) === srcNode)
+            const tgtMod = topology?.Topology?.find(m => String(m.Adress) === tgtNode)
+            const srcIsM12 = isM12(srcMod?.Name)
+            const tgtIsM12 = isM12(tgtMod?.Name)
+            
+            const srcCh = (parseInt(pSrc.replace(/\D/g, '') || '0') * (srcIsM12 ? 2 : 1)) + (subSrc ?? 0)
+            const tgtCh = (parseInt(pTgt.replace(/\D/g, '') || '0') * (tgtIsM12 ? 2 : 1)) + (subTgt ?? 0)
+
+            if (sk === 'inout') {
+                fetch(`/io/module/${srcNode}/parameter/20145`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip_address: ip, timeout: 2.0, value: srcIsOutput ? 'true' : 'false', instance: srcCh })
+                }).catch(() => {})
+            }
+            if (tk === 'inout') {
+                fetch(`/io/module/${tgtNode}/parameter/20145`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip_address: ip, timeout: 2.0, value: srcIsOutput ? 'false' : 'true', instance: tgtCh })
+                }).catch(() => {})
+            }
+        }
 
         const newEdge: Edge = {
             id: edgeId,
@@ -271,10 +304,10 @@ export function useConnectionsFlowLayout(
             label: subSrc !== undefined
                 ? `#${srcNode}:${pSrc}.${subSrc} \u2192 #${tgtNode}:${pTgt}.${subTgt}`
                 : `#${srcNode}:${pSrc} \u2192 #${tgtNode}:${pTgt}`,
-            data: { kind: 'io', portSrc: pSrc, portTgt: pTgt, subSrc, subTgt, wireColor, straight: false },
+            data: { kind: 'io', portSrc: pSrc, portTgt: pTgt, subSrc, subTgt, wireColor, straight: false, srcIsOutput },
         }
         setEdges(prev => prev.some(e => e.id === edgeId) ? prev : [...prev, newEdge])
-    }, [edges, setEdges, theme])
+    }, [edges, setEdges, theme, ip, topology])
 
     const onConnect = useCallback((connection: Connection) => {
         let sh = connection.sourceHandle ?? ''
@@ -290,21 +323,33 @@ export function useConnectionsFlowLayout(
             th = tmpH.replace(/^src-/, 'tgt-')
         }
 
-        if (connectionMode === 'channel') {
-            const srcMod = topology?.Topology?.find(m => String(m.Adress) === srcNode)
-            const tgtMod = topology?.Topology?.find(m => String(m.Adress) === tgtNode)
-            const srcIsM12 = isM12(srcMod?.Name)
-            const tgtIsM12 = isM12(tgtMod?.Name)
+        const sk = handleKind(sh)
+        const tk = handleKind(th)
+        const bothInOut = sk === 'inout' && tk === 'inout'
 
+        const srcMod = topology?.Topology?.find(m => String(m.Adress) === srcNode)
+        const tgtMod = topology?.Topology?.find(m => String(m.Adress) === tgtNode)
+        const srcIsM12 = isM12(srcMod?.Name)
+        const tgtIsM12 = isM12(tgtMod?.Name)
+
+        if (connectionMode === 'channel') {
             if (srcIsM12 || tgtIsM12) {
                 setPendingConn({ conn: connection, srcIsM12, tgtIsM12, sh, th, srcNode, tgtNode })
             } else {
-                processConnection(srcNode, tgtNode, sh, th, 0, 0)
+                if (bothInOut) {
+                    setPendingConn({ conn: connection, srcIsM12, tgtIsM12, sh, th, srcNode, tgtNode })
+                } else {
+                    processConnection(srcNode, tgtNode, sh, th, 0, 0)
+                }
             }
         } else {
-            processConnection(srcNode, tgtNode, sh, th)
+            if (bothInOut) {
+                setPendingConn({ conn: connection, srcIsM12, tgtIsM12, sh, th, srcNode, tgtNode })
+            } else {
+                processConnection(srcNode, tgtNode, sh, th)
+            }
         }
-    }, [connectionMode, topology, processConnection])
+    }, [connectionMode, topology, processConnection, setPendingConn])
 
     const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
         setEdges(prev => reconnectEdge(oldEdge, newConnection, prev))

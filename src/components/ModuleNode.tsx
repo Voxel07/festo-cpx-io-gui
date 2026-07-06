@@ -50,11 +50,17 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
     const svgMaps = useSvgMap()
     const svgUrl = resolveIcon(mod.Name, svgMaps, mod.Modulecode)
+    
+    const is16Dio = /(?:16DIO|16NDIO|16NIDO)/.test(mod.Name.toUpperCase())
+    const numIn = is16Dio ? 0 : mod.NumOfInputs
+    const numOut = is16Dio ? 0 : mod.NumOfOutputs
+    const numInOut = is16Dio ? Math.max(mod.NumOfInputs, mod.NumOfOutputs, 16) : mod.NumOfInOuts
+
     // Port positions come from SVG; port counts/kinds come from bench_config (mod.NumOf*)
     const ports = useSvgPorts(svgUrl, {
-        numIn: mod.NumOfInputs,
-        numOut: mod.NumOfOutputs,
-        numInOut: mod.NumOfInOuts,
+        numIn,
+        numOut,
+        numInOut,
     })
     const isVmpal = mod.Name.toUpperCase().startsWith('VMPAL')
     const isVtux = mod.Name.toUpperCase().startsWith('VTUX')
@@ -88,9 +94,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const displayUrl = useModifiedSvg(svgUrl, effectiveHiddenValves, numValves)
 
     const hasPorts = ports.length > 0
-    const numOut = mod.NumOfOutputs
-    const numIn = mod.NumOfInputs
-    const numInOut = mod.NumOfInOuts
+
     const topCount = numOut + numInOut
     const botCount = numIn + numInOut
 

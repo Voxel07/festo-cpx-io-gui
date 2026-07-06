@@ -17,7 +17,12 @@ export interface ChannelSelectionModalProps {
     open: boolean
     sourceIsM12: boolean
     targetIsM12: boolean
-    onConfirm: (sourceSubchannel: number | 'both', targetSubchannel: number | 'both') => void
+    sourceKind?: string
+    targetKind?: string
+    isPortMode?: boolean
+    sourceLabel?: string
+    targetLabel?: string
+    onConfirm: (sourceSubchannel: number | 'both', targetSubchannel: number | 'both', direction?: 'forward' | 'reverse') => void
     onCancel: () => void
 }
 
@@ -25,23 +30,32 @@ export default function ChannelSelectionModal({
     open,
     sourceIsM12,
     targetIsM12,
+    sourceKind,
+    targetKind,
+    isPortMode,
+    sourceLabel,
+    targetLabel,
     onConfirm,
     onCancel
 }: ChannelSelectionModalProps) {
     // If not M12, it's M8 or single channel, which must be 0.
-    const [srcSub, setSrcSub] = useState<number | 'both'>(0)
-    const [tgtSub, setTgtSub] = useState<number | 'both'>(0)
+    const [srcSub, setSrcSub] = useState<number | 'both'>(isPortMode ? 'both' : 0)
+    const [tgtSub, setTgtSub] = useState<number | 'both'>(isPortMode ? 'both' : 0)
+    const [direction, setDirection] = useState<'forward' | 'reverse'>('forward')
+
+    const bothInOut = sourceKind === 'inout' && targetKind === 'inout'
 
     // Reset state when opened
     React.useEffect(() => {
         if (open) {
-            setSrcSub(0)
-            setTgtSub(0)
+            setSrcSub(isPortMode ? 'both' : 0)
+            setTgtSub(isPortMode ? 'both' : 0)
+            setDirection('forward')
         }
-    }, [open])
+    }, [open, isPortMode])
 
     const handleConfirm = () => {
-        onConfirm(srcSub, tgtSub)
+        onConfirm(srcSub, tgtSub, bothInOut ? direction : undefined)
     }
 
     return (
@@ -51,15 +65,19 @@ export default function ChannelSelectionModal({
             </DialogTitle>
             <DialogContent>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Specify which channel(s) are physically connected on the ports.
+                    {isPortMode
+                        ? "Select the direction of the signal for this connection."
+                        : "Specify which channel(s) are physically connected on the ports."}
                 </Typography>
                 
                 <Stack spacing={2} sx={{ mt: 1 }}>
-                    <FormControl size="small" fullWidth disabled={!sourceIsM12}>
-                        <InputLabel>Source Channel</InputLabel>
+                    {!isPortMode && (
+                        <>
+                            <FormControl size="small" fullWidth disabled={!sourceIsM12}>
+                                <InputLabel>Source Channel {sourceLabel ? `(${sourceLabel})` : ''}</InputLabel>
                         <Select
                             value={sourceIsM12 ? srcSub : 0}
-                            label="Source Channel"
+                            label={`Source Channel ${sourceLabel ? `(${sourceLabel})` : ''}`}
                             onChange={(e) => setSrcSub(e.target.value as number | 'both')}
                         >
                             <MenuItem value={0}>Channel 0</MenuItem>
@@ -74,10 +92,10 @@ export default function ChannelSelectionModal({
                     </FormControl>
 
                     <FormControl size="small" fullWidth disabled={!targetIsM12}>
-                        <InputLabel>Target Channel</InputLabel>
+                        <InputLabel>Target Channel {targetLabel ? `(${targetLabel})` : ''}</InputLabel>
                         <Select
                             value={targetIsM12 ? tgtSub : 0}
-                            label="Target Channel"
+                            label={`Target Channel ${targetLabel ? `(${targetLabel})` : ''}`}
                             onChange={(e) => setTgtSub(e.target.value as number | 'both')}
                         >
                             <MenuItem value={0}>Channel 0</MenuItem>
@@ -90,6 +108,26 @@ export default function ChannelSelectionModal({
                             </Typography>
                         )}
                     </FormControl>
+                        </>
+                    )}
+
+                    {bothInOut && (
+                        <FormControl size="small" fullWidth>
+                            <InputLabel>Signal Direction</InputLabel>
+                            <Select
+                                value={direction}
+                                label="Signal Direction"
+                                onChange={(e) => setDirection(e.target.value as 'forward' | 'reverse')}
+                            >
+                                <MenuItem value="forward">
+                                    Source {sourceLabel ? `(${sourceLabel})` : ''} Output &rarr; Target {targetLabel ? `(${targetLabel})` : ''} Input
+                                </MenuItem>
+                                <MenuItem value="reverse">
+                                    Source {sourceLabel ? `(${sourceLabel})` : ''} Input &larr; Target {targetLabel ? `(${targetLabel})` : ''} Output
+                                </MenuItem>
+                            </Select>
+                        </FormControl>
+                    )}
                 </Stack>
             </DialogContent>
             <DialogActions>
