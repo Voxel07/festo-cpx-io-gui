@@ -66,6 +66,7 @@ export interface IOConnection {
 }
 
 export interface ConnectionEntry {
+    id?: string         // Optional edge ID to ensure unique React keys
     portId: string      // port ID on THIS module, e.g. 'X0'
     peerAddr: string    // address of the peer module (node ID)
     peerPort: string    // port ID on the peer module

@@ -76,7 +76,7 @@ export default function AppHeader({
         }
         const fetchDiags = async () => {
             try {
-                const r = await fetch(`/io/diagnoses?ip_address=${encodeURIComponent(ip)}`)
+                const r = await fetch(`/io/diagnoses?ip_address=${encodeURIComponent(ip)}&timeout=${timeout}`)
                 if (r.ok) {
                     const d = await r.json()
                     setDiagCount(d.length)
@@ -97,7 +97,7 @@ export default function AppHeader({
         fetchDiags()
         const timer = setInterval(fetchDiags, 5000)
         return () => clearInterval(timer)
-    }, [ip])
+    }, [ip, timeout])
 
     const iconColor = diagSeverity === 'error' ? '#d32f2f' :
                       diagSeverity === 'warning' ? '#ed6c02' :

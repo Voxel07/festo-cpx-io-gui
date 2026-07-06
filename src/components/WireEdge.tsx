@@ -291,6 +291,36 @@ export function WireEdge({
         alerts?.showAlert('info', 'Connection removed')
     }, [id, setEdges, alerts])
 
+    // ── Snapshot Auto-Routed Path ─────────────────────────────────────────────
+    // If this edge was just created (has no waypoints) and uses the smart router,
+    // we snapshot the generated path into explicit waypoints immediately.
+    // This prevents the heavy A* pathfinding from running constantly while dragging.
+    useEffect(() => {
+        if (!hasWaypoints && usesStubs) {
+            let corners = routedPoints.slice(1, -1)
+            
+            // If the router found a direct line (no corners), insert a midpoint
+            // so we have at least one waypoint. This ensures hasWaypoints becomes true
+            // and we don't infinitely recalculate.
+            if (corners.length === 0) {
+                const sStub = routedPoints[0]
+                const tStub = routedPoints[routedPoints.length - 1]
+                if (sStub && tStub) {
+                    corners = [{ x: (sStub.x + tStub.x) / 2, y: (sStub.y + tStub.y) / 2 }]
+                }
+            }
+
+            if (corners.length > 0) {
+                setEdges(eds => eds.map(e => {
+                    if (e.id === id) {
+                        return { ...e, data: { ...e.data, waypoints: corners } }
+                    }
+                    return e
+                }))
+            }
+        }
+    }, [hasWaypoints, usesStubs, routedPoints, id, setEdges])
+
     return (
         <>
             <BaseEdge id={id} path={svgPath}

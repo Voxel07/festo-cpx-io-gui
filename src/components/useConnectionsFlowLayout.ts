@@ -208,15 +208,26 @@ export function useConnectionsFlowLayout(
         setNodes(prev => prev.map(n => {
             if (n.type !== 'mod') return n
             const conns: ConnectionEntry[] = ioEdges.reduce<ConnectionEntry[]>((acc, e) => {
-                if (e.source === n.id || e.target === n.id) {
-                    const isSrc = e.source === n.id
-                    const myHandle = String(isSrc ? e.sourceHandle : e.targetHandle ?? '')
-                    const peerHandle = String(isSrc ? e.targetHandle : e.sourceHandle ?? '')
+                const isSrc = e.source === n.id
+                const isTgt = e.target === n.id
+                
+                if (isSrc) {
                     acc.push({
-                        portId: portId(myHandle),
-                        peerAddr: isSrc ? e.target : e.source,
-                        peerPort: portId(peerHandle),
-                        dir: isSrc ? ('src' as const) : ('tgt' as const),
+                        id: e.id,
+                        portId: portId(String(e.sourceHandle ?? '')),
+                        peerAddr: e.target,
+                        peerPort: portId(String(e.targetHandle ?? '')),
+                        dir: 'src',
+                        wireColor: (e.data as Record<string, unknown>)?.wireColor as string | undefined,
+                    })
+                }
+                if (isTgt) {
+                    acc.push({
+                        id: e.id,
+                        portId: portId(String(e.targetHandle ?? '')),
+                        peerAddr: e.source,
+                        peerPort: portId(String(e.sourceHandle ?? '')),
+                        dir: 'tgt',
                         wireColor: (e.data as Record<string, unknown>)?.wireColor as string | undefined,
                     })
                 }

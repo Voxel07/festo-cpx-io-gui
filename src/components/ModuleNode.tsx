@@ -300,7 +300,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     textAlign: 'left',
                 }}>
                     {connections.map((c) => (
-                        <Typography key={`${c.dir}-${c.portId}-${c.peerAddr}-${c.peerPort}`} sx={{
+                        <Typography key={c.id ? `${c.id}-${c.dir}` : `${c.dir}-${c.portId}-${c.peerAddr}-${c.peerPort}`} sx={{
                             fontSize: '0.42rem', lineHeight: 1.4,
                             color: c.dir === 'src' ? PORT_COLOR.out : PORT_COLOR.in,
                             fontFamily: 'monospace',
