@@ -17,6 +17,7 @@ export interface ConnectionsFlowState {
     actuateModule: TopologyModule | null
     actuateMountedValves: number[] | undefined
     connectionMode: 'port' | 'channel'
+    showDebug: boolean
 }
 
 export const initialConnectionsFlowState: ConnectionsFlowState = {
@@ -35,6 +36,7 @@ export const initialConnectionsFlowState: ConnectionsFlowState = {
     actuateModule: null,
     actuateMountedValves: undefined,
     connectionMode: 'port',
+    showDebug: false,
 }
 
 export type ConnectionsFlowAction =
@@ -56,6 +58,7 @@ export type ConnectionsFlowAction =
     | { type: 'OPEN_ACTUATE'; module: TopologyModule; mountedValves: number[] | undefined }
     | { type: 'CLOSE_ACTUATE' }
     | { type: 'SET_CONNECTION_MODE'; mode: 'port' | 'channel' }
+    | { type: 'TOGGLE_DEBUG' }
 
 export function connectionsFlowReducer(state: ConnectionsFlowState, action: ConnectionsFlowAction): ConnectionsFlowState {
     switch (action.type) {
@@ -110,6 +113,8 @@ export function connectionsFlowReducer(state: ConnectionsFlowState, action: Conn
             return { ...state, actuateModule: null, actuateMountedValves: undefined }
         case 'SET_CONNECTION_MODE':
             return { ...state, connectionMode: action.mode }
+        case 'TOGGLE_DEBUG':
+            return { ...state, showDebug: !state.showDebug }
         default:
             return state
     }

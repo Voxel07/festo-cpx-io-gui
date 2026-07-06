@@ -5,6 +5,7 @@
  * Drag from a port to another to create a wired I/O connection.
  * Save/load connections (including valve-mount info) via /connections.
  */
+import { Profiler } from 'react'
 import { Box, Typography } from '@mui/material'
 import type { NodeTypes, EdgeTypes } from '@xyflow/react'
 import TopologyCanvas from './TopologyCanvas'
@@ -21,6 +22,7 @@ import { useConnectionsFlowState } from './useConnectionsFlowState'
 import { useConnectionsFlowTest } from './useConnectionsFlowTest'
 import { useConnectionsFlowLayout } from './useConnectionsFlowLayout'
 import { useConnectionsFlowPersist } from './useConnectionsFlowPersist'
+import { DebugPanel, onRenderCallback } from './DebugPanel'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -65,6 +67,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         actuateModule,
         actuateMountedValves,
         connectionMode,
+        showDebug,
     } = state
 
     const {
@@ -127,6 +130,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 onPsPlChannelChange={ch => dispatch({ type: 'SET_PS_PL_CHANNEL', ch })}
                 psPsChannel={psPsChannel}
                 onPsPsChannelChange={ch => dispatch({ type: 'SET_PS_PS_CHANNEL', ch })}
+                showDebug={showDebug}
+                onToggleDebug={() => dispatch({ type: 'TOGGLE_DEBUG' })}
             />
 
             {/* ── Content area: ReactFlow + Wire Test Panel ────────── */}
@@ -134,20 +139,24 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
 
                 {/* ── ReactFlow Canvas ─────────────────────────────────── */}
                 <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                    <TopologyCanvas
-                        nodes={nodes}
-                        edges={visibleEdges}
-                        nodeTypes={NODE_TYPES}
-                        edgeTypes={EDGE_TYPES}
-                        onNodesChange={onNodesChange}
-                        onEdgesChange={onEdgesChange}
-                        onConnect={onConnect}
-                        onReconnect={onReconnect}
-                        isValidConnection={isValidConnection}
-                        onNodeContextMenu={onNodeContextMenu}
-                        editMode
-                        fitView
-                    />
+                    <Profiler id="TopologyCanvas" onRender={onRenderCallback}>
+                        <TopologyCanvas
+                            nodes={nodes}
+                            edges={visibleEdges}
+                            nodeTypes={NODE_TYPES}
+                            edgeTypes={EDGE_TYPES}
+                            onNodesChange={onNodesChange}
+                            onEdgesChange={onEdgesChange}
+                            onConnect={onConnect}
+                            onReconnect={onReconnect}
+                            isValidConnection={isValidConnection}
+                            onNodeContextMenu={onNodeContextMenu}
+                            editMode
+                            fitView
+                        >
+                            {showDebug && <DebugPanel onClose={() => dispatch({ type: 'TOGGLE_DEBUG' })} />}
+                        </TopologyCanvas>
+                    </Profiler>
                 </Box>
 
                 {/* ── Wire Test Panel ────────────────────────────────────── */}

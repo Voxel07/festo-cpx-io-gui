@@ -7,6 +7,7 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import SettingsInputComponentIcon from '@mui/icons-material/SettingsInputComponent'
+import BugReportIcon from '@mui/icons-material/BugReport'
 import { TooltipButton } from './TooltipButton'
 
 interface ConnectionsToolbarProps {
@@ -32,6 +33,8 @@ interface ConnectionsToolbarProps {
     onPsPlChannelChange: (v: string) => void
     psPsChannel: string
     onPsPsChannelChange: (v: string) => void
+    showDebug: boolean
+    onToggleDebug: () => void
 }
 
 export default function ConnectionsToolbar({
@@ -57,6 +60,8 @@ export default function ConnectionsToolbar({
     onPsPlChannelChange,
     psPsChannel,
     onPsPsChannelChange,
+    showDebug,
+    onToggleDebug,
 }: ConnectionsToolbarProps) {
     return (
         <>
@@ -204,6 +209,21 @@ export default function ConnectionsToolbar({
                         </TooltipButton>
                     </>
                 )}
+
+                <Divider orientation="vertical" flexItem />
+                
+                {/* Debug toggle */}
+                <TooltipButton
+                    size="small"
+                    variant="text"
+                    color="inherit"
+                    onClick={onToggleDebug}
+                    tooltip={showDebug ? 'Hide debug panel' : 'Show debug panel'}
+                    icon={<BugReportIcon />}
+                    sx={{ fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap' }}
+                >
+                    Debug
+                </TooltipButton>
 
                 {/* Status message component removed, centralized through AlertsManager */}
             </Box>

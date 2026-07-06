@@ -127,6 +127,7 @@ export interface ModuleInstance {
     num_inputs?: number
     num_outputs?: number
     num_inouts?: number
+    port_directions?: Record<string, boolean>
 }
 
 export interface WiringConnection {
@@ -140,6 +141,7 @@ export interface WiringConnection {
     label?: string
     waypoints?: Array<{ x: number; y: number }>
     straight?: boolean
+    label_offset?: { x: number; y: number }
     source_subchannel?: number
     target_subchannel?: number
 }
