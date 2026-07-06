@@ -54,6 +54,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
     const {
         showCables,
         showWires,
+        animateWires,
         showPsConfig,
         psComPort,
         psIpAddr,
@@ -113,6 +114,8 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 onToggleCables={() => dispatch({ type: 'TOGGLE_CABLES' })}
                 showWires={showWires}
                 onToggleWires={() => dispatch({ type: 'TOGGLE_WIRES' })}
+                animateWires={animateWires}
+                onToggleAnimation={() => dispatch({ type: 'TOGGLE_ANIMATION' })}
                 connectionMode={connectionMode}
                 onConnectionModeChange={(mode) => dispatch({ type: 'SET_CONNECTION_MODE', mode })}
                 showPsConfig={showPsConfig}
@@ -135,7 +138,20 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
             />
 
             {/* ── Content area: ReactFlow + Wire Test Panel ────────── */}
-            <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
+            <Box 
+                sx={{ 
+                    flex: 1, 
+                    overflow: 'hidden', 
+                    display: 'flex', 
+                    flexDirection: 'row',
+                    '& .react-flow__edge-path': {
+                        // Force hardware acceleration to prevent SVG rasterization from blocking the main thread
+                        willChange: 'stroke-dashoffset, stroke',
+                        transform: 'translateZ(0)',
+                        ...( !animateWires ? { animation: 'none !important' } : {} )
+                    }
+                }}
+            >
 
                 {/* ── ReactFlow Canvas ─────────────────────────────────── */}
                 <Box sx={{ flex: 1, overflow: 'hidden' }}>

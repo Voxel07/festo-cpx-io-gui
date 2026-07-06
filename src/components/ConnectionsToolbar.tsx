@@ -16,6 +16,8 @@ interface ConnectionsToolbarProps {
     onToggleCables: () => void
     showWires: boolean
     onToggleWires: () => void
+    animateWires: boolean
+    onToggleAnimation: () => void
     connectionMode: 'port' | 'channel'
     onConnectionModeChange: (mode: 'port' | 'channel') => void
     showPsConfig: boolean
@@ -37,12 +39,16 @@ interface ConnectionsToolbarProps {
     onToggleDebug: () => void
 }
 
+import AnimationIcon from '@mui/icons-material/Animation'
+
 export default function ConnectionsToolbar({
     ioCount,
     showCables,
     onToggleCables,
     showWires,
     onToggleWires,
+    animateWires,
+    onToggleAnimation,
     connectionMode,
     onConnectionModeChange,
     showPsConfig,
@@ -195,7 +201,23 @@ export default function ConnectionsToolbar({
                 {/* Test Wiring toggle */}
                 {ioCount > 0 && (
                     <>
-                        <Divider orientation="vertical" flexItem />
+                        <TooltipButton
+                        size="small"
+                        variant="outlined"
+                        onClick={onToggleAnimation}
+                        tooltip={animateWires ? 'Disable cable animation' : 'Enable cable animation'}
+                        icon={<AnimationIcon />}
+                        sx={{
+                            fontSize: '0.72rem', py: 0.3, px: 1, whiteSpace: 'nowrap',
+                            bgcolor: animateWires ? 'rgba(255,255,255,0.2)' : 'transparent',
+                            color: animateWires ? '#fff' : 'rgba(255,255,255,0.7)',
+                            borderColor: animateWires ? '#fff' : 'rgba(255,255,255,0.3)',
+                            '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' }
+                        }}
+                    >
+                        Animate Wires
+                    </TooltipButton>
+                    <Divider orientation="vertical" flexItem />
                         <TooltipButton
                             size="small"
                             variant="text"

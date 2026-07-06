@@ -4,6 +4,7 @@ import type { TopologyModule } from '../types'
 export interface ConnectionsFlowState {
     showCables: boolean
     showWires: boolean
+    animateWires: boolean
     showPsConfig: boolean
     psComPort: string
     psIpAddr: string
@@ -23,6 +24,7 @@ export interface ConnectionsFlowState {
 export const initialConnectionsFlowState: ConnectionsFlowState = {
     showCables: false,
     showWires: true,
+    animateWires: true,
     showPsConfig: false,
     psComPort: '',
     psIpAddr: '',
@@ -42,6 +44,7 @@ export const initialConnectionsFlowState: ConnectionsFlowState = {
 export type ConnectionsFlowAction =
     | { type: 'TOGGLE_CABLES' }
     | { type: 'TOGGLE_WIRES' }
+    | { type: 'TOGGLE_ANIMATION' }
     | { type: 'TOGGLE_PS_CONFIG' }
     | { type: 'SET_PS_COMPORT'; port: string }
     | { type: 'SET_PS_IPADDR'; ip: string }
@@ -66,6 +69,8 @@ export function connectionsFlowReducer(state: ConnectionsFlowState, action: Conn
             return { ...state, showCables: !state.showCables }
         case 'TOGGLE_WIRES':
             return { ...state, showWires: !state.showWires }
+        case 'TOGGLE_ANIMATION':
+            return { ...state, animateWires: !state.animateWires }
         case 'TOGGLE_PS_CONFIG':
             return { ...state, showPsConfig: !state.showPsConfig }
         case 'SET_PS_COMPORT':

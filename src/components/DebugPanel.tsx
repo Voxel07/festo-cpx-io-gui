@@ -5,13 +5,6 @@ import CloseIcon from '@mui/icons-material/Close'
 import { Panel, useStore } from '@xyflow/react'
 
 export function DebugPanel({ onClose }: { onClose: () => void }) {
-    const [fps, setFps] = useState(0)
-    const [dt, setDt] = useState(0)
-    const [dropped, setDropped] = useState(0)
-
-    // React Profiler metrics
-    const [renderTime, setRenderTime] = useState(0)
-
     // Exact edge count from React Flow store
     const totalEdges = useStore(s => s.edges.length)
     const totalNodes = useStore(s => s.nodes.length)
@@ -21,36 +14,58 @@ export function DebugPanel({ onClose }: { onClose: () => void }) {
     const frameCountRef = useRef(0)
     const lastFpsTimeRef = useRef(performance.now())
     const droppedRef = useRef(0)
+    const currentDtRef = useRef(0)
 
     useEffect(() => {
         const loop = (time: number) => {
             const currentDt = time - lastTimeRef.current
             lastTimeRef.current = time
-            setDt(currentDt)
+            currentDtRef.current = currentDt
 
+            let didDrop = false
             if (currentDt > 1000 / 60 * 1.5) {
                 droppedRef.current += 1
-                setDropped(droppedRef.current)
+                didDrop = true
             }
 
             frameCountRef.current++
             const elapsed = time - lastFpsTimeRef.current
             if (elapsed >= 1000) {
-                setFps(Math.round((frameCountRef.current * 1000) / elapsed))
+                const newFps = Math.round((frameCountRef.current * 1000) / elapsed)
+                const fpsEl = document.getElementById('debug-fps')
+                if (fpsEl) {
+                    fpsEl.textContent = String(newFps)
+                    fpsEl.style.color = newFps < 30 ? '#d32f2f' : '#2e7d32' // error.main : success.main
+                }
                 frameCountRef.current = 0
                 lastFpsTimeRef.current = time
+            }
+
+            const dtEl = document.getElementById('debug-dt')
+            if (dtEl) dtEl.textContent = `${currentDt.toFixed(1)} ms`
+
+            if (didDrop) {
+                const dropEl = document.getElementById('debug-dropped')
+                if (dropEl) {
+                    dropEl.textContent = String(droppedRef.current)
+                    dropEl.style.color = droppedRef.current > 0 ? '#ed6c02' : 'inherit' // warning.main
+                }
             }
 
             frameRef.current = requestAnimationFrame(loop)
         }
 
         frameRef.current = requestAnimationFrame(loop)
-        return () => cancelAnimationFrame(frameRef.current)
+
+        return () => {
+            cancelAnimationFrame(frameRef.current)
+        }
     }, [])
 
     useEffect(() => {
         const handleProfile = (e: CustomEvent) => {
-            setRenderTime(e.detail.actualDuration)
+            const rtEl = document.getElementById('debug-rt')
+            if (rtEl) rtEl.textContent = `${e.detail.actualDuration.toFixed(2)} ms`
         }
         window.addEventListener('topology-render-profile', handleProfile as EventListener)
         return () => window.removeEventListener('topology-render-profile', handleProfile as EventListener)
@@ -65,19 +80,19 @@ export function DebugPanel({ onClose }: { onClose: () => void }) {
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">FPS</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }} color={fps < 30 ? 'error.main' : 'success.main'}>{fps}</Typography>
+                    <Typography id="debug-fps" variant="body2" sx={{ fontWeight: 'bold' }}>0</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">Frame Time</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{dt.toFixed(1)} ms</Typography>
+                    <Typography id="debug-dt" variant="body2" sx={{ fontWeight: 'bold' }}>0.0 ms</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">Dropped</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }} color={dropped > 0 ? 'warning.main' : 'text.primary'}>{dropped}</Typography>
+                    <Typography id="debug-dropped" variant="body2" sx={{ fontWeight: 'bold' }}>0</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">React Render</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{renderTime.toFixed(2)} ms</Typography>
+                    <Typography id="debug-rt" variant="body2" sx={{ fontWeight: 'bold' }}>0.00 ms</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1, pt: 1, borderTop: '1px solid rgba(0,0,0,0.1)' }}>
                     <Typography variant="body2" color="text.secondary">RF Nodes</Typography>
