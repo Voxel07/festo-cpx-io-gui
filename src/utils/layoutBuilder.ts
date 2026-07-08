@@ -103,7 +103,13 @@ function segmentModules(mods: TopologyModule[]): Segment[] {
         const m = mods[i]
         if (isApA(m.Name)) {
             const run: TopologyModule[] = []
-            while (i < mods.length && isApA(mods[i].Name)) run.push(mods[i++])
+            run.push(mods[i++])
+            while (i < mods.length && isApA(mods[i].Name)) {
+                if (mods[i].Name.includes('EPLI') || mods[i].Name.includes('EPLS')) {
+                    break;
+                }
+                run.push(mods[i++])
+            }
             // VABX bodies that follow an AP-A run with no interface module are physically
             // snapped onto the AP-A backplane via a PCB adapter – no cable, no separate group.
             while (i < mods.length && isValveBody(mods[i].Name)) run.push(mods[i++])
@@ -121,9 +127,12 @@ function segmentModules(mods: TopologyModule[]): Segment[] {
     return segs
 }
 
+import { getModuleDispW } from '../components/moduleNodeHelpers'
+
+// ... later in the file ...
+
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
-const NODE_W = 75   // width of a module card
 const NODE_H = 152  // approximate height of a module card (for group sizing)
 const INLINE_G = 0    // gap between modules on same backplane/rail (none – tight fit)
 const CABLE_G = 160  // gap between cable-connected segments
@@ -141,6 +150,8 @@ export function buildLayout(
     mods: TopologyModule[],
     diffStatus: DiffStatus | null,
     editMode: boolean,
+    wrapThreshold: number = Infinity,
+    cableGap: number = CABLE_G,
 ): { nodes: (ModNode | BpNode)[]; edges: Edge[] } {
     const segments = segmentModules(mods)
     const bgNodes: BpNode[] = []   // pushed first → renders behind module nodes
@@ -148,24 +159,38 @@ export function buildLayout(
     const edges: Edge[] = []
 
     let curX = 40
+    let curY = NODE_Y
+    let rowModCount = 0
 
     type SegInfo = { seg: Segment; lastId: string; epliId: string | null }
     const placed: SegInfo[] = []
 
     for (const seg of segments) {
+        if (rowModCount > 0 && rowModCount + seg.mods.length > wrapThreshold) {
+            curX = 40
+            curY += NODE_H + BP_PAD_TOP + BP_PAD_BOT + 40 // vertical spacing between rows
+            rowModCount = 0
+        }
+
         let lastId = String(seg.mods[0].Adress)
 
         // ── Group background for AP-A and valve assemblies ────
         const isGroup = seg.kind === 'apa' || seg.kind === 'valve'
         if (isGroup) {
-            const segW = seg.mods.length * (NODE_W + INLINE_G) - INLINE_G
+            let segW = -INLINE_G
+            for (const m of seg.mods) {
+                // Add 8 pixels of extra padding that ModuleNode adds to the wrapper
+                const w = getModuleDispW(m) + (seg.kind === 'apa' ? 0 : 8)
+                segW += w + INLINE_G
+            }
+            
             const addrRange = seg.mods.length > 1
                 ? `#${seg.mods[0].Adress}–#${seg.mods[seg.mods.length - 1].Adress}`
                 : `#${seg.mods[0].Adress}`
             bgNodes.push({
                 id: `backplane-${seg.id}`,
                 type: 'backplane' as const,
-                position: { x: curX - BP_PAD_SIDE, y: NODE_Y - BP_PAD_TOP },
+                position: { x: curX - BP_PAD_SIDE, y: curY - BP_PAD_TOP },
                 style: {
                     width: segW + BP_PAD_SIDE * 2,
                     height: BP_PAD_TOP + NODE_H + BP_PAD_BOT,
@@ -182,11 +207,12 @@ export function buildLayout(
             })
         }
 
+        let curSegX = 0
         seg.mods.forEach((m, i) => {
             const id = String(m.Adress)
             const isFirst = i === 0
             const isLast = i === seg.mods.length - 1
-            const stride = NODE_W + INLINE_G
+            const modW = getModuleDispW(m)
             const isDirectValveBody = seg.kind === 'apa' && isValveBody(m.Name)
             const modIsApChain = isApChainInterface(m.Name)
             const apPos = modIsApChain ? getApHandlePos(m) : undefined
@@ -196,8 +222,8 @@ export function buildLayout(
                 type: 'mod' as const,
                 parentId: isGroup ? `backplane-${seg.id}` : undefined,
                 position: isGroup
-                    ? { x: BP_PAD_SIDE + i * stride, y: BP_PAD_TOP }
-                    : { x: curX + i * stride, y: NODE_Y },
+                    ? { x: BP_PAD_SIDE + curSegX, y: BP_PAD_TOP }
+                    : { x: curX + curSegX, y: curY },
                 draggable: false,
                 data: {
                     mod: m,
@@ -217,6 +243,8 @@ export function buildLayout(
                     suppressIoHandles: (seg.kind === 'valve' && !isFirst) || isDirectValveBody || isStandaloneValve(m.Name),
                 },
             })
+            // advance local segment X by this module's width (plus the padding added by the node component)
+            curSegX += modW + (seg.kind === 'apa' ? 0 : 8) + INLINE_G
             lastId = id
         })
 
@@ -224,8 +252,9 @@ export function buildLayout(
         const apChainMod = seg.mods.find(m => isApChainInterface(m.Name))
         const epliId = apChainMod ? String(apChainMod.Adress) : null
         placed.push({ seg, lastId, epliId })
-        const segW = seg.mods.length * (NODE_W + INLINE_G)
-        curX += segW + CABLE_G
+        // Advance global X by the entire segment width
+        curX += curSegX + cableGap
+        rowModCount += seg.mods.length
     }
 
     // ── Cable edges between consecutive segments ──────────

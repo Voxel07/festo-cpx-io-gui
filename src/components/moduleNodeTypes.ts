@@ -37,6 +37,11 @@ export type ModuleNodeData = {
     compareActive?: boolean
     /** Active diagnoses for this module (from system diagnostics) */
     diagnoses?: DiagnosisEntry[]
+    /** Called when the user clicks the remove button (Mock Builder) */
+    /** Called when the user clicks the remove button (Mock Builder) */
+    onRemoveModule?: (addr: number) => void
+    /** Called when the user wants to move the module or change its address (Mock Builder) */
+    onMoveModule?: (oldAddr: number, newAddr: number) => void
 }
 
 export type ModuleNodeType = Node<ModuleNodeData, 'mod'>

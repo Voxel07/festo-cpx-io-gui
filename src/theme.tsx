@@ -37,21 +37,27 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
                 palette: {
                     mode,
                     primary: {
-                        main: '#00afff', // User requested main color
+                        main: '#0091DC', // Main color
                     },
                     secondary: {
-                        main: '#00A0E1',
+                        main: '#C8E6FA',
+                    },
+                    text: {
+                        primary: mode === 'light' ? '#000000' : '#ffffff',
                     },
                     background: {
-                        default: mode === 'light' ? '#f5f5f5' : '#121212',
+                        default: mode === 'light' ? '#E5E8EB' : '#121212',
                         paper: mode === 'light' ? '#ffffff' : '#1e1e1e',
                     },
+                    info: {
+                        main: '#B6B4C6',
+                    }
                 },
                 components: {
                     MuiAppBar: {
                         styleOverrides: {
                             root: {
-                                backgroundColor: mode === 'light' ? '#003366' : '#272727',
+                                backgroundColor: mode === 'light' ? '#0091DC' : '#272727',
                             }
                         }
                     }

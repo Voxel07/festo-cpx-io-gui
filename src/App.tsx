@@ -41,6 +41,9 @@ interface AppState {
     showApCables: boolean
     showIoCables: boolean
     diagnoses: DiagnosisEntry[]
+    mockTopology: Topology | null
+    wrapThreshold: number
+    cableGap: number
 }
 
 const initialAppState: AppState = {
@@ -64,6 +67,9 @@ const initialAppState: AppState = {
     showApCables: true,
     showIoCables: true,
     diagnoses: [] as DiagnosisEntry[],
+    mockTopology: null,
+    wrapThreshold: 5,
+    cableGap: 20,
 }
 
 type AppAction =
@@ -73,6 +79,9 @@ type AppAction =
     | { type: 'SET_TOPOLOGY'; topology: Topology | null }
     | { type: 'SET_DIFF_STATUS'; status: DiffStatus | null }
     | { type: 'SET_REMOVED_MODULES'; removed: TopologyModule[] }
+    | { type: 'SET_MOCK_TOPOLOGY'; topo: Topology | null }
+    | { type: 'SET_WRAP_THRESHOLD'; threshold: number }
+    | { type: 'SET_CABLE_GAP'; gap: number }
     | { type: 'SET_CANVAS_H'; height: number }
     | { type: 'SET_CANVAS_W'; width: number | null }
     | { type: 'SET_FULLSCREEN'; fullscreen: boolean }
@@ -86,6 +95,8 @@ type AppAction =
     | { type: 'SET_RESULT'; topo: Topology | null; status: DiffStatus | null; removed: TopologyModule[]; config?: BenchConfig }
     | { type: 'CONFIG_LOAD'; config: BenchConfig }
     | { type: 'MODULE_VALVE_CHANGE'; addr: number; mountedValves: number[]; valveSlots?: number }
+    | { type: 'MOCK_MODULE_VALVE_CHANGE'; addr: number; mountedValves: number[]; valveSlots?: number }
+    | { type: 'MOCK_MODULE_MOVE'; oldAddr: number; newAddr: number }
     | { type: 'SET_CONFIG_PATH'; path: string }
     | { type: 'TOGGLE_AP_CABLES' }
     | { type: 'TOGGLE_IO_CABLES' }
@@ -119,6 +130,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
             return { ...state, diffStatus: action.status }
         case 'SET_REMOVED_MODULES':
             return { ...state, removedModules: action.removed }
+        case 'SET_MOCK_TOPOLOGY':
+            return { ...state, mockTopology: action.topo }
+        case 'SET_WRAP_THRESHOLD':
+            return { ...state, wrapThreshold: action.threshold }
+        case 'SET_CABLE_GAP':
+            return { ...state, cableGap: action.gap }
         case 'SET_CANVAS_H':
             return { ...state, canvasH: action.height }
         case 'SET_CANVAS_W':
@@ -168,23 +185,60 @@ function appReducer(state: AppState, action: AppAction): AppState {
                 rawConfig: action.config,
                 topology: configToTopology(action.config),
             }
+        case 'MOCK_MODULE_VALVE_CHANGE': {
+            const nextMock = state.mockTopology ? {
+                ...state.mockTopology,
+                Topology: state.mockTopology.Topology.map((m: TopologyModule) =>
+                    m.Adress === action.addr ? { ...m, MountedValves: action.mountedValves, ValveSlots: action.valveSlots ?? m.ValveSlots } : m
+                ),
+            } : null
+            return {
+                ...state,
+                mockTopology: nextMock,
+            }
+        }
         case 'MODULE_VALVE_CHANGE': {
             const nextTopo = state.topology ? {
                 ...state.topology,
                 Topology: state.topology.Topology.map(m =>
-                    m.Adress === action.addr ? { ...m, MountedValves: action.mountedValves, ValveSlots: action.valveSlots } : m
+                    m.Adress === action.addr ? { ...m, MountedValves: action.mountedValves, ValveSlots: action.valveSlots ?? m.ValveSlots } : m
                 ),
             } : null
             const nextRaw = state.rawConfig ? {
                 ...state.rawConfig,
                 module_instances: (state.rawConfig.module_instances || []).map(inst =>
-                    inst.address === action.addr ? { ...inst, mounted_valves: action.mountedValves, valve_slots: action.valveSlots } : inst
+                    inst.address === action.addr ? { ...inst, mounted_valves: action.mountedValves, valve_slots: action.valveSlots ?? inst.valve_slots } : inst
                 )
             } : null
             return {
                 ...state,
                 topology: nextTopo,
                 rawConfig: nextRaw,
+            }
+        }
+        case 'MOCK_MODULE_MOVE': {
+            if (!state.mockTopology) return state
+            const mods = [...state.mockTopology.Topology]
+            mods.sort((a, b) => a.Adress - b.Adress)
+            
+            const oldIdx = mods.findIndex(m => m.Adress === action.oldAddr)
+            if (oldIdx === -1) return state
+            
+            let newIdx = action.newAddr
+            if (newIdx < 0) newIdx = 0
+            if (newIdx >= mods.length) newIdx = mods.length - 1
+            
+            const [movingMod] = mods.splice(oldIdx, 1)
+            mods.splice(newIdx, 0, movingMod)
+            
+            const newMods = mods.map((m, i) => ({ ...m, Adress: i }))
+            
+            return {
+                ...state,
+                mockTopology: {
+                    ...state.mockTopology,
+                    Topology: newMods
+                }
             }
         }
         default:
@@ -231,6 +285,9 @@ export default function App() {
         showApCables,
         showIoCables,
         diagnoses,
+        mockTopology,
+        wrapThreshold,
+        cableGap,
     } = state
 
     const alertsRef = useRef<AlertsManagerRef>(null)
@@ -363,9 +420,28 @@ export default function App() {
         dispatch({ type: 'CONFIG_LOAD', config })
     }
 
-    /** Patch MountedValves on a module entry when user configures valves in ConnectionsFlow */
+    /** Patch MountedValves on a module entry when user configures valves in ConnectionsFlow or Mock Builder */
     function onModuleValveChange(addr: number, mountedValves: number[], valveSlots?: number) {
-        dispatch({ type: 'MODULE_VALVE_CHANGE', addr, mountedValves, valveSlots })
+        if (state.tab === 5) {
+            dispatch({ type: 'MOCK_MODULE_VALVE_CHANGE', addr, mountedValves, valveSlots })
+        } else {
+            dispatch({ type: 'MODULE_VALVE_CHANGE', addr, mountedValves, valveSlots })
+        }
+    }
+
+    function onRemoveModule(addr: number) {
+        if (!mockTopology) return
+        dispatch({
+            type: 'SET_MOCK_TOPOLOGY',
+            topo: {
+                ...mockTopology,
+                Topology: mockTopology.Topology.filter(m => m.Adress !== addr).map((m, i) => ({ ...m, Adress: i }))
+            }
+        })
+    }
+
+    function onMoveModule(oldAddr: number, newAddr: number) {
+        dispatch({ type: 'MOCK_MODULE_MOVE', oldAddr, newAddr })
     }
 
     const alertsContextValue = useMemo(() => ({
@@ -401,6 +477,10 @@ export default function App() {
                         fullscreen={fullscreen}
                         onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
                         showLegend={!!diffStatus}
+                        wrapThreshold={wrapThreshold}
+                        onWrapThresholdChange={val => dispatch({ type: 'SET_WRAP_THRESHOLD', threshold: val })}
+                        cableGap={cableGap}
+                        onCableGapChange={val => dispatch({ type: 'SET_CABLE_GAP', gap: val })}
                     />
                 )}
 
@@ -424,6 +504,10 @@ export default function App() {
                                 fullscreen={fullscreen}
                                 onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
                                 showLegend={tab === 0 && !!diffStatus}
+                                wrapThreshold={wrapThreshold}
+                                onWrapThresholdChange={val => dispatch({ type: 'SET_WRAP_THRESHOLD', threshold: val })}
+                                cableGap={cableGap}
+                                onCableGapChange={val => dispatch({ type: 'SET_CABLE_GAP', gap: val })}
                             />
                         )}
                         {/* Canvas area (width-constrained when user has dragged) */}
@@ -436,7 +520,7 @@ export default function App() {
                         }}>
                             <Suspense fallback={<LoadingChunk label="Loading topology…" />}>
                                 <TopologyFlow
-                                    topology={topology}
+                                    topology={tab === 5 ? mockTopology : topology}
                                     diffStatus={tab === 0 ? diffStatus : null}
                                     removedModules={tab === 0 ? removedModules : []}
                                     activeModuleAddr={activeModuleAddr}
@@ -446,6 +530,12 @@ export default function App() {
                                     showApCables={showApCables}
                                     showIoCables={showIoCables}
                                     diagnoses={diagnoses}
+                                    wrapThreshold={wrapThreshold}
+                                    cableGap={cableGap}
+                                    isMockMode={tab === 5}
+                                    onModuleValveChange={onModuleValveChange}
+                                    onRemoveModule={onRemoveModule}
+                                    onMoveModule={tab === 5 ? onMoveModule : undefined}
                                 />
                             </Suspense>
                         </Box>
@@ -484,6 +574,7 @@ export default function App() {
                             <Tab label="Test Run" sx={{ minHeight: 38 }} />
                             <Tab label="Raw Mode" sx={{ minHeight: 38 }} />
                             <Tab label="History" sx={{ minHeight: 38 }} />
+                            <Tab label="Mock Builder" sx={{ minHeight: 38 }} />
                         </Tabs>
                     </Box>
                 )}
@@ -499,10 +590,16 @@ export default function App() {
                         rawSelectedAddr={rawSelectedAddr}
                         rawConfig={rawConfig}
                         configPath={configPath}
+                        mockTopology={mockTopology}
+                        wrapThreshold={wrapThreshold}
+                        onWrapThresholdChange={val => dispatch({ type: 'SET_WRAP_THRESHOLD', threshold: val })}
+                        cableGap={cableGap}
+                        onCableGapChange={val => dispatch({ type: 'SET_CABLE_GAP', gap: val })}
                         onResult={onResult}
                         onModuleValveChange={onModuleValveChange}
                         onConfigLoad={onConfigLoad}
                         onSetRawSelectedAddr={addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })}
+                        onSetMockTopology={topo => dispatch({ type: 'SET_MOCK_TOPOLOGY', topo })}
                     />
                 )}
                 {diagOpen && (

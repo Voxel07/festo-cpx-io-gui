@@ -45,11 +45,18 @@ interface Props {
     onConfigLoad?: (config: BenchConfig) => void
     rawConfig?: BenchConfig | null
     configPath: string
+    wrapThreshold: number
+    onWrapThresholdChange: (val: number) => void
+    cableGap: number
+    onCableGapChange: (val: number) => void
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValveChange, onConfigLoad, rawConfig, configPath }: Props) {
+export default function ConnectionsFlow({ 
+    topology, diffStatus, ip, onModuleValveChange, onConfigLoad, rawConfig, configPath,
+    wrapThreshold, onWrapThresholdChange, cableGap, onCableGapChange
+}: Props) {
     const [state, dispatch] = useConnectionsFlowState()
     const {
         showCables,
@@ -76,7 +83,7 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
         edges, onEdgesChange,
         ioEdgesRef, pendingConn, setPendingConn, processConnection,
         onConnect, onReconnect, isValidConnection, onNodeContextMenu, doClear
-    } = useConnectionsFlowLayout(topology, diffStatus, ip, rawConfig, onModuleValveChange, connectionMode, dispatch)
+    } = useConnectionsFlowLayout(topology, diffStatus, ip, rawConfig, onModuleValveChange, connectionMode, wrapThreshold, cableGap, dispatch)
 
     const { doSave, doLoad } = useConnectionsFlowPersist(
         configPath, ioEdgesRef, nodes, psComPort, psIpAddr, psPlChannel, psPsChannel, onConfigLoad
@@ -135,6 +142,10 @@ export default function ConnectionsFlow({ topology, diffStatus, ip, onModuleValv
                 onPsPsChannelChange={ch => dispatch({ type: 'SET_PS_PS_CHANNEL', ch })}
                 showDebug={showDebug}
                 onToggleDebug={() => dispatch({ type: 'TOGGLE_DEBUG' })}
+                wrapThreshold={wrapThreshold}
+                onWrapThresholdChange={onWrapThresholdChange}
+                cableGap={cableGap}
+                onCableGapChange={onCableGapChange}
             />
 
             {/* ── Content area: ReactFlow + Wire Test Panel ────────── */}

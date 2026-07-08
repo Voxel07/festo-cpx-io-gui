@@ -8,9 +8,12 @@ interface Props {
     ports: SvgPort[]
     connections: ConnectionEntry[]
     editMode: boolean
+    moduleName: string
 }
 
-export function ModuleNodePorts({ ports, connections, editMode }: Props) {
+export function ModuleNodePorts({ ports, connections, editMode, moduleName }: Props) {
+    const isSquare = moduleName.includes('AP-L') || moduleName.includes('-PI');
+    const isSmall = moduleName.includes('-PI');
     return (
         <>
             {ports.map(port => {
@@ -28,7 +31,7 @@ export function ModuleNodePorts({ ports, connections, editMode }: Props) {
                             id={`src-${port.kind}-${port.id}`}
                             type="source"
                             position={port.side}
-                            style={getPortSrcStyle(port.cx, port.cy, srcColor, editMode)}
+                            style={getPortSrcStyle(port.cx, port.cy, srcColor, editMode, isSquare, isSmall)}
                         />
                         {/* Transparent target hit-area – kind also encoded */}
                         <Handle
@@ -36,12 +39,13 @@ export function ModuleNodePorts({ ports, connections, editMode }: Props) {
                             type="target"
                             position={port.side}
                             style={{
-                                ...getPortTgtStyle(port.cx, port.cy, editMode),
+                                ...getPortTgtStyle(port.cx, port.cy, editMode, isSquare, isSmall),
                                 ...(connectedTgt ? {
                                     background: tgtColor,
-                                    width: PORT_D,
-                                    height: PORT_D,
+                                    width: isSmall ? PORT_D * 0.6 : PORT_D,
+                                    height: isSmall ? PORT_D * 0.6 : PORT_D,
                                     border: '2.5px solid #fff',
+                                    borderRadius: isSquare ? '2px' : '50%',
                                     opacity: 1,
                                     zIndex: 11,
                                 } : {})

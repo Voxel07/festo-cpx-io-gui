@@ -105,6 +105,12 @@ interface Props {
     showApCables: boolean
     showIoCables: boolean
     diagnoses: DiagnosisEntry[]
+    wrapThreshold: number
+    cableGap: number
+    isMockMode?: boolean
+    onModuleValveChange?: (addr: number, mountedValves: number[], valveSlots?: number) => void
+    onRemoveModule?: (addr: number) => void
+    onMoveModule?: (oldAddr: number, newAddr: number) => void
 }
 
 
@@ -113,6 +119,7 @@ export default function TopologyFlow({
     topology, diffStatus, removedModules = [],
     activeModuleAddr = null, selectedModuleAddr = null, onSelectModuleAddr,
     rawConfig, showApCables, showIoCables, diagnoses,
+    wrapThreshold, cableGap, isMockMode, onModuleValveChange, onRemoveModule, onMoveModule
 }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
@@ -166,7 +173,7 @@ export default function TopologyFlow({
                 }
             }
         }
-        const { nodes: newNodes, edges: chainEdges } = buildLayout(allMods, mergedStatus, false)
+        const { nodes: newNodes, edges: chainEdges } = buildLayout(allMods, mergedStatus, !!isMockMode, wrapThreshold, cableGap)
 
         setNodes(prevNodes => {
             const prevNodeMap = new Map(prevNodes.map(n => [n.id, n]))
@@ -187,8 +194,12 @@ export default function TopologyFlow({
                     data: {
                         ...data,
                         ...(isValveBody ? { showValves: true } : {}),
+                        ...(isValveBody && onModuleValveChange ? { showValveEditor: true } : {}),
                         // Preserve hiddenValves across rebuilds only for valve bodies
                         ...(prevHidden != null && isValveBody ? { hiddenValves: prevHidden } : {}),
+                        onValveChange: (isValveBody && onModuleValveChange) ? onModuleValveChange : undefined,
+                        onRemoveModule: (isMockMode && onRemoveModule) ? () => onRemoveModule(addr!) : undefined,
+                        onMoveModule: (isMockMode && onMoveModule) ? onMoveModule : undefined,
                         active,
                         diagnoses: addr != null ? (diagByAddr[addr] ?? []) : [],
                     },
@@ -196,7 +207,7 @@ export default function TopologyFlow({
             })
         })
         setEdges([...chainEdges, ...ioEdges])
-    }, [topology, diffStatus, removedModules, activeModuleAddr, selectedModuleAddr, ioEdges, diagnoses, setNodes, setEdges])
+    }, [topology, diffStatus, removedModules, activeModuleAddr, selectedModuleAddr, ioEdges, diagnoses, wrapThreshold, cableGap, setNodes, setEdges, isMockMode, onMoveModule, onRemoveModule, onModuleValveChange])
 
     const onEdgesChange = (changes: EdgeChange[]) => {
         _onEdgesChange(changes.filter(c => c.type !== 'remove'))
@@ -239,6 +250,7 @@ export default function TopologyFlow({
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 editMode={false}
+                nodesDraggable={true}
                 fitView
                 onNodeClick={handleNodeClick}
                 elementsSelectable={!!onSelectModuleAddr}

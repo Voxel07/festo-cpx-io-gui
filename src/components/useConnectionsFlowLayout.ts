@@ -43,6 +43,8 @@ export function useConnectionsFlowLayout(
     rawConfig: BenchConfig | null | undefined,
     onModuleValveChange: ((addr: number, mountedValves: number[], valveSlots?: number) => void) | undefined,
     connectionMode: 'port' | 'channel',
+    wrapThreshold: number,
+    cableGap: number,
     dispatch: React.Dispatch<ConnectionsFlowAction>
 ) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
@@ -173,6 +175,7 @@ export function useConnectionsFlowLayout(
 
         const { nodes: newNodes, edges: chainEdges } = buildLayout(
             topology.Topology, null, true /* editMode */,
+            wrapThreshold, cableGap
         )
 
         setNodes(prevNodes => {
@@ -201,7 +204,7 @@ export function useConnectionsFlowLayout(
             e => validIds.has(e.source) && validIds.has(e.target),
         )
         setEdges([...chainEdges, ...validIo])
-    }, [topology, diffStatus, onModuleValveChange, setNodes, setEdges, vabxInputs])
+    }, [topology, diffStatus, onModuleValveChange, setNodes, setEdges, vabxInputs, wrapThreshold, cableGap])
 
     useEffect(() => {
         const ioEdges = edges.filter(e => (e.data as Record<string, unknown>)?.kind === 'io')

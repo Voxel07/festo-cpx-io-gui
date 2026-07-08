@@ -20,11 +20,9 @@ import { ModuleNodePorts } from './ModuleNodePorts'
 
 
 import {
-    DISP_W, DISP_H,
-    getGenericOutStyle, getGenericInStyle,
-    getApInStyle, getApOutStyle,
-    supportsMountedValves, defaultValveSlots,
-    PORT_COLOR
+    PORT_COLOR, DISP_H,
+    getGenericInStyle, getGenericOutStyle, getApInStyle, getApOutStyle,
+    supportsMountedValves, defaultValveSlots, getModuleDispW
 } from './moduleNodeHelpers'
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -48,6 +46,14 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         diagnoses = [],
     } = data
 
+    const [isEditingAddr, setIsEditingAddr] = useState(false)
+    const [addrInput, setAddrInput] = useState(mod.Adress.toString())
+    
+    useEffect(() => {
+        setAddrInput(mod.Adress.toString())
+    }, [mod.Adress])
+
+    const theme = useTheme()
     const svgMaps = useSvgMap()
     const svgUrl = resolveIcon(mod.Name, svgMaps, mod.Modulecode)
     
@@ -62,20 +68,15 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         numOut,
         numInOut,
     })
-    const isVmpal = mod.Name.toUpperCase().startsWith('VMPAL')
     const isVtux = mod.Name.toUpperCase().startsWith('VTUX')
     const canConfigureValves = supportsMountedValves(mod.Name, mod.Type)
     const numValves = defaultValveSlots(mod.Name, mod.ValveSlots)
-    const theme = useTheme()
 
-    let dispW = DISP_W
-    if (isVmpal && numValves !== undefined) {
-        const svgW = 33 + numValves * 10
-        dispW = Math.round(svgW * (DISP_H / 109))
-    }
 
     const wantsValves = canConfigureValves && (showValveEditor || showValves)
     const valveGroups = useValveGroups(wantsValves ? svgUrl : '', numValves)
+
+    const dispW = getModuleDispW(mod)
 
     const [valveEditorOpen, setValveEditorOpen] = useState(false)
     const updateNodeInternals = useUpdateNodeInternals()
@@ -212,14 +213,67 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 direction="row"
                 spacing={0.5}
                 sx={{ justifyContent: 'center', alignItems: 'center', marginBottom: 0.25 }}
-
             >
-                <Typography sx={{
-                    fontSize: '0.48rem', fontWeight: 700, color: theme.palette.mode === 'dark' ? theme.palette.primary.light : '#1565c0',
-                    lineHeight: 1, letterSpacing: '0.02em',
-                }}>
-                    #{mod.Adress}
-                </Typography>
+                {data.onRemoveModule && (
+                    <Tooltip title="Remove module" placement="top">
+                        <IconButton size="small"
+                            onClick={() => data.onRemoveModule?.(mod.Adress)}
+                            sx={{
+                                p: 0, width: 14, height: 14, minWidth: 14, fontSize: '0.5rem',
+                                color: '#e53935',
+                                '&:hover': { background: '#ffebee', color: '#c62828' },
+                            }}>
+                            ✖
+                        </IconButton>
+                    </Tooltip>
+                )}
+                {data.onMoveModule && mod.Adress > 0 && (
+                    <IconButton size="small" sx={{ p: 0, width: 10, height: 10, minWidth: 10 }} onClick={() => data.onMoveModule!(mod.Adress, mod.Adress - 1)}>
+                        <Typography sx={{ fontSize: '0.48rem', lineHeight: 1 }}>{"<"}</Typography>
+                    </IconButton>
+                )}
+
+                {isEditingAddr ? (
+                    <input
+                        autoFocus
+                        value={addrInput}
+                        onChange={e => setAddrInput(e.target.value)}
+                        onBlur={() => {
+                            setIsEditingAddr(false)
+                            const newVal = parseInt(addrInput)
+                            if (!isNaN(newVal) && newVal !== mod.Adress) {
+                                data.onMoveModule?.(mod.Adress, newVal)
+                            } else {
+                                setAddrInput(mod.Adress.toString())
+                            }
+                        }}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') e.currentTarget.blur()
+                            if (e.key === 'Escape') {
+                                setIsEditingAddr(false)
+                                setAddrInput(mod.Adress.toString())
+                            }
+                        }}
+                        style={{ width: 24, fontSize: '0.48rem', textAlign: 'center', outline: 'none', border: '1px solid #1565c0', borderRadius: 2 }}
+                    />
+                ) : (
+                    <Typography 
+                        onClick={() => data.onMoveModule ? setIsEditingAddr(true) : null}
+                        sx={{
+                            fontSize: '0.48rem', fontWeight: 700, color: theme.palette.mode === 'dark' ? theme.palette.primary.light : '#1565c0',
+                            lineHeight: 1, letterSpacing: '0.02em',
+                            cursor: data.onMoveModule ? 'pointer' : 'default',
+                            '&:hover': data.onMoveModule ? { textDecoration: 'underline' } : {}
+                        }}>
+                        #{mod.Adress}
+                    </Typography>
+                )}
+
+                {data.onMoveModule && (
+                    <IconButton size="small" sx={{ p: 0, width: 10, height: 10, minWidth: 10 }} onClick={() => data.onMoveModule!(mod.Adress, mod.Adress + 1)}>
+                        <Typography sx={{ fontSize: '0.48rem', lineHeight: 1 }}>{">"}</Typography>
+                    </IconButton>
+                )}
 
                 {(numIn > 0 || numOut > 0 || numInOut > 0) && (
                     <Typography sx={{ fontSize: '0.44rem', color: theme.palette.text.secondary, lineHeight: 1, whiteSpace: 'nowrap' }}>
@@ -240,6 +294,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                         alt={mod.Name}
                         loading="lazy"
                         decoding="async"
+                        draggable={false}
                         style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }}
                         onError={e => { (e.target as HTMLImageElement).src = '/svg/CPX-AP-A_Generic.svg' }}
                     />
@@ -273,7 +328,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 {/* ── SVG-port handles (always rendered so edges can resolve handle IDs;
                      invisible when not in edit mode per React Flow best-practice) ── */}
                 {!suppressIoHandles && hasPorts && (
-                    <ModuleNodePorts ports={ports} connections={connections} editMode={editMode} />
+                    <ModuleNodePorts ports={ports} connections={connections} editMode={editMode} moduleName={mod.Name} />
                 )}
             </Box>
 
@@ -346,6 +401,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     {valveGroups.length >= 0 && null}
                 </>
             )}
+
+
         </TopologyNodeWrapper>
     )
 }

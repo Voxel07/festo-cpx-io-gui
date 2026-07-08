@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ProfilerOnRenderCallback } from 'react'
 import { Box, Typography, Paper, IconButton } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'

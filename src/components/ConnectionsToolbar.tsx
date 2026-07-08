@@ -1,4 +1,4 @@
-import { Box, Typography, Chip, Divider, Stack, TextField } from '@mui/material'
+import { Box, Typography, Chip, Divider, Stack, TextField, Slider } from '@mui/material'
 import CableIcon from '@mui/icons-material/Cable'
 import TimelineIcon from '@mui/icons-material/Timeline'
 import PowerIcon from '@mui/icons-material/Power'
@@ -37,6 +37,10 @@ interface ConnectionsToolbarProps {
     onPsPsChannelChange: (v: string) => void
     showDebug: boolean
     onToggleDebug: () => void
+    wrapThreshold: number
+    onWrapThresholdChange: (val: number) => void
+    cableGap: number
+    onCableGapChange: (val: number) => void
 }
 
 import AnimationIcon from '@mui/icons-material/Animation'
@@ -68,6 +72,10 @@ export default function ConnectionsToolbar({
     onPsPsChannelChange,
     showDebug,
     onToggleDebug,
+    wrapThreshold,
+    onWrapThresholdChange,
+    cableGap,
+    onCableGapChange,
 }: ConnectionsToolbarProps) {
     return (
         <>
@@ -109,6 +117,34 @@ export default function ConnectionsToolbar({
                 >
                     {showCables ? 'Hide AP Cables' : 'Show AP Cables'}
                 </TooltipButton>
+
+                <Divider orientation="vertical" flexItem />
+                
+                {/* Layout Controls */}
+                <Stack direction="row" spacing={3} sx={{ alignItems: 'center' }}>
+                    <Box sx={{ width: 100 }}>
+                        <Typography variant="caption" sx={{ display: 'block', mb: -0.5, color: '#fff' }}>Modules/Row: {wrapThreshold}</Typography>
+                        <Slider
+                            size="small"
+                            value={wrapThreshold}
+                            min={4}
+                            max={32}
+                            step={1}
+                            onChange={(_, val) => onWrapThresholdChange(val as number)}
+                        />
+                    </Box>
+                    <Box sx={{ width: 100 }}>
+                        <Typography variant="caption" sx={{ display: 'block', mb: -0.5, color: '#fff' }}>Spacing: {cableGap}</Typography>
+                        <Slider
+                            size="small"
+                            value={cableGap}
+                            min={40}
+                            max={400}
+                            step={10}
+                            onChange={(_, val) => onCableGapChange(val as number)}
+                        />
+                    </Box>
+                </Stack>
 
                 <Divider orientation="vertical" flexItem />
 

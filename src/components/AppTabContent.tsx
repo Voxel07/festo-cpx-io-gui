@@ -8,6 +8,7 @@ const TestRunTab = lazy(() => import('./TestRunTab'))
 const HistoryTab = lazy(() => import('./HistoryTab'))
 const ConnectionsFlow = lazy(() => import('./ConnectionsFlow'))
 const RawModeTab = lazy(() => import('./RawModeTab'))
+const MockBuilderTab = lazy(() => import('./MockBuilderTab'))
 
 interface AppTabContentProps {
     tab: number
@@ -18,17 +19,24 @@ interface AppTabContentProps {
     rawSelectedAddr: number | null
     rawConfig: BenchConfig | null
     configPath: string
+    mockTopology?: Topology | null
     onResult: (topo: Topology | null, status: DiffStatus | null, removed?: TopologyModule[], config?: BenchConfig) => void
     onModuleValveChange: (addr: number, mountedValves: number[], valveSlots?: number) => void
     onConfigLoad: (config: BenchConfig) => void
     onSetRawSelectedAddr: (addr: number | null) => void
+    onSetMockTopology?: (topo: Topology | null) => void
+    wrapThreshold: number
+    onWrapThresholdChange: (val: number) => void
+    cableGap: number
+    onCableGapChange: (val: number) => void
 }
 
 export default function AppTabContent(props: AppTabContentProps) {
     const {
         tab, ip, timeout, topology, diffStatus,
-        rawSelectedAddr, rawConfig, configPath,
-        onResult, onModuleValveChange, onConfigLoad, onSetRawSelectedAddr
+        rawSelectedAddr, rawConfig, configPath, mockTopology,
+        wrapThreshold, onWrapThresholdChange, cableGap, onCableGapChange,
+        onResult, onModuleValveChange, onConfigLoad, onSetRawSelectedAddr, onSetMockTopology
     } = props
 
     return (
@@ -51,6 +59,10 @@ export default function AppTabContent(props: AppTabContentProps) {
                             onConfigLoad={onConfigLoad}
                             rawConfig={rawConfig}
                             configPath={configPath}
+                            wrapThreshold={wrapThreshold!}
+                            onWrapThresholdChange={onWrapThresholdChange}
+                            cableGap={cableGap!}
+                            onCableGapChange={onCableGapChange}
                         />
                     </Suspense>
                 </Box>
@@ -74,6 +86,16 @@ export default function AppTabContent(props: AppTabContentProps) {
                 <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
                     <Suspense fallback={<LoadingChunk label="Loading history…" />}>
                         <HistoryTab />
+                    </Suspense>
+                </Box>
+            )}
+            {tab === 5 && (
+                <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                    <Suspense fallback={<LoadingChunk label="Loading mock builder…" />}>
+                        <MockBuilderTab 
+                            mockTopology={mockTopology || null} 
+                            setMockTopology={onSetMockTopology || (() => {})} 
+                        />
                     </Suspense>
                 </Box>
             )}

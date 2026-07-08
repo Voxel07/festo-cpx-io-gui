@@ -23,6 +23,7 @@ export default defineConfig({
             '/test-run':    { target: 'http://localhost:8000', changeOrigin: true },
             '/io':          { target: 'http://localhost:8000', changeOrigin: true },
             '/pocketbase':  { target: 'http://localhost:8000', changeOrigin: true },
+            '/metadata':    { target: 'http://localhost:8000', changeOrigin: true },
             '/dashboard':   { target: 'http://localhost:8000', changeOrigin: true },
         },
     },

@@ -39,6 +39,7 @@ interface Props {
     onNodeContextMenu?: NodeMouseHandler<Node>
     onNodeClick?: NodeMouseHandler<Node>
     elementsSelectable?: boolean
+    nodesDraggable?: boolean
     children?: ReactNode
 }
 
@@ -71,6 +72,7 @@ export default function TopologyCanvas({
     onNodeContextMenu,
     onNodeClick,
     elementsSelectable = editMode,
+    nodesDraggable = editMode,
     children,
 }: Props) {
     const theme = useTheme()
@@ -91,7 +93,7 @@ export default function TopologyCanvas({
             onNodeClick={onNodeClick}
             edgesReconnectable={editMode}
             elementsSelectable={elementsSelectable}
-            nodesDraggable={editMode}
+            nodesDraggable={nodesDraggable}
             nodesConnectable={editMode}
             fitView={fitView}
             fitViewOptions={{ padding: fitViewPadding }}
