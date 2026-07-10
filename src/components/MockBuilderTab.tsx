@@ -44,16 +44,17 @@ export default function MockBuilderTab({ mockTopology, setMockTopology }: Props)
             .catch(err => console.error('Failed to load metadata', err))
     }, [])
 
-    const handleAddModule = () => {
-        if (!selectedCode) return
+    const handleAddModule = (explicitCode?: string) => {
+        const codeToUse = typeof explicitCode === 'string' ? explicitCode : selectedCode
+        if (!codeToUse) return
 
         const mods = mockTopology?.Topology ?? []
 
         // Find matching metadata (it can be exact, or match without trailing characters, similar to backend logic)
-        let matchedMeta = metadata[selectedCode]
+        let matchedMeta = metadata[codeToUse]
         if (!matchedMeta) {
             const keys = Object.keys(metadata)
-            const fallbackKey = keys.find(k => selectedCode.startsWith(k))
+            const fallbackKey = keys.find(k => codeToUse.startsWith(k))
             if (fallbackKey) {
                 matchedMeta = metadata[fallbackKey]
             }
@@ -63,7 +64,7 @@ export default function MockBuilderTab({ mockTopology, setMockTopology }: Props)
 
         const newMod: TopologyModule = {
             Adress: addressToUse,
-            Name: selectedCode,
+            Name: codeToUse,
             Modulecode: 9999,
             ProductKey: '',
             Type: matchedMeta?.category ? matchedMeta.category.charAt(0).toUpperCase() + matchedMeta.category.slice(1) : 'MockType',
@@ -131,6 +132,23 @@ export default function MockBuilderTab({ mockTopology, setMockTopology }: Props)
                     getOptionLabel={(option) => `${option.OrderCode} (${option.FileName})`}
                     value={mappings.find(m => m.OrderCode === selectedCode) || null}
                     onChange={(_, newValue) => setSelectedCode(newValue ? newValue.OrderCode : null)}
+                    renderOption={(props, option) => {
+                        const { onAuxClick, ...restProps } = props as any;
+                        return (
+                            <li
+                                {...restProps}
+                                onAuxClick={(e) => {
+                                    if (e.button === 1) { // Middle click
+                                        e.preventDefault();
+                                        handleAddModule(option.OrderCode);
+                                    }
+                                    if (onAuxClick) onAuxClick(e);
+                                }}
+                            >
+                                {option.OrderCode} ({option.FileName})
+                            </li>
+                        );
+                    }}
                     renderInput={(params) => <TextField {...params} label="Search Module Type" variant="outlined" />}
                 />
                 <TextField
