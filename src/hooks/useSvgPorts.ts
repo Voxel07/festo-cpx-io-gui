@@ -117,12 +117,13 @@ async function fetchAndParseSvg(
                 const dn = g.getAttribute('data-name') ?? ''
                 if (!/^X\d+$/.test(dn)) return
 
-                // Skip groups inside secondary-view parents (IDs with "-" suffix like "Top_Right-2")
-                let parent = g.parentElement
-                while (parent && parent.tagName.toLowerCase() === 'g') {
+                // Skip groups whose immediate parent <g> has a "-" suffix (e.g. "Top_Right-2").
+                // Only check the first ancestor <g>, not the root — root group IDs like
+                // "CPX-AP-L-16NDI-PI" also contain hyphens but are not secondary views.
+                const parent = g.parentElement
+                if (parent && parent.tagName.toLowerCase() === 'g') {
                     const pid = parent.getAttribute('id') ?? ''
                     if (/-/.test(pid)) return  // skip secondary view groups
-                    parent = parent.parentElement
                 }
 
                 const rect = g.querySelector('rect[stroke="none"]') ?? g.querySelector('rect')
@@ -146,8 +147,12 @@ async function fetchAndParseSvg(
                 return a[1].cx - b[1].cx
             })
 
-            entries.forEach(([_dn, pos], idx) => {
-                found.push({ id: `X${idx}`, cx: pos.cx, cy: pos.cy, svgKind: null })
+            entries.forEach(([dn, pos]) => {
+                // Preserve the original data-name as the port id so CSS selectors
+                // (#X0, #X1, …) in ModuleNode correctly target the matching SVG elements.
+                // deriveKind later uses the sorted position (ioIndex), not the id,
+                // so input/output assignment remains correct.
+                found.push({ id: dn, cx: pos.cx, cy: pos.cy, svgKind: null })
             })
         }
 

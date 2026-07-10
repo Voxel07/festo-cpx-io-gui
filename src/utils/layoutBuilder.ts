@@ -22,6 +22,7 @@ function isVabxApInterface(name: string): boolean {
     return /^VABX-A-(?:S-)?EL-\w+-API/.test(name)
 }
 
+/** AP-I module with M12/M8 connector (e.g. CPX-AP-I-PN-M12, CPX-AP-I-16NDIO-M12-5P). */
 function isApIM12orM8(name: string): boolean {
     const upperName = name.toUpperCase()
     return (upperName.includes('CPX-AP-I') || upperName.includes('AP-I')) && (upperName.includes('M12') || upperName.includes('M8'))
@@ -40,6 +41,7 @@ function getApHandlePos(mod: TopologyModule): {
     apOutTop: string; apOutLeft: string
 } {
     const name = mod.Name
+    const upperName = name.toUpperCase()
     if (name === 'VMPAL-EPL-AP') {
         const numValves = mod.ValveSlots ?? 16
         const svgW = 33 + numValves * 10
@@ -52,10 +54,18 @@ function getApHandlePos(mod: TopologyModule): {
         return { apInTop: '21.6%', apInLeft: '28.5%', apOutTop: '40.8%', apOutLeft: '28.5%' }
     }
     if (isApIM12orM8(name)) {
-        // M12/M8 SVG 33.005×186; objectFit:contain scale = 128/186 ≈ 0.688
-        // XF10 cx=8.5, cy=139.5 → cx = 25.75%, cy = 75%
-        // XF20 cx=25.5, cy=139.5 → cx = 77.26%, cy = 75%
-        return { apInTop: '75%', apInLeft: '25.75%', apOutTop: '75%', apOutLeft: '77.26%' }
+        const isWideIo = /(?:16(?:DI|DIO|NDI|NDIO|NIDO))/.test(upperName)
+        if (isWideIo) {
+            // M12/M8 Wide SVG 68×186
+            // XF10 cx=21.5, cy=139.5 → cx = 31.62%, cy = 75%
+            // XF20 cx=46.5, cy=139.5 → cx = 68.38%, cy = 75%
+            return { apInTop: '75%', apInLeft: '31.62%', apOutTop: '75%', apOutLeft: '68.38%' }
+        } else {
+            // M12/M8 SVG 33.005×186
+            // XF10 cx=8.5, cy=139.5 → cx = 25.75%, cy = 75%
+            // XF20 cx=25.5, cy=139.5 → cx = 77.26%, cy = 75%
+            return { apInTop: '75%', apInLeft: '25.75%', apOutTop: '75%', apOutLeft: '77.26%' }
+        }
     }
     // EPLI SVG 31×107; objectFit:contain scale = 128/107 ≈ 1.196
     // XF10 cy=40.5 → 37.85 %  |  XF20 cy=56.5 → 52.8 %  |  cx=15.5 → 50 %

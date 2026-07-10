@@ -177,11 +177,16 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     styles[`& #LED_${i}`] = { fill: '#fd4800 !important' }
                 }
             })
-            // InOut LEDs (rarely explicit LED_IO, but map to input/output if needed, usually mapped as I or O)
+            // InOut LEDs — 16DIO/NDIO modules use LED_0..LED_15 (numbered, not I/O prefixed)
+            modState.inouts.forEach((val, i) => {
+                if (val) {
+                    styles[`& #LED_${i}`] = { fill: '#ff9800 !important' } // amber for inout
+                }
+            })
         }
 
         return styles
-    }, [ports, modState])
+    }, [ports, modState, diagnoses])
 
     return (
         <TopologyNodeWrapper

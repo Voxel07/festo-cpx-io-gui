@@ -17,6 +17,70 @@
     <rect id="Left" width="9" height="58" fill="#b6bec6" x="14" y="36.0">
       <title>Left</title>
     </rect>
+        <g id="X0" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="37"/>
+          <rect x="16.0" y="37.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X1" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="44"/>
+          <rect x="16.0" y="44.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X2" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="51"/>
+          <rect x="16.0" y="51.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X3" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="58"/>
+          <rect x="16.0" y="58.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X4" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="65"/>
+          <rect x="16.0" y="65.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X5" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="72"/>
+          <rect x="16.0" y="72.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X6" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="79"/>
+          <rect x="16.0" y="79.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X7" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="86"/>
+          <rect x="16.0" y="86.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X8" data-name="X8" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="37"/>
+          <rect x="29.0" y="37.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X9" data-name="X9" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="44"/>
+          <rect x="29.0" y="44.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X10" data-name="X10" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="51"/>
+          <rect x="29.0" y="51.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X11" data-name="X11" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="58"/>
+          <rect x="29.0" y="58.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X12" data-name="X12" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="65"/>
+          <rect x="29.0" y="65.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X13" data-name="X13" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="72"/>
+          <rect x="29.0" y="72.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X14" data-name="X14" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="79"/>
+          <rect x="29.0" y="79.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X15" data-name="X15" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="86"/>
+          <rect x="29.0" y="86.5" width="5" height="5" fill="none"/>
+        </g>
   </g>
   <g id="LEDs">
     <g id="Right-2" data-name="Right">

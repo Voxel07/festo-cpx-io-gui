@@ -17,6 +17,38 @@
     <rect id="Left" width="9" height="58" fill="#b6bec6" x="14" y="36.0">
       <title>Left</title>
     </rect>
+        <g id="X0" data-name="X0" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="43"/>
+          <rect x="16.0" y="43.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X1" data-name="X1" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="56"/>
+          <rect x="16.0" y="56.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X2" data-name="X2" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="68"/>
+          <rect x="16.0" y="68.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X3" data-name="X3" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="15.5" y="81"/>
+          <rect x="16.0" y="81.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X4" data-name="X4" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="43"/>
+          <rect x="29.0" y="43.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X5" data-name="X5" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="56"/>
+          <rect x="29.0" y="56.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X6" data-name="X6" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="68"/>
+          <rect x="29.0" y="68.5" width="5" height="5" fill="none"/>
+        </g>
+        <g id="X7" data-name="X7" fill="#b6bec6" stroke="#b6bec6" stroke-width="1">
+          <rect width="6" height="6" stroke="none" x="28.5" y="81"/>
+          <rect x="29.0" y="81.5" width="5" height="5" fill="none"/>
+        </g>
   </g>
   <g id="LEDs">
     <g id="Right-2" data-name="Right">
