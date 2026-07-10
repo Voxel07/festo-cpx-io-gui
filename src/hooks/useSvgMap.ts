@@ -57,7 +57,7 @@ export function resolveIcon(
         const upperName = name.toUpperCase()
         if (upperName.includes('CPX-AP-I') || upperName.includes('AP-I')) {
             // 16-channel AP-I devices use the Wide module SVG (more connector positions)
-            const isWide = /(?:16(?:DI|DIO|NDI|NIDO))/.test(upperName)
+            const isWide = /(?:16(?:DI|DIO|NDI|NDIO|NIDO))/.test(upperName)
             if (upperName.includes('M12')) {
                 file = isWide ? 'CPX-AP-I-M12_Wide.svg' : 'CPX-AP-I-M12.svg'
             } else if (upperName.includes('M8')) {

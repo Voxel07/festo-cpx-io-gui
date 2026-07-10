@@ -14,10 +14,14 @@ interface Props {
 export function ModuleNodePorts({ ports, connections, editMode, moduleName }: Props) {
     const isSquare = moduleName.includes('AP-L') || moduleName.includes('-PI');
     const isSmall = moduleName.includes('-PI');
+    
+    // ap-in and ap-out are rendered as left/right Handles in ModuleNode
+    const ioPorts = ports.filter(p => p.kind !== 'ap-in' && p.kind !== 'ap-out')
+
     return (
         <>
-            {ports.map(port => {
-                const portColor = PORT_COLOR[port.kind]
+            {ioPorts.map(port => {
+                const portColor = PORT_COLOR[port.kind as Exclude<typeof port.kind, 'ap-in'|'ap-out'>]
                 const connectedSrc = connections.find(c => c.dir === 'src' && c.portId === port.id)
                 const connectedTgt = connections.find(c => c.dir === 'tgt' && c.portId === port.id)
                 
@@ -31,7 +35,7 @@ export function ModuleNodePorts({ ports, connections, editMode, moduleName }: Pr
                             id={`src-${port.kind}-${port.id}`}
                             type="source"
                             position={port.side}
-                            style={getPortSrcStyle(port.cx, port.cy, srcColor, editMode, isSquare, isSmall)}
+                            style={getPortSrcStyle(port.cx, port.cy, editMode, isSquare, isSmall)}
                         />
                         {/* Transparent target hit-area – kind also encoded */}
                         <Handle

@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react'
 import { Position } from '@xyflow/react'
 
-export type PortKind = 'in' | 'out' | 'inout'
+export type PortKind = 'in' | 'out' | 'inout' | 'ap-in' | 'ap-out'
 
 export interface SvgPort {
     id: string         // 'X0', 'X1', ...
@@ -92,6 +92,8 @@ async function fetchAndParseSvg(
         const vbH = vb[3] || 107
 
         const found: Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }> = []
+
+        // ── A-series / circle-based connectors (X0, X1, ... as <circle> elements) ──
         doc.querySelectorAll('circle[id]').forEach(c => {
             if (/^X\d+$/.test(c.id)) {
                 const cx = parseFloat(c.getAttribute('cx') ?? '0') / vbW
@@ -104,6 +106,64 @@ async function fetchAndParseSvg(
                 found.push({ id: c.id, cx, cy, svgKind })
             }
         })
+
+        // ── L-series / rect-based connectors (X0, X1, ... as <g> elements with <rect>) ──
+        // Only collect from primary connector groups (parents whose IDs don't have "-" suffix)
+        // to avoid collecting duplicate representations of the same connectors.
+        if (found.length === 0) {
+            const gathered: Map<string, { cx: number; cy: number; parentY: number }> = new Map()
+
+            doc.querySelectorAll('g[data-name]').forEach(g => {
+                const dn = g.getAttribute('data-name') ?? ''
+                if (!/^X\d+$/.test(dn)) return
+
+                // Skip groups inside secondary-view parents (IDs with "-" suffix like "Top_Right-2")
+                let parent = g.parentElement
+                while (parent && parent.tagName.toLowerCase() === 'g') {
+                    const pid = parent.getAttribute('id') ?? ''
+                    if (/-/.test(pid)) return  // skip secondary view groups
+                    parent = parent.parentElement
+                }
+
+                const rect = g.querySelector('rect[stroke="none"]') ?? g.querySelector('rect')
+                if (!rect) return
+
+                const rx = parseFloat(rect.getAttribute('x') ?? '0')
+                const ry = parseFloat(rect.getAttribute('y') ?? '0')
+                const rw = parseFloat(rect.getAttribute('width') ?? '3')
+                const rh = parseFloat(rect.getAttribute('height') ?? '6')
+                const cx = (rx + rw / 2) / vbW
+                const cy = (ry + rh / 2) / vbH
+
+                gathered.set(dn, { cx, cy, parentY: ry })
+            })
+
+            // Convert to array, sort by y then x, assign sequential X0..XN
+            const entries = [...gathered.entries()]
+            entries.sort((a, b) => {
+                const dy = a[1].cy - b[1].cy
+                if (Math.abs(dy) > 0.01) return dy
+                return a[1].cx - b[1].cx
+            })
+
+            entries.forEach(([_dn, pos], idx) => {
+                found.push({ id: `X${idx}`, cx: pos.cx, cy: pos.cy, svgKind: null })
+            })
+        }
+
+        // Also search for AP cable connectors (XF10 = ap-in, XF20 = ap-out)
+        doc.querySelectorAll('g[id^="XF"]').forEach(g => {
+            const id = g.id
+            if (id === 'XF10' || id === 'XF20') {
+                const circle = g.querySelector('circle')
+                if (circle) {
+                    const cx = parseFloat(circle.getAttribute('cx') ?? '0') / vbW
+                    const cy = parseFloat(circle.getAttribute('cy') ?? '0') / vbH
+                    found.push({ id, cx, cy, svgKind: id === 'XF10' ? 'ap-in' : 'ap-out' })
+                }
+            }
+        })
+        
         // Sort top-to-bottom so portIndex 0 is the physically highest connector
         found.sort((a, b) => a.cy - b.cy)
         onSuccess(found)
@@ -136,12 +196,24 @@ export function useSvgPorts(svgUrl: string, counts?: PortCounts): SvgPort[] {
     // Derive from cache during render — React Compiler can optimise this
     const raw = svgUrl ? (geoCache.get(svgUrl) ?? []) : []
     const defaultCounts: PortCounts = counts ?? { numIn: 0, numOut: 0, numInOut: 0 }
-    return raw.map((p, i) => ({
-        id:   p.id,
-        cx:   p.cx,
-        cy:   p.cy,
-        side: p.cx < 0.5 ? Position.Left : Position.Right,
-        kind: deriveKind(i, p.svgKind, defaultCounts, raw.length),
-    }))
+    
+    let ioIndex = 0
+    const numIoConnectors = raw.filter(p => p.svgKind !== 'ap-in' && p.svgKind !== 'ap-out').length
+    
+    return raw.map((p) => {
+        let kind: PortKind
+        if (p.svgKind === 'ap-in' || p.svgKind === 'ap-out') {
+            kind = p.svgKind
+        } else {
+            kind = deriveKind(ioIndex++, p.svgKind, defaultCounts, numIoConnectors)
+        }
+        return {
+            id:   p.id,
+            cx:   p.cx,
+            cy:   p.cy,
+            side: p.cx < 0.5 ? Position.Left : Position.Right,
+            kind,
+        }
+    })
 }
 

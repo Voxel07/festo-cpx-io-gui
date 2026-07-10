@@ -62,6 +62,7 @@ const AVAILABLE_TESTS = [
 
 interface Props {
     ip: string
+    hwConnected: boolean
 }
 
 interface RunTabState {
@@ -131,7 +132,7 @@ function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
     }
 }
 
-export default function TestRunTab({ ip }: Props) {
+export default function TestRunTab({ ip, hwConnected }: Props) {
     const [state, dispatch] = useReducer(runTabReducer, initialRunTabState)
     const { selected, runState, sseLogs, pbLogs, busy } = state
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -280,6 +281,7 @@ export default function TestRunTab({ ip }: Props) {
                     isRunning={isRunning}
                     isStarting={isStarting}
                     busy={busy}
+                    hwConnected={hwConnected}
                     runSource={runState.source}
                     onToggleTest={toggleTest}
                     onStart={doStart}

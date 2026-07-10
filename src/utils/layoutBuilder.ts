@@ -127,7 +127,7 @@ function segmentModules(mods: TopologyModule[]): Segment[] {
     return segs
 }
 
-import { getModuleDispW } from '../components/moduleNodeHelpers'
+import { getModuleDispSize } from '../components/moduleNodeHelpers'
 
 // ... later in the file ...
 
@@ -161,6 +161,7 @@ export function buildLayout(
     let curX = 40
     let curY = NODE_Y
     let rowModCount = 0
+    let rowMaxH = NODE_H
 
     type SegInfo = { seg: Segment; lastId: string; epliId: string | null }
     const placed: SegInfo[] = []
@@ -168,20 +169,25 @@ export function buildLayout(
     for (const seg of segments) {
         if (rowModCount > 0 && rowModCount + seg.mods.length > wrapThreshold) {
             curX = 40
-            curY += NODE_H + BP_PAD_TOP + BP_PAD_BOT + 40 // vertical spacing between rows
+            curY += rowMaxH + BP_PAD_TOP + BP_PAD_BOT + 40 // vertical spacing between rows
             rowModCount = 0
+            rowMaxH = NODE_H
         }
 
         let lastId = String(seg.mods[0].Adress)
 
         // ── Group background for AP-A and valve assemblies ────
         const isGroup = seg.kind === 'apa' || seg.kind === 'valve'
+        let maxSegH = NODE_H
         if (isGroup) {
             let segW = -INLINE_G
+            maxSegH = 0
             for (const m of seg.mods) {
                 // Add 8 pixels of extra padding that ModuleNode adds to the wrapper
-                const w = getModuleDispW(m) + (seg.kind === 'apa' ? 0 : 8)
-                segW += w + INLINE_G
+                const { w, h } = getModuleDispSize(m)
+                const dispW = w + (seg.kind === 'apa' ? 0 : 8)
+                segW += dispW + INLINE_G
+                if (h > maxSegH) maxSegH = h
             }
             
             const addrRange = seg.mods.length > 1
@@ -193,7 +199,7 @@ export function buildLayout(
                 position: { x: curX - BP_PAD_SIDE, y: curY - BP_PAD_TOP },
                 style: {
                     width: segW + BP_PAD_SIDE * 2,
-                    height: BP_PAD_TOP + NODE_H + BP_PAD_BOT,
+                    height: BP_PAD_TOP + maxSegH + BP_PAD_BOT,
                 },
                 data: {
                     label: seg.kind === 'apa'
@@ -212,7 +218,7 @@ export function buildLayout(
             const id = String(m.Adress)
             const isFirst = i === 0
             const isLast = i === seg.mods.length - 1
-            const modW = getModuleDispW(m)
+            const { w: rawModW, h: modH } = getModuleDispSize(m)
             const isDirectValveBody = seg.kind === 'apa' && isValveBody(m.Name)
             const modIsApChain = isApChainInterface(m.Name)
             const apPos = modIsApChain ? getApHandlePos(m) : undefined
@@ -244,7 +250,8 @@ export function buildLayout(
                 },
             })
             // advance local segment X by this module's width (plus the padding added by the node component)
-            curSegX += modW + (seg.kind === 'apa' ? 0 : 8) + INLINE_G
+            curSegX += rawModW + (seg.kind === 'apa' ? 0 : 8) + INLINE_G
+            if (modH > rowMaxH) rowMaxH = modH
             lastId = id
         })
 

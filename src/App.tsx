@@ -9,6 +9,7 @@ import type { AlertsManagerRef } from './utils/AlertsManagerTypes'
 
 import AppTabContent from './components/AppTabContent'
 import { LoadingChunk } from './components/LoadingChunk'
+import { IoStateProvider } from './hooks/useIoStatePolling'
 
 const TopologyFlow = lazy(() => import('./components/TopologyFlow'))
 const DiagnosticsModal = lazy(() => import('./components/DiagnosticsModal'))
@@ -44,6 +45,8 @@ interface AppState {
     mockTopology: Topology | null
     wrapThreshold: number
     cableGap: number
+    hwConnected: boolean
+    hwConnecting: boolean
 }
 
 const initialAppState: AppState = {
@@ -70,6 +73,8 @@ const initialAppState: AppState = {
     mockTopology: null,
     wrapThreshold: 5,
     cableGap: 20,
+    hwConnected: false,
+    hwConnecting: false,
 }
 
 type AppAction =
@@ -101,6 +106,8 @@ type AppAction =
     | { type: 'TOGGLE_AP_CABLES' }
     | { type: 'TOGGLE_IO_CABLES' }
     | { type: 'SET_DIAGNOSES'; diagnoses: DiagnosisEntry[] }
+    | { type: 'SET_HW_CONNECTED'; connected: boolean }
+    | { type: 'SET_HW_CONNECTING'; connecting: boolean }
 
 import { configToTopology } from './utils/topology'
 
@@ -120,6 +127,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
             return { ...state, showIoCables: !state.showIoCables }
         case 'SET_DIAGNOSES':
             return { ...state, diagnoses: action.diagnoses }
+        case 'SET_HW_CONNECTED':
+            return { ...state, hwConnected: action.connected }
+        case 'SET_HW_CONNECTING':
+            return { ...state, hwConnecting: action.connecting }
         case 'SET_IP':
             return { ...state, ip: action.ip }
         case 'SET_TIMEOUT':
@@ -288,6 +299,8 @@ export default function App() {
         mockTopology,
         wrapThreshold,
         cableGap,
+        hwConnected,
+        hwConnecting,
     } = state
 
     const alertsRef = useRef<AlertsManagerRef>(null)
@@ -334,14 +347,14 @@ export default function App() {
 
     // Poll system diagnoses for topology indicators
     const refreshDiagnoses = useCallback(async () => {
-        if (!ip) return
+        if (!ip || !hwConnected) return
         try {
             const r = await fetch(`/io/diagnoses?ip_address=${encodeURIComponent(ip)}`)
             if (!r.ok) return
             const d: DiagnosisEntry[] = await r.json()
             dispatch({ type: 'SET_DIAGNOSES', diagnoses: d })
         } catch { /* ignore */ }
-    }, [ip])
+    }, [ip, hwConnected])
 
     useEffect(() => {
         refreshDiagnoses()
@@ -361,6 +374,10 @@ export default function App() {
             .then(config => {
                 if (!cancelled && config?.test_bench) {
                     dispatch({ type: 'CONFIG_LOAD', config })
+                    // Use the IP from the bench config if available
+                    if (config.test_bench.ip_address) {
+                        dispatch({ type: 'SET_IP', ip: config.test_bench.ip_address })
+                    }
                 }
             })
             .catch(err => {
@@ -444,14 +461,63 @@ export default function App() {
         dispatch({ type: 'MOCK_MODULE_MOVE', oldAddr, newAddr })
     }
 
+    // ── HW connect / disconnect ──────────────────────────────────────
+    function onConnect() {
+        dispatch({ type: 'SET_HW_CONNECTING', connecting: true })
+        fetch('/hw/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ip_address: ip, timeout }),
+        })
+            .then(r => {
+                if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Connection failed') })
+                return r.json()
+            })
+            .then(() => {
+                dispatch({ type: 'SET_HW_CONNECTED', connected: true })
+                alertsRef.current?.showAlert('success', `Connected to ${ip}`)
+            })
+            .catch(err => {
+                alertsRef.current?.showAlert('error', `HW connect failed: ${err.message}`)
+            })
+            .finally(() => dispatch({ type: 'SET_HW_CONNECTING', connecting: false }))
+    }
+
+    function onDisconnect() {
+        fetch('/hw/disconnect', { method: 'POST' })
+            .then(() => {
+                dispatch({ type: 'SET_HW_CONNECTED', connected: false })
+                alertsRef.current?.showAlert('info', 'Disconnected from hardware')
+            })
+            .catch(err => {
+                alertsRef.current?.showAlert('error', `HW disconnect failed: ${err.message}`)
+            })
+    }
+
+    // Poll HW connection status periodically
+    useEffect(() => {
+        const poll = () => {
+            fetch('/hw/status')
+                .then(r => r.json())
+                .then(d => {
+                    dispatch({ type: 'SET_HW_CONNECTED', connected: !!d.connected })
+                })
+                .catch(() => {})
+        }
+        poll()
+        const timer = setInterval(poll, 5000)
+        return () => clearInterval(timer)
+    }, [])
+
     const alertsContextValue = useMemo(() => ({
         showAlert: (sev: any, msg: any) => alertsRef.current?.showAlert(sev, msg)
     }), [])
 
     return (
         <AlertsContext.Provider value={alertsContextValue}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-                <AlertsManager ref={alertsRef} />
+            <IoStateProvider ipAddress={ip} intervalMs={500} isConnected={hwConnected}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+                    <AlertsManager ref={alertsRef} />
                 <AppHeader
                     ip={ip}
                     onIpChange={v => dispatch({ type: 'SET_IP', ip: v })}
@@ -465,6 +531,10 @@ export default function App() {
                     onOpenDiagnostics={() => dispatch({ type: 'SET_DIAG_OPEN', open: true })}
                     configPath={configPath}
                     onConfigPathChange={path => dispatch({ type: 'SET_CONFIG_PATH', path })}
+                    hwConnected={hwConnected}
+                    hwConnecting={hwConnecting}
+                    onConnect={onConnect}
+                    onDisconnect={onDisconnect}
                 />
 
                 {/* ── Topology toolbar (below AppHeader) ── */}
@@ -590,6 +660,7 @@ export default function App() {
                         rawSelectedAddr={rawSelectedAddr}
                         rawConfig={rawConfig}
                         configPath={configPath}
+                        hwConnected={hwConnected}
                         mockTopology={mockTopology}
                         wrapThreshold={wrapThreshold}
                         onWrapThresholdChange={val => dispatch({ type: 'SET_WRAP_THRESHOLD', threshold: val })}
@@ -607,7 +678,8 @@ export default function App() {
                         <DiagnosticsModal open={diagOpen} onClose={() => dispatch({ type: 'SET_DIAG_OPEN', open: false })} ip={ip} diagnoses={diagnoses} onRefresh={refreshDiagnoses} />
                     </Suspense>
                 )}
-            </Box>
+                </Box>
+            </IoStateProvider>
         </AlertsContext.Provider>
     )
 }

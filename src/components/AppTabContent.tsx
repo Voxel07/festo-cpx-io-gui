@@ -19,6 +19,7 @@ interface AppTabContentProps {
     rawSelectedAddr: number | null
     rawConfig: BenchConfig | null
     configPath: string
+    hwConnected: boolean
     mockTopology?: Topology | null
     onResult: (topo: Topology | null, status: DiffStatus | null, removed?: TopologyModule[], config?: BenchConfig) => void
     onModuleValveChange: (addr: number, mountedValves: number[], valveSlots?: number) => void
@@ -34,7 +35,7 @@ interface AppTabContentProps {
 export default function AppTabContent(props: AppTabContentProps) {
     const {
         tab, ip, timeout, topology, diffStatus,
-        rawSelectedAddr, rawConfig, configPath, mockTopology,
+        rawSelectedAddr, rawConfig, configPath, hwConnected, mockTopology,
         wrapThreshold, onWrapThresholdChange, cableGap, onCableGapChange,
         onResult, onModuleValveChange, onConfigLoad, onSetRawSelectedAddr, onSetMockTopology
     } = props
@@ -69,7 +70,7 @@ export default function AppTabContent(props: AppTabContentProps) {
             )}
             {tab === 2 && (
                 <Suspense fallback={<LoadingChunk label="Loading test runner…" />}>
-                    <TestRunTab ip={ip} />
+                    <TestRunTab ip={ip} hwConnected={hwConnected} />
                 </Suspense>
             )}
             {tab === 3 && (

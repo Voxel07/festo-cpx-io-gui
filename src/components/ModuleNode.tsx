@@ -7,7 +7,8 @@ import { useSvgMap, resolveIcon } from '../hooks/useSvgMap'
 import { useSvgPorts } from '../hooks/useSvgPorts'
 
 import { useValveGroups } from '../hooks/useValveGroups'
-import { useModifiedSvg } from '../hooks/useModifiedSvg'
+import { useModifiedSvgText } from '../hooks/useModifiedSvg'
+import { useLiveIoState } from '../hooks/useIoStatePolling'
 import type { DiffStatusKind } from '../types'
 import ValveEditorDialog from './ValveEditorDialog'
 import TopologyNodeWrapper from './TopologyNodeWrapper'
@@ -20,9 +21,9 @@ import { ModuleNodePorts } from './ModuleNodePorts'
 
 
 import {
-    PORT_COLOR, DISP_H,
+    PORT_COLOR, DISP_H, PORT_HIT_D, DISP_W,
     getGenericInStyle, getGenericOutStyle, getApInStyle, getApOutStyle,
-    supportsMountedValves, defaultValveSlots, getModuleDispW
+    supportsMountedValves, defaultValveSlots, getModuleDispSize
 } from './moduleNodeHelpers'
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
     const [isEditingAddr, setIsEditingAddr] = useState(false)
     const [addrInput, setAddrInput] = useState(mod.Adress.toString())
-    
+
     useEffect(() => {
         setAddrInput(mod.Adress.toString())
     }, [mod.Adress])
@@ -56,7 +57,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const theme = useTheme()
     const svgMaps = useSvgMap()
     const svgUrl = resolveIcon(mod.Name, svgMaps, mod.Modulecode)
-    
+
     const is16Dio = /(?:16DIO|16NDIO|16NIDO)/.test(mod.Name.toUpperCase())
     const numIn = is16Dio ? 0 : mod.NumOfInputs
     const numOut = is16Dio ? 0 : mod.NumOfOutputs
@@ -76,7 +77,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const wantsValves = canConfigureValves && (showValveEditor || showValves)
     const valveGroups = useValveGroups(wantsValves ? svgUrl : '', numValves)
 
-    const dispW = getModuleDispW(mod)
+    const { w: dispW, h: dispH } = getModuleDispSize(mod)
 
     const [valveEditorOpen, setValveEditorOpen] = useState(false)
     const updateNodeInternals = useUpdateNodeInternals()
@@ -92,7 +93,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         const mountedSet = new Set(mod.MountedValves)
         return valveGroups.filter((_, i) => !mountedSet.has(i))
     }, [hiddenValves, mod.MountedValves, valveGroups, wantsValves])
-    const displayUrl = useModifiedSvg(svgUrl, effectiveHiddenValves, numValves)
+    const svgText = useModifiedSvgText(svgUrl, effectiveHiddenValves, numValves)
 
     const hasPorts = ports.length > 0
 
@@ -133,6 +134,55 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     }
     const statusBarColor = STATUS_BORDER[status] ?? theme.palette.primary.main
 
+    const liveState = useLiveIoState()
+    const modState = liveState[mod.Adress]
+
+    // Build dynamic CSS rules for port and LED coloring.
+    // The IoStateContext will eventually provide real-time state for these LEDs.
+    const dynamicStyles = useMemo(() => {
+        const styles: Record<string, any> = {
+            '& svg': { width: '100%', height: '100%', display: 'block' }
+        }
+
+        // 1. Color ports based on their kind (in, out, inout)
+        for (const p of ports) {
+            styles[`& #${p.id}`] = {
+                fill: `${PORT_COLOR[p.kind]} !important`,
+                stroke: `${PORT_COLOR[p.kind]} !important`,
+            }
+        }
+
+        // 2. Default LEDs (SD / MD)
+        const hasDiag = diagnoses && diagnoses.length > 0
+        const diagColor = hasDiag ? '#e53935' : '#00ff22'
+        styles[`& #LED_SD`] = { fill: `${diagColor} !important` }
+        styles[`& #LED_MD`] = { fill: `${diagColor} !important` }
+
+        // 2. LED animations
+        if (modState) {
+            // Power load status LED
+            styles[`& #LED_PL`] = { fill: '#00ff22 !important' } // green if we have state
+
+            // Input LEDs
+            modState.inputs.forEach((val, i) => {
+                if (val) {
+                    styles[`& #LED_I${i}`] = { fill: '#00ff22 !important' } // bright green
+                    styles[`& #LED_${i}`] = { fill: '#00ff22 !important' }
+                }
+            })
+            // Output LEDs
+            modState.outputs.forEach((val, i) => {
+                if (val) {
+                    styles[`& #LED_O${i}`] = { fill: '#fd4800 !important' } // amber/orange
+                    styles[`& #LED_${i}`] = { fill: '#fd4800 !important' }
+                }
+            })
+            // InOut LEDs (rarely explicit LED_IO, but map to input/output if needed, usually mapped as I or O)
+        }
+
+        return styles
+    }, [ports, modState])
+
     return (
         <TopologyNodeWrapper
             status={status}
@@ -148,8 +198,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     label={status.toUpperCase()}
                     color={
                         status === 'changed' ? 'warning' :
-                        status === 'added' ? 'success' :
-                        status === 'removed' ? 'error' : 'default'
+                            status === 'added' ? 'success' :
+                                status === 'removed' ? 'error' : 'default'
                     }
                     size="small"
                     sx={{
@@ -167,13 +217,34 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
             {/* ── Left / Right cable handles (standard AP-I) ── */}
             {showLeftHandle && (
                 <Handle id="left" type="target" position={Position.Left}
-                    style={{ background: '#546e7a', width: 10, height: 10, border: '2px solid #fff' }} />
+                    style={
+                        ports.find(p => p.kind === 'ap-in')
+                            ? {
+                                position: 'absolute',
+                                left: `${ports.find(p => p.kind === 'ap-in')!.cx * 100}%`,
+                                top: `${ports.find(p => p.kind === 'ap-in')!.cy * 100}%`,
+                                transform: 'translate(-50%,-50%)',
+                                width: PORT_HIT_D, height: PORT_HIT_D, opacity: 0,
+                                border: 'none', background: 'transparent'
+                            }
+                            : { background: '#546e7a', width: 10, height: 10, border: '2px solid #fff' }
+                    } />
             )}
             {showRightHandle && (
                 <Handle id="right" type="source" position={Position.Right}
-                    style={{ background: '#546e7a', width: 10, height: 10, border: '2px solid #fff' }} />
+                    style={
+                        ports.find(p => p.kind === 'ap-out')
+                            ? {
+                                position: 'absolute',
+                                left: `${ports.find(p => p.kind === 'ap-out')!.cx * 100}%`,
+                                top: `${ports.find(p => p.kind === 'ap-out')!.cy * 100}%`,
+                                transform: 'translate(-50%,-50%)',
+                                width: PORT_HIT_D, height: PORT_HIT_D, opacity: 0,
+                                border: 'none', background: 'transparent'
+                            }
+                            : { background: '#546e7a', width: 10, height: 10, border: '2px solid #fff' }
+                    } />
             )}
-
             {/* ── VABX Extra Inputs ── */}
             {hasVabxInputs && Array.from({ length: 8 }).map((_, i) => {
                 const row = Math.floor(i / 4)
@@ -257,7 +328,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                         style={{ width: 24, fontSize: '0.48rem', textAlign: 'center', outline: 'none', border: '1px solid #1565c0', borderRadius: 2 }}
                     />
                 ) : (
-                    <Typography 
+                    <Typography
                         onClick={() => data.onMoveModule ? setIsEditingAddr(true) : null}
                         sx={{
                             fontSize: '0.48rem', fontWeight: 700, color: theme.palette.mode === 'dark' ? theme.palette.primary.light : '#1565c0',
@@ -287,16 +358,11 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
 
             {/* ── SVG image container ── */}
-            <Box sx={{ position: 'relative', width: dispW, height: DISP_H, margin: '0 auto' }}>
+            <Box sx={{ position: 'relative', width: dispW, height: dispH, margin: '0 auto' }}>
                 <Tooltip title={mod.Name} placement="top" arrow>
-                    <img
-                        src={displayUrl}
-                        alt={mod.Name}
-                        loading="lazy"
-                        decoding="async"
-                        draggable={false}
-                        style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }}
-                        onError={e => { (e.target as HTMLImageElement).src = '/svg/CPX-AP-A_Generic.svg' }}
+                    <Box
+                        sx={dynamicStyles}
+                        dangerouslySetInnerHTML={{ __html: svgText || '<svg viewBox="0 0 100 100"></svg>' }}
                     />
                 </Tooltip>
 

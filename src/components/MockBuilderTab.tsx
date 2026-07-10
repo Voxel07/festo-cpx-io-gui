@@ -17,6 +17,9 @@ interface ModuleMetadata {
     category: string
     mounted_valves: number[]
     valve_slots: number | null
+    num_inputs?: number
+    num_outputs?: number
+    num_inouts?: number
 }
 
 export default function MockBuilderTab({ mockTopology, setMockTopology }: Props) {
@@ -64,9 +67,9 @@ export default function MockBuilderTab({ mockTopology, setMockTopology }: Props)
             Modulecode: 9999,
             ProductKey: '',
             Type: matchedMeta?.category ? matchedMeta.category.charAt(0).toUpperCase() + matchedMeta.category.slice(1) : 'MockType',
-            NumOfInputs: 0,
-            NumOfOutputs: 0,
-            NumOfInOuts: 0,
+            NumOfInputs: matchedMeta?.num_inputs ?? 0,
+            NumOfOutputs: matchedMeta?.num_outputs ?? 0,
+            NumOfInOuts: matchedMeta?.num_inouts ?? 0,
             ValveSlots: matchedMeta?.valve_slots ?? 32,
             MountedValves: [],
         }

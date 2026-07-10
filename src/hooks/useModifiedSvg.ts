@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react'
 const textCache = new Map<string, string>()
 const dataUrlCache = new Map<string, string>()
 
-function buildDataUrl(text: string, hiddenIds: string[], numValves?: number, svgUrl?: string): string {
+function buildSvgText(text: string, hiddenIds: string[], numValves?: number, svgUrl?: string): string {
     const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
     
     // Dynamically rebuild SVG if requested
@@ -103,8 +103,7 @@ function buildDataUrl(text: string, hiddenIds: string[], numValves?: number, svg
         const el = doc.getElementById(id)
         if (el) el.setAttribute('style', 'display:none')
     })
-    const modified = new XMLSerializer().serializeToString(doc.documentElement)
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(modified)}`
+    return new XMLSerializer().serializeToString(doc.documentElement)
 }
 
 async function fetchSvgText(url: string): Promise<string> {
@@ -115,13 +114,25 @@ async function fetchSvgText(url: string): Promise<string> {
     return ''
 }
 
-export function useModifiedSvg(svgUrl: string, hiddenIds: string[], numValves?: number): string {
-    const [displayUrl, setDisplayUrl] = useState(svgUrl)
+export function useModifiedSvgText(svgUrl: string, hiddenIds: string[], numValves?: number): string {
+    const [svgText, setSvgText] = useState<string>('')
     const hiddenKey = hiddenIds.join('\u0000')
 
     useEffect(() => {
+        if (!svgUrl) return
         if (hiddenIds.length === 0 && numValves === undefined) {
-            setDisplayUrl(svgUrl)
+            // Just use the raw fetched text directly if no modifications are needed
+            const cachedText = textCache.get(svgUrl)
+            if (cachedText) {
+                setSvgText(cachedText)
+                return
+            }
+            fetchSvgText(svgUrl).then(fetchedText => {
+                if (fetchedText) {
+                    textCache.set(svgUrl, fetchedText)
+                    setSvgText(fetchedText)
+                }
+            })
             return
         }
 
@@ -129,7 +140,7 @@ export function useModifiedSvg(svgUrl: string, hiddenIds: string[], numValves?: 
         const cacheKey = `${svgUrl}|${numValves ?? ''}|${hiddenKey}`
         const cached = dataUrlCache.get(cacheKey)
         if (cached) {
-            setDisplayUrl(cached)
+            setSvgText(cached)
             return
         }
 
@@ -138,13 +149,10 @@ export function useModifiedSvg(svgUrl: string, hiddenIds: string[], numValves?: 
             fetchSvgText(svgUrl).then(fetchedText => {
                 if (fetchedText && !cancelled) {
                     textCache.set(svgUrl, fetchedText)
-                    // Trigger next effect run by setting displayUrl to fallback, 
-                    // or just let a re-render handle it if it was tied to state.
-                    // Actually, setting displayUrl to fallback is fine, but we can also manually call the builder here.
                     void setTimeout(() => {
-                        const next = buildDataUrl(fetchedText, hiddenIds, numValves, svgUrl)
+                        const next = buildSvgText(fetchedText, hiddenIds, numValves, svgUrl)
                         dataUrlCache.set(cacheKey, next)
-                        if (!cancelled) setDisplayUrl(next)
+                        if (!cancelled) setSvgText(next)
                     }, 0)
                 }
             })
@@ -153,9 +161,9 @@ export function useModifiedSvg(svgUrl: string, hiddenIds: string[], numValves?: 
 
         // We have text, build async so we don't block the UI thread during React render
         const timer = setTimeout(() => {
-            const next = buildDataUrl(text, hiddenIds, numValves, svgUrl)
+            const next = buildSvgText(text, hiddenIds, numValves, svgUrl)
             dataUrlCache.set(cacheKey, next)
-            if (!cancelled) setDisplayUrl(next)
+            if (!cancelled) setSvgText(next)
         }, 0)
 
         return () => {
@@ -164,5 +172,15 @@ export function useModifiedSvg(svgUrl: string, hiddenIds: string[], numValves?: 
         }
     }, [svgUrl, hiddenKey, hiddenIds.length, numValves])
 
-    return displayUrl
+    return svgText
+}
+
+export function useModifiedSvg(svgUrl: string, hiddenIds: string[], numValves?: number): string {
+    const text = useModifiedSvgText(svgUrl, hiddenIds, numValves)
+    if (!text) return ''
+    try {
+        return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(text)))}`
+    } catch {
+        return ''
+    }
 }

@@ -4,6 +4,8 @@ export const PORT_COLOR: Record<PortKind, string> = {
     in: '#1565c0',   // blue  – digital/analog input
     out: '#2e7d32',   // green – digital/analog output
     inout: '#ff9800',   // amber – bidirectional / unknown
+    'ap-in': 'transparent',
+    'ap-out': 'transparent',
 }
 
 export const DISP_W = 60
@@ -77,7 +79,7 @@ export function getApOutStyle(left?: string, top?: string): React.CSSProperties 
     }
 }
 
-export function getPortSrcStyle(cx: number, cy: number, portColor: string, editMode: boolean, isSquare?: boolean, isSmall?: boolean): React.CSSProperties {
+export function getPortSrcStyle(cx: number, cy: number, editMode: boolean, isSquare?: boolean, isSmall?: boolean): React.CSSProperties {
     const size = isSmall ? PORT_D * 0.6 : PORT_D;
     return {
         position: 'absolute',
@@ -86,13 +88,13 @@ export function getPortSrcStyle(cx: number, cy: number, portColor: string, editM
         transform: 'translate(-50%,-50%)',
         width: size,
         height: size,
-        background: editMode ? portColor : 'transparent',
-        border: editMode ? '2.5px solid #fff' : 'none',
+        background: 'transparent',
+        border: 'none',
         borderRadius: isSquare ? '2px' : '50%',
-        boxShadow: editMode ? `0 0 0 2px ${portColor}` : 'none',
+        boxShadow: 'none',
         zIndex: 10,
         cursor: editMode ? 'crosshair' : 'default',
-        opacity: editMode ? 1 : 0,
+        opacity: 0,
         pointerEvents: editMode ? undefined : 'none',
     }
 }
@@ -149,37 +151,62 @@ const KNOWN_DISP_WIDTHS: Record<string, number> = {
     'CPX-AP-L-16NDI8NDO-PI':        210,  // 148×90
 }
 
-export function getModuleDispW(mod: { Name: string, ValveSlots?: number }): number {
-    // Exact-name lookup wins over formulas
-    const known = KNOWN_DISP_WIDTHS[mod.Name]
-    if (known !== undefined) return known
-
-    const isVmpal = mod.Name.toUpperCase().startsWith('VMPAL')
-    const isVaba = mod.Name.toUpperCase().startsWith('VABA')
-    const isVabaX5 = mod.Name.toUpperCase().includes('X5')
-    const isVaem = mod.Name.toUpperCase().startsWith('VAEM')
-    const isApl = mod.Name.toUpperCase().startsWith('CPX-AP-L')
-    const is32DiD = mod.Name.toUpperCase().includes('32DI-D')
-    const is16DiM8 = mod.Name.toUpperCase().includes('16DI-M8-3P')
+export function getModuleDispSize(mod: { Name: string, ValveSlots?: number }): { w: number, h: number } {
+    // Constant scale factor (approx 1.2 pixels per SVG unit)
+    const SCALE = DISP_H / 107; // DISP_H is 128, so 128/107 ≈ 1.196
+    
+    // Exact-name lookup for widths (if specified, we still scale height according to its known SVG height, which we'd have to guess, so fallback to width-only overrides is tricky. Actually KNOWN_DISP_WIDTHS only has widths. Let's just return fixed heights for those if they are AP-A)
+    const upName = mod.Name.toUpperCase()
+    const isVmpal = upName.startsWith('VMPAL')
+    const isVaba = upName.startsWith('VABA')
+    const isVabaX5 = upName.includes('X5')
+    const isVaem = upName.startsWith('VAEM')
+    const isApl = upName.startsWith('CPX-AP-L')
+    const is32DiD = upName.includes('32DI-D')
+    const is16DiM8 = upName.includes('16DI-M8-3P')
+    const isEpli = upName.includes('EPLI')
+    const isApI = upName.startsWith('CPX-AP-I')
+    const isVabx = upName.startsWith('VABX')
     const numValves = defaultValveSlots(mod.Name, mod.ValveSlots)
 
+    const knownW = KNOWN_DISP_WIDTHS[mod.Name]
+    
     if (isVmpal && numValves !== undefined) {
         const svgW = 33 + numValves * 10
-        return Math.round(svgW * (DISP_H / 109))
+        return { w: Math.round(svgW * SCALE), h: Math.round(109 * SCALE) }
     } else if (isVaba && numValves !== undefined) {
         const svgW = isVabaX5 ? (72 + numValves * 17) : (45 + numValves * 17)
-        return Math.round(svgW * (DISP_H / 145))
+        return { w: Math.round(svgW * SCALE), h: Math.round(145 * SCALE) }
     } else if (isVaem) {
-        // Parse solenoid count from name: "VAEM-L1-S-12-AP" → 12
-        // SVG width formula (validated against S-12=115 and S-24=139): svgW = 91 + 2×N
         const match = /VAEM-[^-]+-S-(\d+)/.exec(mod.Name)
         const nSolenoids = match ? parseInt(match[1]) : (numValves ?? 12)
-        return Math.round((91 + 2 * nSolenoids) * (DISP_H / 104))
+        return { w: Math.round((91 + 2 * nSolenoids) * SCALE), h: Math.round(104 * SCALE) }
     } else if (isApl) {
-        // CPX-AP-L-16DIO-PI and CPX-AP-L-16NDI-PI both use 102×90 SVG
-        return Math.round(102 * (DISP_H / 90))
+        return { w: knownW ?? Math.round(102 * SCALE), h: Math.round(90 * SCALE) }
+    } else if (isApI) {
+        // AP-I must be checked before is32DiD/is16DiM8 so AP-I modules like
+        // CPX-AP-I-16DI-M8-3P aren't misclassified as AP-A form-factor modules.
+        const isBusNode = upName.endsWith('-M12') && (upName.includes('-PN-') || upName.includes('-EP-') || upName.includes('-EC-') || upName.includes('-PB-') || upName.includes('-CCB-'))
+        const isWideIo = /(?:16(?:DI|DIO|NDI|NDIO|NIDO))/.test(upName)
+        const svgW = isBusNode ? 54 : (isWideIo ? 68 : 33)
+        return { w: Math.round(svgW * SCALE), h: Math.round(186 * SCALE) }
     } else if (is32DiD || is16DiM8) {
-        return Math.round(100 * (DISP_H / 107))
+        return { w: Math.round(100 * SCALE), h: Math.round(107 * SCALE) }
+    } else if (isEpli) {
+        return { w: Math.round(31 * SCALE), h: Math.round(107 * SCALE) }
+    } else if (isVabx) {
+        if (upName.includes('-V4A')) return { w: Math.round(43 * SCALE), h: Math.round(109 * SCALE) }
+        if (upName.includes('-V4B')) return { w: Math.round(51 * SCALE), h: Math.round(109 * SCALE) }
     }
-    return DISP_W
+    
+    return { w: knownW ?? DISP_W, h: DISP_H }
 }
+
+export function getModuleDispW(mod: { Name: string, ValveSlots?: number }): number {
+    return getModuleDispSize(mod).w
+}
+
+
+
+
+

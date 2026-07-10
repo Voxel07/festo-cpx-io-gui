@@ -9,6 +9,8 @@ import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import DashboardIcon from '@mui/icons-material/Dashboard'
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew'
+import LinkOffIcon from '@mui/icons-material/LinkOff'
 import { TooltipButton } from './TooltipButton'
 import { useColorMode } from '../themeContext'
 
@@ -38,6 +40,10 @@ interface AppHeaderProps {
     onOpenDiagnostics: () => void
     configPath: string
     onConfigPathChange: (path: string) => void
+    hwConnected: boolean
+    hwConnecting: boolean
+    onConnect: () => void
+    onDisconnect: () => void
 }
 
 export default function AppHeader({
@@ -53,6 +59,10 @@ export default function AppHeader({
     onOpenDiagnostics,
     configPath,
     onConfigPathChange,
+    hwConnected,
+    hwConnecting,
+    onConnect,
+    onDisconnect,
 }: AppHeaderProps) {
     const { mode, toggleColorMode } = useColorMode()
     const [diagCount, setDiagCount] = useState(0)
@@ -69,7 +79,7 @@ export default function AppHeader({
     }, [doCheck])
 
     useEffect(() => {
-        if (!ip) {
+        if (!ip || !hwConnected) {
             setDiagCount(0)
             setDiagSeverity('none')
             return
@@ -97,11 +107,11 @@ export default function AppHeader({
         fetchDiags()
         const timer = setInterval(fetchDiags, 5000)
         return () => clearInterval(timer)
-    }, [ip, timeout])
+    }, [ip, timeout, hwConnected])
 
     const iconColor = diagSeverity === 'error' ? '#d32f2f' :
-                      diagSeverity === 'warning' ? '#ed6c02' :
-                      diagSeverity === 'info' ? '#0288d1' : 'inherit'
+        diagSeverity === 'warning' ? '#ed6c02' :
+            diagSeverity === 'info' ? '#0288d1' : 'inherit'
 
     return (
         <AppBar position="static" sx={{ flexShrink: 0, pt: 1, pb: 1, color: '#fff' }}>
@@ -128,6 +138,26 @@ export default function AppHeader({
                     sx={{ ...appBarFieldSx, width: 160 }}
                 />
                 <Stack direction="row" spacing={1} sx={{ ml: 'auto', alignItems: 'center' }}>
+                    <TooltipButton
+                        size="small"
+                        variant="outlined"
+                        onClick={hwConnected ? onDisconnect : onConnect}
+                        disabled={hwConnecting}
+                        tooltip={hwConnected ? `Disconnect from ${ip}` : `Connect to ${ip}`}
+                        icon={hwConnected
+                            ? <LinkOffIcon sx={{ fontSize: '1rem', color: '#4caf50' }} />
+                            : <PowerSettingsNewIcon sx={{ fontSize: '1rem', color: '#ff0000ff' }} />
+                        }
+                        sx={{
+                            fontSize: '0.65rem', height: 26, px: 1, whiteSpace: 'nowrap',
+                            color: hwConnected ? '#4caf50' : '#ff0000ff',
+                            borderColor: hwConnected ? '#4caf50' : 'rgba(255,255,255,0.5)',
+                            '&:hover': { borderColor: '#fff', color: '#fff' },
+                            '& .MuiButton-startIcon': { mr: 0.5 }
+                        }}
+                    >
+                        {hwConnecting ? '...' : hwConnected ? 'Connected' : 'Disconnected'}
+                    </TooltipButton>
                     <TooltipButton
                         size="small"
                         variant="outlined"

@@ -12,6 +12,7 @@ interface TestSelectionProps {
     isRunning: boolean
     isStarting: boolean
     busy: boolean
+    hwConnected?: boolean
     runSource?: string
     onToggleTest: (id: string) => void
     onStart: () => void
@@ -24,6 +25,7 @@ export default function TestSelection({
     isRunning,
     isStarting,
     busy,
+    hwConnected = true,
     runSource,
     onToggleTest,
     onStart,
@@ -57,10 +59,10 @@ export default function TestSelection({
                     color="primary"
                     startIcon={isStarting || busy ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
                     onClick={onStart}
-                    disabled={isRunning || isStarting || busy || selected.length === 0}
+                    disabled={isRunning || isStarting || busy || selected.length === 0 || !hwConnected}
                     size="small"
                 >
-                    {isStarting ? 'Starting…' : isRunning ? 'Running…' : busy ? 'Waiting…' : 'Start Test Run'}
+                    {isStarting ? 'Starting…' : isRunning ? 'Running…' : busy ? 'Waiting…' : !hwConnected ? 'Not Connected' : 'Start Test Run'}
                 </Button>
                 {isRunning && (
                     <Button
