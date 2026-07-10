@@ -21,7 +21,7 @@ import { ModuleNodePorts } from './ModuleNodePorts'
 
 
 import {
-    PORT_COLOR, DISP_H, PORT_HIT_D, DISP_W,
+    PORT_COLOR, PORT_HIT_D,
     getGenericInStyle, getGenericOutStyle, getApInStyle, getApOutStyle,
     supportsMountedValves, defaultValveSlots, getModuleDispSize
 } from './moduleNodeHelpers'
@@ -153,8 +153,19 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         }
 
         // 2. Default LEDs (SD / MD)
-        const hasDiag = diagnoses && diagnoses.length > 0
-        const diagColor = hasDiag ? '#e53935' : '#00ff22'
+        let diagColor = '#00ff22' // default green
+        if (diagnoses && diagnoses.length > 0) {
+            const hasError = diagnoses.some(d => d.severity === 'error')
+            const hasWarning = diagnoses.some(d => d.severity === 'warning')
+            
+            if (hasError) {
+                diagColor = '#e53935' // red
+            } else if (hasWarning) {
+                diagColor = '#fdba00ff' // yellow
+            } else {
+                diagColor = '#0288d1' // blue for maintenance/info
+            }
+        }
         styles[`& #LED_SD`] = { fill: `${diagColor} !important` }
         styles[`& #LED_MD`] = { fill: `${diagColor} !important` }
 
@@ -173,8 +184,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
             // Output LEDs
             modState.outputs.forEach((val, i) => {
                 if (val) {
-                    styles[`& #LED_O${i}`] = { fill: '#fd4800 !important' } // amber/orange
-                    styles[`& #LED_${i}`] = { fill: '#fd4800 !important' }
+                    styles[`& #LED_O${i}`] = { fill: '#fdba00ff !important' } // amber/orange
+                    styles[`& #LED_${i}`] = { fill: '#fdba00ff !important' }
                 }
             })
             // InOut LEDs — 16DIO/NDIO modules use LED_0..LED_15 (numbered, not I/O prefixed)

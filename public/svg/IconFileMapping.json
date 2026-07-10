@@ -69,6 +69,37 @@
       "ModuleCode": "8199"
     },
     {
+      "OrderCode": "CPX-AP-I-16DI-M8-3P",
+      "PartNumber": "8086600",
+      "FileName": "CPX-AP-I-M8_Wide.svg",
+      "ModuleCode": "8501"
+    },
+    {
+      "OrderCode": "CPX-AP-I-16DI-M12-5P",
+      "PartNumber": "N/A",
+      "FileName": "CPX-AP-I-M12_Wide.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-I-16NDI-M12-5P",
+      "PartNumber": "N/A",
+      "FileName": "CPX-AP-I-M12_Wide.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-I-16DIO-M12-5P",
+      "PartNumber": "N/A",
+      "FileName": "CPX-AP-I-M12_Wide.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-I-16DIO-M8-3P",
+      "PartNumber": "N/A",
+      "FileName": "CPX-AP-I-M8_Wide.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-I-16NIDO-M12-5P",
+      "PartNumber": "N/A",
+      "FileName": "CPX-AP-I-M12_Wide.svg"
+    },
+    {
       "OrderCode": "CPX-AP-I-8DI-M12-5P",
       "PartNumber": "8086602",
       "FileName": "CPX-AP-I-M12.svg",
@@ -246,6 +277,24 @@
       "PartNumber": "8129250",
       "ModuleCode": "12414",
       "FileName": "CPX-AP-A-EPLI.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-L-16NDI8NDO-PI",
+      "PartNumber": "8176415",
+      "ModuleCode": "16385",
+      "FileName": "CPX-AP-L-16NDI8NDO-PI.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-L-16NDI-PI",
+      "PartNumber": "8176326",
+      "ModuleCode": "16384",
+      "FileName": "CPX-AP-L-16NDI-PI.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-L-16DIO-PI",
+      "PartNumber": "8273869",
+      "ModuleCode": "16386",
+      "FileName": "CPX-AP-L-16DIO-PI.svg"
     },
     {
       "OrderCode": "VABA-S6-1-X5",
@@ -533,6 +582,11 @@
           "ModuleCode": "12314"
         }
       ]
+    },
+    {
+      "OrderCode": "VABX-A-P-EL-E12-API",
+      "PartNumber": "8000014",
+      "FileName": "VABX-A-P-EL-E12-API.svg"
     },
     {
       "OrderCode": "VABX-A-EL-API-P",

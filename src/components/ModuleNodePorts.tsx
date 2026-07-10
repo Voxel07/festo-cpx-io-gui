@@ -25,7 +25,6 @@ export function ModuleNodePorts({ ports, connections, editMode, moduleName }: Pr
                 const connectedSrc = connections.find(c => c.dir === 'src' && c.portId === port.id)
                 const connectedTgt = connections.find(c => c.dir === 'tgt' && c.portId === port.id)
                 
-                const srcColor = connectedSrc?.wireColor || portColor
                 const tgtColor = connectedTgt?.wireColor || 'transparent'
 
                 return (

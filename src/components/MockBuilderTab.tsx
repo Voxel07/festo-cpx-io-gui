@@ -46,9 +46,9 @@ export default function MockBuilderTab({ mockTopology, setMockTopology }: Props)
 
     const handleAddModule = () => {
         if (!selectedCode) return
-        
+
         const mods = mockTopology?.Topology ?? []
-        
+
         // Find matching metadata (it can be exact, or match without trailing characters, similar to backend logic)
         let matchedMeta = metadata[selectedCode]
         if (!matchedMeta) {
@@ -58,7 +58,7 @@ export default function MockBuilderTab({ mockTopology, setMockTopology }: Props)
                 matchedMeta = metadata[fallbackKey]
             }
         }
-        
+
         const addressToUse = addAddress === "" ? mods.length : parseInt(addAddress) || 0
 
         const newMod: TopologyModule = {
@@ -73,7 +73,7 @@ export default function MockBuilderTab({ mockTopology, setMockTopology }: Props)
             ValveSlots: matchedMeta?.valve_slots ?? 32,
             MountedValves: [],
         }
-        
+
         const newTopology = [...mods, newMod].sort((a, b) => a.Adress - b.Adress)
         setMockTopology({
             Name: mockTopology?.Name ?? 'Mock Topology',
@@ -133,11 +133,11 @@ export default function MockBuilderTab({ mockTopology, setMockTopology }: Props)
                     onChange={(_, newValue) => setSelectedCode(newValue ? newValue.OrderCode : null)}
                     renderInput={(params) => <TextField {...params} label="Search Module Type" variant="outlined" />}
                 />
-                <TextField 
-                    label="Address (opt)" 
-                    variant="outlined" 
+                <TextField
+                    label="Address (opt)"
+                    variant="outlined"
                     type="number"
-                    sx={{ width: 140 }} 
+                    sx={{ width: 140 }}
                     value={addAddress}
                     onChange={e => setAddAddress(e.target.value)}
                     placeholder={mockTopology?.Topology?.length.toString() || '0'}

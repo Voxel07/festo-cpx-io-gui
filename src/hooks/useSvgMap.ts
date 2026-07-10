@@ -2,25 +2,31 @@
  * useSvgMap.ts
  *
  * This file provides hooks and utilities for mapping CPX-AP module names and OrderCodes
- * to their corresponding SVG file assets. It processes a bundled JSON mapping at build time
- * to allow instant, synchronous lookups for the topology and connections canvas, handling
- * variants like wide modules for 16-channel devices and generic fallback SVGs.
+ * to their corresponding SVG file assets. The mapping is fetched once at runtime from
+ * /svg/IconFileMapping.json and cached at module level, then used for instant,
+ * synchronous lookups for the topology and connections canvas.
  */
-// Icon file mapping bundled at build time — no network fetch needed.
-import iconMapping from '../assets/IconFileMapping.json'
+import { useState, useEffect } from 'react'
 
 type SvgMap = Record<string, string>
 
-// ── Build maps once at module init (zero-cost after first import) ────────────
+interface IconMappingEntry {
+    OrderCode?: string
+    ModuleCode?: string | number
+    FileName: string
+    Variants?: Array<{ OrderCode: string; ModuleCode?: string | number }>
+}
 
-function buildMaps(): { byName: SvgMap; byCode: SvgMap } {
+// ── Module-level cache: fetch once, share across all components ────────────
+
+let _cachedMaps: { byName: SvgMap; byCode: SvgMap } | null = null
+let _fetchPromise: Promise<void> | null = null
+
+function buildMaps(entries: IconMappingEntry[]): { byName: SvgMap; byCode: SvgMap } {
     const byName: SvgMap = {}
     const byCode: SvgMap = {}
 
-    for (const e of (iconMapping as { IconFileMapping: Array<{
-        OrderCode?: string; ModuleCode?: string | number; FileName: string
-        Variants?: Array<{ OrderCode: string; ModuleCode?: string | number }>
-    }> }).IconFileMapping) {
+    for (const e of entries) {
         if (e.Variants) {
             for (const v of e.Variants) {
                 byName[v.OrderCode.trim()] = e.FileName
@@ -36,12 +42,32 @@ function buildMaps(): { byName: SvgMap; byCode: SvgMap } {
     return { byName, byCode }
 }
 
-const _builtinMaps = buildMaps()
+function ensureMaps(): Promise<void> {
+    if (_cachedMaps) return Promise.resolve()
+    if (!_fetchPromise) {
+        _fetchPromise = fetch('/svg/IconFileMapping.json')
+            .then(r => r.json())
+            .then((data: { IconFileMapping: IconMappingEntry[] }) => {
+                _cachedMaps = buildMaps(data.IconFileMapping)
+            })
+    }
+    return _fetchPromise
+}
 
-// ── Hook: returns the pre-built maps (no fetch, no state, instant) ──────────
+// ── Hook: returns maps, falling back to empty maps until the fetch completes ─
 
 export function useSvgMap(): { byName: SvgMap; byCode: SvgMap } {
-    return _builtinMaps
+    const [maps, setMaps] = useState<{ byName: SvgMap; byCode: SvgMap }>(
+        _cachedMaps ?? { byName: {}, byCode: {} },
+    )
+
+    useEffect(() => {
+        if (!_cachedMaps) {
+            ensureMaps().then(() => setMaps(_cachedMaps!))
+        }
+    }, [])
+
+    return maps
 }
 
 /** Resolve the SVG URL for a module by order-code name, with ModuleCode fallback. */
