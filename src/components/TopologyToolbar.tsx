@@ -86,7 +86,7 @@ export default function TopologyToolbar({
             </TooltipButton>
 
             <Divider orientation="vertical" flexItem />
-            
+
             {/* Layout Controls */}
             <Stack direction="row" spacing={3} sx={{ ml: 1, alignItems: 'center' }}>
                 <Box sx={{ width: 120 }}>
@@ -94,7 +94,7 @@ export default function TopologyToolbar({
                     <Slider
                         size="small"
                         value={wrapThreshold}
-                        min={4}
+                        min={5}
                         max={32}
                         step={1}
                         onChange={(_, val) => onWrapThresholdChange(val as number)}

@@ -1,9 +1,10 @@
 /**
  * TestRunTab – start, monitor, and view results of automated CPX-AP tests.
  *
- * Polls /test-run/status every second during an active run so progress
- * updates appear live, regardless of whether the run was started from the
- * web UI or CI.
+ * Polls /test-run/status continuously (idle: 5 s, active: 2 s) so any run
+ * started from the UI, CI, or another external API client appears live.
+ * PocketBase realtime provides instant push-notification when a new run
+ * starts externally and streams log entries for external runs.
  */
 import { useReducer, useEffect, useRef, useCallback } from 'react'
 import { Box, Stack, Typography, Alert, Paper, CircularProgress } from '@mui/material'
@@ -11,8 +12,12 @@ import TestSelection from './TestSelection'
 import TestProgress from './TestProgress'
 import TestResults from './TestResults'
 import TestLiveLog from './TestLiveLog'
+import { usePocketBaseRealtime } from '../hooks/usePocketBaseRealtime'
 
+/** Fast poll interval while a run is active (started locally or detected externally). */
 const POLL_MS = 2000
+/** Slow background poll while idle — detects externally-started runs. */
+const POLL_IDLE_MS = 5000
 
 const CONFIG_PATH = 'data/bench_config.json'
 
@@ -63,6 +68,8 @@ interface RunTabState {
     selected: string[]
     runState: TestRunState
     sseLogs: LogEntry[]
+    /** Log entries streamed from PocketBase realtime (external runs / SSE fallback). */
+    pbLogs: LogEntry[]
     busy: boolean
 }
 
@@ -70,6 +77,7 @@ const initialRunTabState: RunTabState = {
     selected: ['connection-validation', 'compare-topology'],
     runState: { status: 'idle' },
     sseLogs: [],
+    pbLogs: [],
     busy: false,
 }
 
@@ -78,6 +86,8 @@ type RunTabAction =
     | { type: 'SET_RUN_STATE'; state: TestRunState }
     | { type: 'SET_SSE_LOGS'; logs: LogEntry[] }
     | { type: 'APPEND_SSE_LOG'; log: LogEntry }
+    | { type: 'APPEND_PB_LOG'; log: LogEntry }
+    | { type: 'CLEAR_PB_LOGS' }
     | { type: 'SET_BUSY'; busy: boolean }
     | { type: 'START_RUN'; selected: string[] }
     | { type: 'RUN_START_FAIL'; error: string }
@@ -94,12 +104,19 @@ function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
             const next = [...state.sseLogs, action.log]
             return { ...state, sseLogs: next.length > 500 ? next.slice(-500) : next }
         }
+        case 'APPEND_PB_LOG': {
+            const next = [...state.pbLogs, action.log]
+            return { ...state, pbLogs: next.length > 500 ? next.slice(-500) : next }
+        }
+        case 'CLEAR_PB_LOGS':
+            return { ...state, pbLogs: [] }
         case 'SET_BUSY':
             return { ...state, busy: action.busy }
         case 'START_RUN':
             return {
                 ...state,
                 sseLogs: [],
+                pbLogs: [],
                 runState: { status: 'starting', tests: action.selected, checkpoints: [], logs: [] },
                 busy: true,
             }
@@ -116,12 +133,13 @@ function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
 
 export default function TestRunTab({ ip }: Props) {
     const [state, dispatch] = useReducer(runTabReducer, initialRunTabState)
-    const { selected, runState, sseLogs, busy } = state
+    const { selected, runState, sseLogs, pbLogs, busy } = state
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const esRef = useRef<EventSource | null>(null)
 
     const isRunning = runState.status === 'running'
     const isStarting = runState.status === 'starting'
+    const isActive = isRunning || isStarting || busy
     const progress = runState.progress
         ? (runState.progress.completed / Math.max(runState.progress.total, 1)) * 100
         : 0
@@ -146,16 +164,47 @@ export default function TestRunTab({ ip }: Props) {
         } catch { /* backend may be restarting */ }
     }, [])
 
+    // Always poll — even when idle — so externally-started runs are detected
+    // automatically.  Switch to the faster interval as soon as a run is active.
     useEffect(() => {
-        if (isRunning || isStarting || busy) {
-            timerRef.current = setInterval(fetchStatus, POLL_MS)
-        }
+        const interval = isActive ? POLL_MS : POLL_IDLE_MS
+        timerRef.current = setInterval(fetchStatus, interval)
         return () => {
             if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
         }
-    }, [isRunning, isStarting, busy, fetchStatus])
+    }, [isActive, fetchStatus])
 
     useEffect(() => { fetchStatus() }, [fetchStatus])
+
+    // ── Clear PB logs when a new run starts (run_id changes) ────────────
+    useEffect(() => {
+        dispatch({ type: 'CLEAR_PB_LOGS' })
+    }, [runState.run_id])
+
+    // ── PocketBase realtime: instant run detection + log streaming ───────
+    // The SSE log guard: only forward PB logs while no SSE stream is active
+    // (avoids duplicates when both are streaming the same run).
+    const sseActiveRef = useRef(false)
+    useEffect(() => { sseActiveRef.current = sseLogs.length > 0 }, [sseLogs.length])
+
+    usePocketBaseRealtime({
+        activeRunId: runState.run_id ?? null,
+        onRunStarted: useCallback(() => {
+            // A run was started externally — refresh immediately to get run_id
+            // and switch to active polling speed.
+            fetchStatus()
+        }, [fetchStatus]),
+        onRunCompleted: useCallback(() => {
+            // Run finished externally — fetch final results.
+            fetchStatus()
+        }, [fetchStatus]),
+        onLog: useCallback((entry) => {
+            // Only use PB logs as fallback when the SSE stream isn't active yet
+            if (!sseActiveRef.current) {
+                dispatch({ type: 'APPEND_PB_LOG', log: entry })
+            }
+        }, []),
+    })
 
     // ── SSE: open a log stream as soon as we have a run_id ──────────────
     useEffect(() => {
@@ -178,8 +227,9 @@ export default function TestRunTab({ ip }: Props) {
         return () => { es.close(); esRef.current = null }
     }, [runState.run_id])
 
-    // Merge SSE logs with any logs that arrived via polling (dedup by timestamp+msg)
-    const displayLogs = sseLogs.length > 0 ? sseLogs : (runState.logs ?? [])
+    // Log priority: SSE stream (richest, real-time) → PocketBase realtime
+    // (external runs before SSE opens) → polling snapshot (last resort).
+    const displayLogs = sseLogs.length > 0 ? sseLogs : pbLogs.length > 0 ? pbLogs : (runState.logs ?? [])
 
     async function doStart() {
         if (selected.length === 0) return
