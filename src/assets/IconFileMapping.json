@@ -279,6 +279,24 @@
       "FileName": "CPX-AP-A-EPLI.svg"
     },
     {
+      "OrderCode": "CPX-AP-L-16NDI8NDO-PI",
+      "PartNumber": "8176415",
+      "ModuleCode": "16385",
+      "FileName": "CPX-AP-L-16NDI8NDO-PI.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-L-16NDI-PI",
+      "PartNumber": "8176326",
+      "ModuleCode": "16384",
+      "FileName": "CPX-AP-L-16NDI-PI.svg"
+    },
+    {
+      "OrderCode": "CPX-AP-L-16DIO-PI",
+      "PartNumber": "8273869",
+      "ModuleCode": "16386",
+      "FileName": "CPX-AP-L-16DIO-PI.svg"
+    },
+    {
       "OrderCode": "VABA-S6-1-X5",
       "PartNumber": "8154036",
       "FileName": "VABA-S6-1-X5.svg",
@@ -564,6 +582,11 @@
           "ModuleCode": "12314"
         }
       ]
+    },
+    {
+      "OrderCode": "VABX-A-P-EL-E12-API",
+      "PartNumber": "8000014",
+      "FileName": "VABX-A-P-EL-E12-API.svg"
     },
     {
       "OrderCode": "VABX-A-EL-API-P",

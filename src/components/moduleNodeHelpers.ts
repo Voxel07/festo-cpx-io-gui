@@ -128,7 +128,32 @@ export function defaultValveSlots(name: string, explicitSlots?: number): number 
     return undefined
 }
 
+// Pre-computed display widths for modules with non-standard SVG aspect ratios
+// (svgWidth × DISP_H / svgHeight, rounded). Keyed by exact module OrderCode name.
+const KNOWN_DISP_WIDTHS: Record<string, number> = {
+    // VABX interface modules – "API-P" / "APA-P" wide parallel-bus variants (SVG height 109)
+    'VABX-A-EL-API-P':              177,  // 151×109
+    'VABX-A-EL-APA-P':              127,  // 108×109
+    // VABX-A-P-EL-* parallel port variants (SVG height 109)
+    'VABX-A-P-EL-E12-API':          178,  // 151.178×109
+    'VABX-A-P-EL-E12-APA':          127,  // 108×109
+    'VABX-A-P-E12-CTED':            122,  // 104.179×109
+    'VABX-A-P-EL-E12-CTED-MPM12':   181,  // 154.09×109
+    'VABX-A-P-EL-E12-CTED-MPM8':    181,  // 154.09×109
+    'VABX-A-P-EL-E12-CTED-MPRJ45':  181,  // 154×109
+    // VABX-A-S-EL-* single-bus CTED variants (SVG height 109)
+    'VABX-A-S-EL-E12-CTED-MPM12':   58,   // 49×109
+    'VABX-A-S-EL-E12-CTED-MPM8':    58,   // 49×109
+    'VABX-A-S-EL-E12-CTED-MPRJ45':  58,   // 49×109
+    // CPX-AP-L wider variant (3-section connector block, SVG 148×90)
+    'CPX-AP-L-16NDI8NDO-PI':        210,  // 148×90
+}
+
 export function getModuleDispW(mod: { Name: string, ValveSlots?: number }): number {
+    // Exact-name lookup wins over formulas
+    const known = KNOWN_DISP_WIDTHS[mod.Name]
+    if (known !== undefined) return known
+
     const isVmpal = mod.Name.toUpperCase().startsWith('VMPAL')
     const isVaba = mod.Name.toUpperCase().startsWith('VABA')
     const isVabaX5 = mod.Name.toUpperCase().includes('X5')
@@ -144,10 +169,14 @@ export function getModuleDispW(mod: { Name: string, ValveSlots?: number }): numb
     } else if (isVaba && numValves !== undefined) {
         const svgW = isVabaX5 ? (72 + numValves * 17) : (45 + numValves * 17)
         return Math.round(svgW * (DISP_H / 145))
-    } else if (isVaem && numValves !== undefined) {
-        const svgW = 45 + numValves * 10 + 10
-        return Math.round(svgW * (DISP_H / 104))
+    } else if (isVaem) {
+        // Parse solenoid count from name: "VAEM-L1-S-12-AP" → 12
+        // SVG width formula (validated against S-12=115 and S-24=139): svgW = 91 + 2×N
+        const match = /VAEM-[^-]+-S-(\d+)/.exec(mod.Name)
+        const nSolenoids = match ? parseInt(match[1]) : (numValves ?? 12)
+        return Math.round((91 + 2 * nSolenoids) * (DISP_H / 104))
     } else if (isApl) {
+        // CPX-AP-L-16DIO-PI and CPX-AP-L-16NDI-PI both use 102×90 SVG
         return Math.round(102 * (DISP_H / 90))
     } else if (is32DiD || is16DiM8) {
         return Math.round(100 * (DISP_H / 107))
