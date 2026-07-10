@@ -396,16 +396,26 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 {/* ── EPLI / VABX-AP AP-bus handles at physical XF10/XF20 port positions ──
                      EPLI SVG 31×107: XF10 at cy=40.5 (37.85%), XF20 at cy=56.5 (52.8%)
                      VABX-EL-API SVG 46×109: XF10 at cy=23.5 (21.6%), XF20 at cy=44.5 (40.8%) */}
-                {showApIn && (
-                    <Handle id="ap-in" type="target" position={Position.Left}
-                        style={getApInStyle(apInPos?.left, apInPos?.top)}
-                    />
-                )}
-                {showApOut && (
-                    <Handle id="ap-out" type="source" position={Position.Right}
-                        style={getApOutStyle(apOutPos?.left, apOutPos?.top)}
-                    />
-                )}
+                {showApIn && (() => {
+                    const apInPort = ports.find(p => p.kind === 'ap-in')
+                    const left = apInPort ? `${apInPort.cx * 100}%` : apInPos?.left
+                    const top = apInPort ? `${apInPort.cy * 100}%` : apInPos?.top
+                    return (
+                        <Handle id="ap-in" type="target" position={Position.Left}
+                            style={getApInStyle(left, top)}
+                        />
+                    )
+                })()}
+                {showApOut && (() => {
+                    const apOutPort = ports.find(p => p.kind === 'ap-out')
+                    const left = apOutPort ? `${apOutPort.cx * 100}%` : apOutPos?.left
+                    const top = apOutPort ? `${apOutPort.cy * 100}%` : apOutPos?.top
+                    return (
+                        <Handle id="ap-out" type="source" position={Position.Right}
+                            style={getApOutStyle(left, top)}
+                        />
+                    )
+                })()}
 
                 {/* ── SVG-port handles (always rendered so edges can resolve handle IDs;
                      invisible when not in edit mode per React Flow best-practice) ── */}

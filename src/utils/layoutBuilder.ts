@@ -28,10 +28,15 @@ function isApIM12orM8(name: string): boolean {
     return (upperName.includes('CPX-AP-I') || upperName.includes('AP-I')) && (upperName.includes('M12') || upperName.includes('M8'))
 }
 
+function isApLModule(name: string): boolean {
+    const upperName = name.toUpperCase()
+    return upperName.includes('CPX-AP-L') || upperName.includes('AP-L')
+}
+
 /** AP-chain interface — module that has explicit ap-in / ap-out handles instead of
  *  the standard left/right cable handles. */
 function isApChainInterface(name: string): boolean {
-    return isEpli(name) || isVabxApInterface(name) || isApIM12orM8(name) || name === 'VMPAL-EPL-AP'
+    return isEpli(name) || isVabxApInterface(name) || isApIM12orM8(name) || isApLModule(name) || name === 'VMPAL-EPL-AP'
 }
 
 /** Handle position percentages within the SVG image container box (60 × 128 px).
@@ -52,6 +57,25 @@ function getApHandlePos(mod: TopologyModule): {
         // VABX-A-EL-API-S.svg viewBox 46×109; objectFit:contain scale = 128/109 ≈ 1.174
         // XF10 cy=23.5 → 21.6 %  |  XF20 cy=44.5 → 40.8 %  |  cx=12.0 → 28.5 %
         return { apInTop: '21.6%', apInLeft: '28.5%', apOutTop: '40.8%', apOutLeft: '28.5%' }
+    }
+    if (isApLModule(name)) {
+        const upperName = name.toUpperCase()
+        if (upperName.includes('16NDI8NDO')) {
+            // CPX-AP-L-16NDI8NDO-PI width=148, height=90.
+            // XF10 cx=119, cy=15 -> cx = 80.40%, cy = 16.66%
+            // XF20 cx=138, cy=15 -> cx = 93.24%, cy = 16.66%
+            return { apInTop: '16.66%', apInLeft: '80.40%', apOutTop: '16.66%', apOutLeft: '93.24%' }
+        }
+        if (upperName.includes('16NDI')) {
+            // CPX-AP-L-16NDI-PI width=102, height=90.
+            // XF10 cx=73, cy=15 -> cx = 71.56%, cy = 16.66%
+            // XF20 cx=92, cy=15 -> cx = 90.19%, cy = 16.66%
+            return { apInTop: '16.66%', apInLeft: '71.56%', apOutTop: '16.66%', apOutLeft: '90.19%' }
+        }
+        // CPX-AP-L-16DIO-PI width=102, height=90.
+        // XF10 cx=60, cy=16 -> cx = 58.82%, cy = 17.77%
+        // XF20 cx=79, cy=16 -> cx = 77.45%, cy = 17.77%
+        return { apInTop: '17.77%', apInLeft: '58.82%', apOutTop: '17.77%', apOutLeft: '77.45%' }
     }
     if (isApIM12orM8(name)) {
         const isWideIo = /(?:16(?:DI|DIO|NDI|NDIO|NIDO))/.test(upperName)
@@ -199,7 +223,7 @@ export function buildLayout(
                 segW += dispW + INLINE_G
                 if (h > maxSegH) maxSegH = h
             }
-            
+
             const addrRange = seg.mods.length > 1
                 ? `#${seg.mods[0].Adress}–#${seg.mods[seg.mods.length - 1].Adress}`
                 : `#${seg.mods[0].Adress}`

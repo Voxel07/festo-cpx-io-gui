@@ -113,17 +113,26 @@ async function fetchAndParseSvg(
         if (found.length === 0) {
             const gathered: Map<string, { cx: number; cy: number; parentY: number }> = new Map()
 
+            const isApL = svgUrl.includes('AP-L')
             doc.querySelectorAll('g[data-name]').forEach(g => {
                 const dn = g.getAttribute('data-name') ?? ''
-                if (!/^X\d+$/.test(dn)) return
+                
+                // For AP-L modules, the IO connectors are specifically Xn-3, Xn-5, Xn-7, Xn-9
+                if (isApL) {
+                    if (!/^X\d+-(3|5|7|9)$/.test(dn)) return
+                } else {
+                    if (!/^X\d+$/.test(dn)) return
+                }
 
                 // Skip groups whose immediate parent <g> has a "-" suffix (e.g. "Top_Right-2").
                 // Only check the first ancestor <g>, not the root — root group IDs like
                 // "CPX-AP-L-16NDI-PI" also contain hyphens but are not secondary views.
-                const parent = g.parentElement
-                if (parent && parent.tagName.toLowerCase() === 'g') {
-                    const pid = parent.getAttribute('id') ?? ''
-                    if (/-/.test(pid)) return  // skip secondary view groups
+                if (!isApL) {
+                    const parent = g.parentElement
+                    if (parent && parent.tagName.toLowerCase() === 'g') {
+                        const pid = parent.getAttribute('id') ?? ''
+                        if (/-/.test(pid)) return  // skip secondary view groups
+                    }
                 }
 
                 const rect = g.querySelector('rect[stroke="none"]') ?? g.querySelector('rect')
@@ -139,7 +148,7 @@ async function fetchAndParseSvg(
                 gathered.set(dn, { cx, cy, parentY: ry })
             })
 
-            // Convert to array, sort by y then x, assign sequential X0..XN
+            // Convert to array, sort by y then x
             const entries = [...gathered.entries()]
             entries.sort((a, b) => {
                 const dy = a[1].cy - b[1].cy
@@ -149,25 +158,42 @@ async function fetchAndParseSvg(
 
             entries.forEach(([dn, pos]) => {
                 // Preserve the original data-name as the port id so CSS selectors
-                // (#X0, #X1, …) in ModuleNode correctly target the matching SVG elements.
-                // deriveKind later uses the sorted position (ioIndex), not the id,
-                // so input/output assignment remains correct.
-                found.push({ id: dn, cx: pos.cx, cy: pos.cy, svgKind: null })
+                // (#X0, #X0-3, …) in ModuleNode correctly target the matching SVG elements.
+                let explicitKind: PortKind | null = null
+                if (svgUrl.includes('16NDI8NDO')) {
+                    if (dn.endsWith('-9') || dn.endsWith('-7')) explicitKind = 'out'
+                    else if (dn.endsWith('-5')) explicitKind = 'in'
+                }
+                found.push({ id: dn, cx: pos.cx, cy: pos.cy, svgKind: explicitKind })
             })
         }
 
-        // Also search for AP cable connectors (XF10 = ap-in, XF20 = ap-out)
-        doc.querySelectorAll('g[id^="XF"]').forEach(g => {
-            const id = g.id
-            if (id === 'XF10' || id === 'XF20') {
-                const circle = g.querySelector('circle')
-                if (circle) {
-                    const cx = parseFloat(circle.getAttribute('cx') ?? '0') / vbW
-                    const cy = parseFloat(circle.getAttribute('cy') ?? '0') / vbH
-                    found.push({ id, cx, cy, svgKind: id === 'XF10' ? 'ap-in' : 'ap-out' })
+        // Also search for AP cable connectors (XF10/X10 = ap-in, XF20/X20 = ap-out)
+        // Skip for VMPAL since its SVG width is dynamically resized in the UI.
+        if (!svgUrl.includes('VMPAL')) {
+            doc.querySelectorAll('g[id^="XF"], g[id="X10"], g[id="X20"]').forEach(g => {
+                const id = g.id
+                const isL = svgUrl.includes('AP-L')
+                if (id === 'XF10' || id === 'XF20' || (isL && (id === 'X10' || id === 'X20'))) {
+                    const isApIn = id === 'XF10' || id === 'X10'
+                    const circle = g.querySelector('circle')
+                    const rect = g.querySelector('rect')
+                    if (circle) {
+                        const cx = parseFloat(circle.getAttribute('cx') ?? '0') / vbW
+                        const cy = parseFloat(circle.getAttribute('cy') ?? '0') / vbH
+                        found.push({ id, cx, cy, svgKind: isApIn ? 'ap-in' : 'ap-out' })
+                    } else if (rect) {
+                        const rx = parseFloat(rect.getAttribute('x') ?? '0')
+                        const ry = parseFloat(rect.getAttribute('y') ?? '0')
+                        const rw = parseFloat(rect.getAttribute('width') ?? '0')
+                        const rh = parseFloat(rect.getAttribute('height') ?? '0')
+                        const cx = (rx + rw / 2) / vbW
+                        const cy = (ry + rh / 2) / vbH
+                        found.push({ id, cx, cy, svgKind: isApIn ? 'ap-in' : 'ap-out' })
+                    }
                 }
-            }
-        })
+            })
+        }
         
         // Sort top-to-bottom so portIndex 0 is the physically highest connector
         found.sort((a, b) => a.cy - b.cy)

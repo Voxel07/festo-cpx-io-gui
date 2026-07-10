@@ -147,8 +147,6 @@ const KNOWN_DISP_WIDTHS: Record<string, number> = {
     'VABX-A-S-EL-E12-CTED-MPM12':   58,   // 49×109
     'VABX-A-S-EL-E12-CTED-MPM8':    58,   // 49×109
     'VABX-A-S-EL-E12-CTED-MPRJ45':  58,   // 49×109
-    // CPX-AP-L wider variant (3-section connector block, SVG 148×90)
-    'CPX-AP-L-16NDI8NDO-PI':        210,  // 148×90
 }
 
 export function getModuleDispSize(mod: { Name: string, ValveSlots?: number }): { w: number, h: number } {
@@ -182,7 +180,11 @@ export function getModuleDispSize(mod: { Name: string, ValveSlots?: number }): {
         const nSolenoids = match ? parseInt(match[1]) : (numValves ?? 12)
         return { w: Math.round((91 + 2 * nSolenoids) * SCALE), h: Math.round(104 * SCALE) }
     } else if (isApl) {
-        return { w: knownW ?? Math.round(102 * SCALE), h: Math.round(90 * SCALE) }
+        let defaultW = 102
+        if (upName.includes('16NDI8NDO')) {
+            defaultW = 148
+        }
+        return { w: knownW ?? Math.round(defaultW * SCALE), h: Math.round(90 * SCALE) }
     } else if (isApI) {
         // AP-I must be checked before is32DiD/is16DiM8 so AP-I modules like
         // CPX-AP-I-16DI-M8-3P aren't misclassified as AP-A form-factor modules.
