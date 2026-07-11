@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import type { ProfilerOnRenderCallback } from 'react'
 import { Box, Typography, Paper, IconButton } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { Panel, useStore } from '@xyflow/react'
@@ -105,13 +104,4 @@ export function DebugPanel({ onClose }: { onClose: () => void }) {
             </Paper>
         </Panel>
     )
-}
-
-// Render profiler to fire events that the panel can listen to
-export const onRenderCallback: ProfilerOnRenderCallback = (
-    id, phase, actualDuration
-) => {
-    window.dispatchEvent(new CustomEvent('topology-render-profile', {
-        detail: { id, phase, actualDuration }
-    }))
 }

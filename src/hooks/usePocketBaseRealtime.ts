@@ -116,8 +116,17 @@ export function usePocketBaseRealtime({
                             subscriptions: ['festo_test_runs', 'festo_system_logs'],
                         }),
                     })
-                        .then(() => { if (alive) setConnected(true) })
-                        .catch(() => { /* subscribe failed — will retry on next connect */ })
+                        .then(response => {
+                            if (!response.ok) throw new Error(`PocketBase subscription failed: ${response.status}`)
+                            if (alive) setConnected(true)
+                        })
+                        .catch(() => {
+                            if (!alive) return
+                            setConnected(false)
+                            es?.close()
+                            if (reconnectTimer) clearTimeout(reconnectTimer)
+                            reconnectTimer = setTimeout(connect, 8000)
+                        })
                 } catch { /* malformed PB_CONNECT */ }
             })
 
@@ -133,7 +142,7 @@ export function usePocketBaseRealtime({
                         onRunStartedRef.current?.(record.run_id, record.source ?? 'external')
                     } else if (
                         action === 'update' &&
-                        (record.status === 'completed' || record.status === 'error')
+                        (record.status === 'completed' || record.status === 'error' || record.status === 'failed')
                     ) {
                         onRunCompletedRef.current?.(record.run_id)
                     }
@@ -166,6 +175,7 @@ export function usePocketBaseRealtime({
                 es = null
                 // Exponential back-off is handled by the browser for SSE; use a
                 // manual reconnect only if the error is permanent (stream closed).
+                if (reconnectTimer) clearTimeout(reconnectTimer)
                 reconnectTimer = setTimeout(connect, 8000)
             }
         }

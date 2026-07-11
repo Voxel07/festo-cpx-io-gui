@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useContext, useRef } from 'react'
 import { useNodesState, useEdgesState, reconnectEdge } from '@xyflow/react'
 import type { Node, Edge, Connection, EdgeChange } from '@xyflow/react'
 import { useTheme } from '@mui/material/styles'
@@ -7,6 +7,7 @@ import { buildLayout } from '../utils/layoutBuilder'
 import type { Topology, DiffStatus, BenchConfig, WiringConnection, ConnectionEntry } from '../types'
 import type { ModuleNodeData } from './moduleNodeTypes'
 import type { ConnectionsFlowAction } from './useConnectionsFlowState'
+import { AlertsContext } from '../utils/AlertsContext'
 
 const HIGH_CONTRAST_COLORS = [
     '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
@@ -17,7 +18,7 @@ const HIGH_CONTRAST_COLORS = [
 
 function handleKind(handleId: string): 'in' | 'out' | 'inout' {
     const k = handleId.split('-')[1]
-    if (k === 'in' || k === 'out' || k === 'inout') return k as any
+    if (k === 'in' || k === 'out' || k === 'inout') return k
     return 'inout'
 }
 
@@ -50,6 +51,7 @@ export function useConnectionsFlowLayout(
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
     const theme = useTheme()
+    const alerts = useContext(AlertsContext)
 
     const ioEdgesRef = useRef<Edge[]>([])
     const pendingIoRef = useRef<Edge[]>([])
@@ -80,7 +82,7 @@ export function useConnectionsFlowLayout(
                     if (r.ok) {
                         setVabxInputs(prev => ({ ...prev, [mod.Adress]: true }))
                     }
-                } catch (e) { }
+                } catch { /* unsupported or temporarily unavailable parameter */ }
             }
         })
     }, [topology, ip])
@@ -280,6 +282,7 @@ export function useConnectionsFlowLayout(
             srcIsOutput = true
         }
 
+        const directionWrites: Promise<Response>[] = []
         if (ip) {
             const srcMod = topology?.Topology?.find(m => String(m.Adress) === srcNode)
             const tgtMod = topology?.Topology?.find(m => String(m.Adress) === tgtNode)
@@ -290,18 +293,18 @@ export function useConnectionsFlowLayout(
             const tgtCh = (parseInt(pTgt.replace(/\D/g, '') || '0') * (tgtIsM12 ? 2 : 1)) + (subTgt ?? 0)
 
             if (sk === 'inout') {
-                fetch(`/io/module/${srcNode}/parameter/20145`, {
+                directionWrites.push(fetch(`/io/module/${srcNode}/parameter/20145`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ip_address: ip, timeout: 2.0, value: srcIsOutput ? 'true' : 'false', instance: srcCh })
-                }).catch(() => {})
+                }))
             }
             if (tk === 'inout') {
-                fetch(`/io/module/${tgtNode}/parameter/20145`, {
+                directionWrites.push(fetch(`/io/module/${tgtNode}/parameter/20145`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ip_address: ip, timeout: 2.0, value: srcIsOutput ? 'false' : 'true', instance: tgtCh })
-                }).catch(() => {})
+                }))
             }
         }
 
@@ -321,7 +324,18 @@ export function useConnectionsFlowLayout(
             data: { kind: 'io', portSrc: pSrc, portTgt: pTgt, subSrc, subTgt, wireColor, straight: false, srcIsOutput },
         }
         setEdges(prev => prev.some(e => e.id === edgeId) ? prev : [...prev, newEdge])
-    }, [edges, setEdges, theme, ip, topology])
+        if (directionWrites.length > 0) {
+            void Promise.all(directionWrites)
+                .then(responses => {
+                    const failed = responses.find(response => !response.ok)
+                    if (failed) throw new Error(`HTTP ${failed.status}`)
+                })
+                .catch(error => {
+                    setEdges(previous => previous.filter(edge => edge.id !== edgeId))
+                    alerts?.showAlert('error', `Could not configure I/O direction; connection was reverted: ${(error as Error).message}`)
+                })
+        }
+    }, [edges, setEdges, theme, ip, topology, alerts])
 
     const onConnect = useCallback((connection: Connection) => {
         let sh = connection.sourceHandle ?? ''

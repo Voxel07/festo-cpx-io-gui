@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo } from 'react'
 
 const cache = new Map<string, string[]>()
+const pending = new Map<string, Promise<string[]>>()
 
 async function fetchAndParseValveGroups(
     svgUrl: string, 
@@ -33,16 +34,39 @@ async function fetchAndParseValveGroups(
     }
 }
 
+function loadValveGroups(svgUrl: string): Promise<string[]> {
+    const cached = cache.get(svgUrl)
+    if (cached) return Promise.resolve(cached)
+    const active = pending.get(svgUrl)
+    if (active) return active
+    const request = new Promise<string[]>(resolve => {
+        fetchAndParseValveGroups(svgUrl, found => resolve(found)).then(() => resolve([]))
+    }).then(found => {
+        cache.set(svgUrl, found)
+        pending.delete(svgUrl)
+        return found
+    })
+    pending.set(svgUrl, request)
+    return request
+}
+
 export function useValveGroups(svgUrl: string, overrideCount?: number): string[] {
-    const [tick, setTick] = useState(0)
+    const [groups, setGroups] = useState<string[]>(() => cache.get(svgUrl) ?? [])
 
     // Trigger async fetch on cache miss (only setState in the async callback)
     useEffect(() => {
-        if (!svgUrl || cache.has(svgUrl)) return
-        fetchAndParseValveGroups(svgUrl, (found) => {
-            cache.set(svgUrl, found)
-            setTick(t => t + 1)  // trigger re-render so cached groups are picked up below
-        })
+        if (!svgUrl) {
+            setGroups([])
+            return
+        }
+        const cached = cache.get(svgUrl)
+        if (cached) {
+            setGroups(cached)
+            return
+        }
+        let cancelled = false
+        void loadValveGroups(svgUrl).then(found => { if (!cancelled) setGroups(found) })
+        return () => { cancelled = true }
     }, [svgUrl])
 
     return useMemo(() => {
@@ -51,6 +75,6 @@ export function useValveGroups(svgUrl: string, overrideCount?: number): string[]
         }
 
         // Derive from cache during render — React Compiler can optimise this
-        return svgUrl ? (cache.get(svgUrl) ?? []) : []
-    }, [svgUrl, overrideCount, tick])
+        return groups
+    }, [groups, overrideCount])
 }

@@ -26,6 +26,7 @@ export default defineConfig({
             '/pocketbase':  { target: 'http://localhost:8000', changeOrigin: true },
             '/metadata':    { target: 'http://localhost:8000', changeOrigin: true },
             '/dashboard':   { target: 'http://localhost:8000', changeOrigin: true },
+            '/architecture': { target: 'http://localhost:8000', changeOrigin: true },
         },
     },
     build: {

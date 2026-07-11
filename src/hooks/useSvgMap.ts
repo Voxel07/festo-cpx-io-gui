@@ -46,9 +46,17 @@ function ensureMaps(): Promise<void> {
     if (_cachedMaps) return Promise.resolve()
     if (!_fetchPromise) {
         _fetchPromise = fetch('/svg/IconFileMapping.json')
-            .then(r => r.json())
+            .then(r => {
+                if (!r.ok) throw new Error(`SVG map request failed: ${r.status}`)
+                return r.json()
+            })
             .then((data: { IconFileMapping: IconMappingEntry[] }) => {
+                if (!Array.isArray(data.IconFileMapping)) throw new Error('Invalid SVG map response')
                 _cachedMaps = buildMaps(data.IconFileMapping)
+            })
+            .catch(error => {
+                _fetchPromise = null
+                throw error
             })
     }
     return _fetchPromise
@@ -63,7 +71,11 @@ export function useSvgMap(): { byName: SvgMap; byCode: SvgMap } {
 
     useEffect(() => {
         if (!_cachedMaps) {
-            ensureMaps().then(() => setMaps(_cachedMaps!))
+            let cancelled = false
+            ensureMaps()
+                .then(() => { if (!cancelled && _cachedMaps) setMaps(_cachedMaps) })
+                .catch(() => { /* transient failure; the next mount retries */ })
+            return () => { cancelled = true }
         }
     }, [])
 

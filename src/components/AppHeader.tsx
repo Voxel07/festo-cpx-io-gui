@@ -84,9 +84,13 @@ export default function AppHeader({
             setDiagSeverity('none')
             return
         }
+        let stopped = false
+        let timer: ReturnType<typeof setTimeout> | null = null
+        let controller: AbortController | null = null
         const fetchDiags = async () => {
+            controller = new AbortController()
             try {
-                const r = await fetch(`/io/diagnoses?ip_address=${encodeURIComponent(ip)}&timeout=${timeout}`)
+                const r = await fetch(`/io/diagnoses?ip_address=${encodeURIComponent(ip)}&timeout=${timeout}`, { signal: controller.signal })
                 if (r.ok) {
                     const d = await r.json()
                     setDiagCount(d.length)
@@ -103,10 +107,14 @@ export default function AppHeader({
             } catch {
                 // ignore
             }
+            if (!stopped) timer = setTimeout(fetchDiags, 5000)
         }
-        fetchDiags()
-        const timer = setInterval(fetchDiags, 5000)
-        return () => clearInterval(timer)
+        void fetchDiags()
+        return () => {
+            stopped = true
+            controller?.abort()
+            if (timer) clearTimeout(timer)
+        }
     }, [ip, timeout, hwConnected])
 
     const iconColor = diagSeverity === 'error' ? '#d32f2f' :

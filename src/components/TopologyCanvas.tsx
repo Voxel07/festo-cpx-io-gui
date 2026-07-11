@@ -8,7 +8,7 @@
  * node/edge rendering logic to its parent components.
  */
 import type { ReactNode } from 'react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useTheme } from '@mui/material/styles'
 import {
     ReactFlow,
@@ -79,6 +79,13 @@ export default function TopologyCanvas({
     children,
 }: Props) {
     const theme = useTheme()
+    const layoutKey = useMemo(() => JSON.stringify(nodes.map(n => ({
+        id: n.id,
+        x: n.position.x,
+        y: n.position.y,
+        width: n.measured?.width ?? n.width ?? n.style?.width,
+        height: n.measured?.height ?? n.height ?? n.style?.height,
+    }))), [nodes])
 
     return (
         <ReactFlow
@@ -106,13 +113,7 @@ export default function TopologyCanvas({
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} color={theme.palette.mode === 'dark' ? '#555' : '#81818a'} />
             <Controls />
             {fitView && fitViewOnLayoutChange && <FitViewTrigger
-                layoutKey={JSON.stringify(nodes.map(n => ({
-                    id: n.id,
-                    x: n.position.x,
-                    y: n.position.y,
-                    width: n.measured?.width ?? n.width ?? n.style?.width,
-                    height: n.measured?.height ?? n.height ?? n.style?.height,
-                })))}
+                layoutKey={layoutKey}
                 padding={fitViewPadding}
             />}
             {children}

@@ -121,7 +121,8 @@ export function buildRows(cmpData: CompareResult): DiffRow[] {
                     const comma = idx < keys.length - 1 ? ',' : ''
                     const sl = `${indK}"${k}": ${JSON.stringify(sm[k])}${comma}`
                     const ll = `${indK}"${k}": ${JSON.stringify(lm[k])}${comma}`
-                    fd.has(k as string) ? push(sl, 'del', ll, 'add') : push(sl, 'ctx', ll, 'ctx')
+                    if (fd.has(k as string)) push(sl, 'del', ll, 'add')
+                    else push(sl, 'ctx', ll, 'ctx')
                 })
                 push(`${ind}},`, 'ctx', `${ind}},`, 'ctx')
             } else {

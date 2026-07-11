@@ -1,18 +1,6 @@
-import { createContext, useContext, useEffect, useState } from 'react'
-
-export interface ModuleIoState {
-    inputs: boolean[]
-    outputs: boolean[]
-    inouts: boolean[]
-}
-
-export type AllIoStates = Record<number, ModuleIoState>
-
-const IoStateContext = createContext<AllIoStates>({})
-
-export function useLiveIoState() {
-    return useContext(IoStateContext)
-}
+import { useEffect, useState } from 'react'
+import { IoStateContext } from './ioStateContext'
+import type { AllIoStates, ModuleIoState } from './ioStateContext'
 
 interface Props {
     children: React.ReactNode
@@ -31,10 +19,13 @@ export function IoStateProvider({ children, ipAddress, intervalMs = 500, isConne
         }
 
         let cancelled = false
+        let timer: ReturnType<typeof setTimeout> | null = null
+        let controller: AbortController | null = null
         const poll = async () => {
             if (cancelled) return
+            controller = new AbortController()
             try {
-                const r = await fetch(`/io/read-all?ip_address=${encodeURIComponent(ipAddress)}`)
+                const r = await fetch(`/io/read-all?ip_address=${encodeURIComponent(ipAddress)}`, { signal: controller.signal })
                 if (r.ok) {
                     const data = await r.json()
                     // API returns JSON with string keys (e.g. "0", "1") since
@@ -50,7 +41,7 @@ export function IoStateProvider({ children, ipAddress, intervalMs = 500, isConne
                 // ignore network errors during polling
             }
             if (!cancelled) {
-                setTimeout(poll, intervalMs)
+                timer = setTimeout(poll, intervalMs)
             }
         }
 
@@ -58,6 +49,8 @@ export function IoStateProvider({ children, ipAddress, intervalMs = 500, isConne
 
         return () => {
             cancelled = true
+            controller?.abort()
+            if (timer) clearTimeout(timer)
         }
     }, [ipAddress, intervalMs, isConnected])
 

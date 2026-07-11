@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 
 const textCache = new Map<string, string>()
 const dataUrlCache = new Map<string, string>()
+const textPromises = new Map<string, Promise<string>>()
 
 function buildSvgText(text: string, hiddenIds: string[], numValves?: number, svgUrl?: string): string {
     const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
@@ -107,11 +108,23 @@ function buildSvgText(text: string, hiddenIds: string[], numValves?: number, svg
 }
 
 async function fetchSvgText(url: string): Promise<string> {
+    const cached = textCache.get(url)
+    if (cached) return cached
+    const pending = textPromises.get(url)
+    if (pending) return pending
+    const request = (async () => {
     try {
         const r = await fetch(url)
-        if (r.ok) return await r.text()
+        if (r.ok) {
+            const text = await r.text()
+            if (text) textCache.set(url, text)
+            return text
+        }
     } catch { /* ignore */ }
     return ''
+    })().finally(() => textPromises.delete(url))
+    textPromises.set(url, request)
+    return request
 }
 
 export function useModifiedSvgText(svgUrl: string, hiddenIds: string[], numValves?: number): string {
@@ -121,7 +134,9 @@ export function useModifiedSvgText(svgUrl: string, hiddenIds: string[], numValve
     useEffect(() => {
         if (!svgUrl) return
         let cancelled = false
-        if (hiddenIds.length === 0 && numValves === undefined) {
+        let timer: ReturnType<typeof setTimeout> | null = null
+        const currentHiddenIds = hiddenKey ? hiddenKey.split('\u0000') : []
+        if (currentHiddenIds.length === 0 && numValves === undefined) {
             // Just use the raw fetched text directly if no modifications are needed
             const cachedText = textCache.get(svgUrl)
             if (cachedText) {
@@ -149,28 +164,31 @@ export function useModifiedSvgText(svgUrl: string, hiddenIds: string[], numValve
             fetchSvgText(svgUrl).then(fetchedText => {
                 if (fetchedText && !cancelled) {
                     textCache.set(svgUrl, fetchedText)
-                    void setTimeout(() => {
-                        const next = buildSvgText(fetchedText, hiddenIds, numValves, svgUrl)
+                    timer = setTimeout(() => {
+                        const next = buildSvgText(fetchedText, currentHiddenIds, numValves, svgUrl)
                         dataUrlCache.set(cacheKey, next)
                         if (!cancelled) setSvgText(next)
                     }, 0)
                 }
             })
-            return
+            return () => {
+                cancelled = true
+                if (timer) clearTimeout(timer)
+            }
         }
 
         // We have text, build async so we don't block the UI thread during React render
-        const timer = setTimeout(() => {
-            const next = buildSvgText(text, hiddenIds, numValves, svgUrl)
+        timer = setTimeout(() => {
+            const next = buildSvgText(text, currentHiddenIds, numValves, svgUrl)
             dataUrlCache.set(cacheKey, next)
             if (!cancelled) setSvgText(next)
         }, 0)
 
         return () => {
             cancelled = true
-            clearTimeout(timer)
+            if (timer) clearTimeout(timer)
         }
-    }, [svgUrl, hiddenKey, hiddenIds.length, numValves])
+    }, [svgUrl, hiddenKey, numValves])
 
     return svgText
 }

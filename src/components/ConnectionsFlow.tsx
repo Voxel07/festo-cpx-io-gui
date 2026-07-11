@@ -22,7 +22,8 @@ import { useConnectionsFlowState } from './useConnectionsFlowState'
 import { useConnectionsFlowTest } from './useConnectionsFlowTest'
 import { useConnectionsFlowLayout } from './useConnectionsFlowLayout'
 import { useConnectionsFlowPersist } from './useConnectionsFlowPersist'
-import { DebugPanel, onRenderCallback } from './DebugPanel'
+import { DebugPanel } from './DebugPanel'
+import { onRenderCallback } from '../utils/topologyProfiler'
 
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -190,6 +190,8 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
     const [state, dispatch] = useReducer(runTabReducer, initialRunTabState)
     const { selected, runState, sseLogs, pbLogs, busy } = state
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const statusControllerRef = useRef<AbortController | null>(null)
+    const statusGenerationRef = useRef(0)
     const esRef = useRef<EventSource | null>(null)
     const activeRunIdRef = useRef<string | null>(runState.run_id ?? null)
     const externalRunRef = useRef(false)
@@ -217,10 +219,15 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
     }, [runState.run_id, runState.source])
 
     const fetchStatus = useCallback(async () => {
+        const generation = ++statusGenerationRef.current
+        statusControllerRef.current?.abort()
+        const controller = new AbortController()
+        statusControllerRef.current = controller
         try {
-            const r = await fetch('/test-run/status')
+            const r = await fetch('/test-run/status', { signal: controller.signal })
             if (!r.ok) return
             const d = normalizeRunState(await r.json())
+            if (generation !== statusGenerationRef.current) return
             if (d.status === 'idle' && externalRunRef.current) return
             dispatch({ type: 'SET_RUN_STATE', state: d })
             if (d.status !== 'running' && d.status !== 'starting') {
@@ -246,13 +253,18 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
     // automatically.  Switch to the faster interval as soon as a run is active.
     useEffect(() => {
         const interval = isActive ? POLL_MS : POLL_IDLE_MS
-        timerRef.current = setInterval(fetchStatus, interval)
+        let stopped = false
+        const poll = async () => {
+            await fetchStatus()
+            if (!stopped) timerRef.current = setTimeout(poll, interval)
+        }
+        void poll()
         return () => {
+            stopped = true
+            statusControllerRef.current?.abort()
             if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
         }
     }, [isActive, fetchStatus])
-
-    useEffect(() => { fetchStatus() }, [fetchStatus])
 
     // ── Clear PB logs when a new run starts (run_id changes) ────────────
     useEffect(() => {

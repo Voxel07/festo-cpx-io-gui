@@ -62,6 +62,7 @@ function deriveKind(portIndex: number, svgKind: PortKind | null, counts: PortCou
 // URL-keyed geometry cache (kind is NOT cached – depends on module counts)
 const geoCache   = new Map<string, Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }>>()
 const pending    = new Set<string>()
+const subscribers = new Map<string, Set<() => void>>()
 const EMPTY_GEO: Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }> = []
 
 async function fetchAndParseSvg(
@@ -210,24 +211,36 @@ export function useSvgPorts(svgUrl: string, counts?: PortCounts): SvgPort[] {
 
     // Trigger async fetch on cache miss (only setState in the async callback)
     useEffect(() => {
-        if (!svgUrl || svgUrl.includes('Generic') || geoCache.has(svgUrl) || pending.has(svgUrl)) return
-        pending.add(svgUrl)
-        fetchAndParseSvg(
-            svgUrl,
-            (found) => {
-                geoCache.set(svgUrl, found)
-                setTick(t => t + 1)  // trigger re-render so cached geometry is picked up below
-            },
-            () => {
-                if (!geoCache.has(svgUrl)) geoCache.set(svgUrl, [])
-                pending.delete(svgUrl)
-            }
-        )
+        if (!svgUrl || svgUrl.includes('Generic')) return
+        const notify = () => setTick(t => t + 1)
+        const listeners = subscribers.get(svgUrl) ?? new Set<() => void>()
+        listeners.add(notify)
+        subscribers.set(svgUrl, listeners)
+
+        if (!geoCache.has(svgUrl) && !pending.has(svgUrl)) {
+            pending.add(svgUrl)
+            fetchAndParseSvg(
+                svgUrl,
+                found => { geoCache.set(svgUrl, found) },
+                () => {
+                    if (!geoCache.has(svgUrl)) geoCache.set(svgUrl, [])
+                    pending.delete(svgUrl)
+                    subscribers.get(svgUrl)?.forEach(listener => listener())
+                },
+            )
+        }
+        return () => {
+            const current = subscribers.get(svgUrl)
+            current?.delete(notify)
+            if (current?.size === 0) subscribers.delete(svgUrl)
+        }
     }, [svgUrl])
 
     // Derive from cache during render — React Compiler can optimise this
     const raw = svgUrl ? (geoCache.get(svgUrl) ?? EMPTY_GEO) : EMPTY_GEO
-    const defaultCounts: PortCounts = counts ?? { numIn: 0, numOut: 0, numInOut: 0 }
+    const numIn = counts?.numIn ?? 0
+    const numOut = counts?.numOut ?? 0
+    const numInOut = counts?.numInOut ?? 0
 
     return useMemo(() => {
         let ioIndex = 0
@@ -238,7 +251,7 @@ export function useSvgPorts(svgUrl: string, counts?: PortCounts): SvgPort[] {
             if (p.svgKind === 'ap-in' || p.svgKind === 'ap-out') {
                 kind = p.svgKind
             } else {
-                kind = deriveKind(ioIndex++, p.svgKind, defaultCounts, numIoConnectors)
+                kind = deriveKind(ioIndex++, p.svgKind, { numIn, numOut, numInOut }, numIoConnectors)
             }
             return {
                 id: p.id,
@@ -248,6 +261,6 @@ export function useSvgPorts(svgUrl: string, counts?: PortCounts): SvgPort[] {
                 kind,
             }
         })
-    }, [raw, defaultCounts.numIn, defaultCounts.numOut, defaultCounts.numInOut])
+    }, [raw, numIn, numOut, numInOut])
 }
 

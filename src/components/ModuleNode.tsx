@@ -8,7 +8,7 @@ import { useSvgPorts } from '../hooks/useSvgPorts'
 
 import { useValveGroups } from '../hooks/useValveGroups'
 import { useModifiedSvgText } from '../hooks/useModifiedSvg'
-import { useLiveIoState } from '../hooks/useIoStatePolling'
+import { useLiveIoState } from '../hooks/ioStateContext'
 import type { DiffStatusKind } from '../types'
 import ValveEditorDialog from './ValveEditorDialog'
 import TopologyNodeWrapper from './TopologyNodeWrapper'
