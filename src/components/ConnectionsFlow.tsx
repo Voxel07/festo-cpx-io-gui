@@ -180,6 +180,8 @@ export default function ConnectionsFlow({
                             onNodeContextMenu={onNodeContextMenu}
                             editMode
                             fitView
+                            // Fit once on entry; preserve the user's zoom/pan while editing wires.
+                            fitViewOnLayoutChange={false}
                         >
                             {showDebug && <DebugPanel onClose={() => dispatch({ type: 'TOGGLE_DEBUG' })} />}
                         </TopologyCanvas>

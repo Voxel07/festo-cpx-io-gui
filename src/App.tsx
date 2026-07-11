@@ -538,7 +538,7 @@ export default function App() {
                 />
 
                 {/* ── Topology toolbar (below AppHeader) ── */}
-                {showTopology && (
+                {showTopology && tab !== 6 && (
                     <TopologyToolbar
                         showApCables={showApCables}
                         onToggleApCables={() => dispatch({ type: 'TOGGLE_AP_CABLES' })}
@@ -555,7 +555,7 @@ export default function App() {
                 )}
 
                 {/* ── Topology canvas (collapsible) ── */}
-                {showTopology && (
+                {showTopology && tab !== 6 && (
                     <Box sx={fullscreen
                         ? { position: 'fixed', inset: 0, zIndex: 1300, bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }
                         : {
@@ -624,7 +624,7 @@ export default function App() {
                 )}
 
                 {/* ── Drag-resize handle ── */}
-                {!fullscreen && showTopology && (
+                {!fullscreen && showTopology && tab !== 6 && (
                     <Box onMouseDown={onDragStart} sx={{
                         height: 6, flexShrink: 0, cursor: 'row-resize',
                         bgcolor: 'divider',
@@ -645,6 +645,7 @@ export default function App() {
                             <Tab label="Raw Mode" sx={{ minHeight: 38 }} />
                             <Tab label="History" sx={{ minHeight: 38 }} />
                             <Tab label="Mock Builder" sx={{ minHeight: 38 }} />
+                            <Tab label="Architecture" sx={{ minHeight: 38 }} />
                         </Tabs>
                     </Box>
                 )}

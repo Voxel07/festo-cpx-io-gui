@@ -6,7 +6,7 @@
  * (input, output, or inout) based on the module's channel counts, properly mapping mixed
  * modules (like 4DI4DO) where outputs are on the bottom connectors and inputs on the top.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Position } from '@xyflow/react'
 
 export type PortKind = 'in' | 'out' | 'inout' | 'ap-in' | 'ap-out'
@@ -62,6 +62,7 @@ function deriveKind(portIndex: number, svgKind: PortKind | null, counts: PortCou
 // URL-keyed geometry cache (kind is NOT cached – depends on module counts)
 const geoCache   = new Map<string, Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }>>()
 const pending    = new Set<string>()
+const EMPTY_GEO: Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }> = []
 
 async function fetchAndParseSvg(
     svgUrl: string, 
@@ -225,26 +226,28 @@ export function useSvgPorts(svgUrl: string, counts?: PortCounts): SvgPort[] {
     }, [svgUrl])
 
     // Derive from cache during render — React Compiler can optimise this
-    const raw = svgUrl ? (geoCache.get(svgUrl) ?? []) : []
+    const raw = svgUrl ? (geoCache.get(svgUrl) ?? EMPTY_GEO) : EMPTY_GEO
     const defaultCounts: PortCounts = counts ?? { numIn: 0, numOut: 0, numInOut: 0 }
-    
-    let ioIndex = 0
-    const numIoConnectors = raw.filter(p => p.svgKind !== 'ap-in' && p.svgKind !== 'ap-out').length
-    
-    return raw.map((p) => {
-        let kind: PortKind
-        if (p.svgKind === 'ap-in' || p.svgKind === 'ap-out') {
-            kind = p.svgKind
-        } else {
-            kind = deriveKind(ioIndex++, p.svgKind, defaultCounts, numIoConnectors)
-        }
-        return {
-            id:   p.id,
-            cx:   p.cx,
-            cy:   p.cy,
-            side: p.cx < 0.5 ? Position.Left : Position.Right,
-            kind,
-        }
-    })
+
+    return useMemo(() => {
+        let ioIndex = 0
+        const numIoConnectors = raw.filter(p => p.svgKind !== 'ap-in' && p.svgKind !== 'ap-out').length
+
+        return raw.map((p) => {
+            let kind: PortKind
+            if (p.svgKind === 'ap-in' || p.svgKind === 'ap-out') {
+                kind = p.svgKind
+            } else {
+                kind = deriveKind(ioIndex++, p.svgKind, defaultCounts, numIoConnectors)
+            }
+            return {
+                id: p.id,
+                cx: p.cx,
+                cy: p.cy,
+                side: p.cx < 0.5 ? Position.Left : Position.Right,
+                kind,
+            }
+        })
+    }, [raw, defaultCounts.numIn, defaultCounts.numOut, defaultCounts.numInOut])
 }
 

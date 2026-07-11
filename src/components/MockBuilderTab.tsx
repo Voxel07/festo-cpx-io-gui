@@ -160,7 +160,7 @@ export default function MockBuilderTab({ mockTopology, setMockTopology }: Props)
                     onChange={e => setAddAddress(e.target.value)}
                     placeholder={mockTopology?.Topology?.length.toString() || '0'}
                 />
-                <Button variant="contained" onClick={handleAddModule} disabled={!selectedCode}>
+                <Button variant="contained" onClick={() => handleAddModule()} disabled={!selectedCode}>
                     Add Module
                 </Button>
                 <Button variant="outlined" color="error" onClick={handleClear} disabled={!mockTopology || (mockTopology.Topology && mockTopology.Topology.length === 0)}>

@@ -32,8 +32,10 @@ interface Props {
     isValidConnection?: IsValidConnection
     /** Enable port handles and drag-to-connect (editor mode) */
     editMode?: boolean
-    /** Auto-fit view on mount / node changes */
+    /** Auto-fit view once when the React Flow canvas initializes */
     fitView?: boolean
+    /** Re-fit after layout changes. Keep disabled for interactive editors so user zoom/pan is preserved. */
+    fitViewOnLayoutChange?: boolean
     fitViewPadding?: number
     /** Right-click on a module node */
     onNodeContextMenu?: NodeMouseHandler<Node>
@@ -43,22 +45,22 @@ interface Props {
     children?: ReactNode
 }
 
-function FitViewTrigger({ nodesStr, padding }: { nodesStr: string, padding: number }) {
+function FitViewTrigger({ layoutKey, padding }: { layoutKey: string, padding: number }) {
     const { fitView } = useReactFlow()
     const initialized = useNodesInitialized()
     const fitStrRef = useRef<string | null>(null)
 
     useEffect(() => {
-        if (nodesStr && initialized && fitStrRef.current !== nodesStr) {
+        if (layoutKey && initialized && fitStrRef.current !== layoutKey) {
             const timer = setTimeout(() => {
                 window.requestAnimationFrame(() => {
                     fitView({ padding, duration: 400 })
-                    fitStrRef.current = nodesStr
+                    fitStrRef.current = layoutKey
                 })
             }, 50)
             return () => clearTimeout(timer)
         }
-    }, [nodesStr, initialized, fitView, padding])
+    }, [layoutKey, initialized, fitView, padding])
     return null
 }
 
@@ -68,6 +70,7 @@ export default function TopologyCanvas({
     onConnect, onReconnect, isValidConnection,
     editMode = false,
     fitView = true,
+    fitViewOnLayoutChange = false,
     fitViewPadding = 0.25,
     onNodeContextMenu,
     onNodeClick,
@@ -102,7 +105,16 @@ export default function TopologyCanvas({
         >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} color={theme.palette.mode === 'dark' ? '#555' : '#81818a'} />
             <Controls />
-            {fitView && <FitViewTrigger nodesStr={nodes.map(n => n.id).join(',')} padding={fitViewPadding} />}
+            {fitView && fitViewOnLayoutChange && <FitViewTrigger
+                layoutKey={JSON.stringify(nodes.map(n => ({
+                    id: n.id,
+                    x: n.position.x,
+                    y: n.position.y,
+                    width: n.measured?.width ?? n.width ?? n.style?.width,
+                    height: n.measured?.height ?? n.height ?? n.style?.height,
+                })))}
+                padding={fitViewPadding}
+            />}
             {children}
         </ReactFlow>
     )

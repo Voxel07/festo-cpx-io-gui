@@ -19,7 +19,7 @@ interface PBRunRecord {
     status: string
     source: string
     ip_address: string
-    tests: string  // JSON-encoded string
+    tests: string | string[]
 }
 
 interface PBLogRecord {
@@ -46,7 +46,7 @@ export interface UsePocketBaseRealtimeOptions {
      * Called for every new log entry that matches `activeRunId`.
      * Use this when the SSE stream from the API is not yet open (external runs).
      */
-    onLog?: (entry: LogEntry) => void
+    onLog?: (entry: LogEntry, runId: string) => void
 }
 
 export interface PocketBaseRealtimeState {
@@ -155,7 +155,7 @@ export function usePocketBaseRealtime({
                         level: record.level,
                         message: record.message,
                         timestamp: record.timestamp,
-                    })
+                    }, record.run_id)
                 } catch { /* ignore malformed event */ }
             })
 

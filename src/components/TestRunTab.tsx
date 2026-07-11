@@ -6,7 +6,7 @@
  * PocketBase realtime provides instant push-notification when a new run
  * starts externally and streams log entries for external runs.
  */
-import { useReducer, useEffect, useRef, useCallback } from 'react'
+import { useReducer, useEffect, useRef, useCallback, useState } from 'react'
 import { Box, Stack, Typography, Alert, Paper, CircularProgress } from '@mui/material'
 import TestSelection from './TestSelection'
 import TestProgress from './TestProgress'
@@ -34,6 +34,14 @@ export interface LogEntry {
     timestamp: string
 }
 
+export interface TestResult {
+    test_id?: string
+    passed?: boolean
+    error?: string
+    duration_ms?: number
+    [k: string]: unknown
+}
+
 export interface TestRunState {
     run_id?: string
     status: 'idle' | 'starting' | 'running' | 'completed' | 'error'
@@ -41,7 +49,7 @@ export interface TestRunState {
     ip_address?: string
     tests?: string[]
     progress?: { completed: number; total: number; current_test: string | null; current_module: string | null }
-    results?: Array<{ test_id?: string; passed?: boolean; error?: string; duration_ms?: number;[k: string]: unknown }>
+    results?: TestResult[]
     checkpoints?: Checkpoint[]
     logs?: LogEntry[]
     error?: string
@@ -59,6 +67,52 @@ const AVAILABLE_TESTS = [
     { id: 'factory-reset', label: 'Factory Reset' },
     { id: 'open-load-diag', label: 'Open-Load Diagnostic' },
 ]
+
+function parseJsonValue(value: unknown): unknown {
+    if (typeof value !== 'string') return value
+    try { return JSON.parse(value) } catch { return value }
+}
+
+function normalizeTests(value: unknown): string[] {
+    const parsed = parseJsonValue(value)
+    if (Array.isArray(parsed)) return parsed.map(String)
+    return typeof parsed === 'string' && parsed.length > 0 ? [parsed] : []
+}
+
+function normalizeResults(value: unknown): TestResult[] {
+    const parsed = parseJsonValue(value)
+    if (Array.isArray(parsed)) return parsed.filter((item): item is TestResult => !!item && typeof item === 'object')
+    if (parsed && typeof parsed === 'object') {
+        const record = parsed as Record<string, unknown>
+        if ('test_id' in record) return [record as TestResult]
+        return Object.values(record).filter((item): item is TestResult => !!item && typeof item === 'object')
+    }
+    return []
+}
+
+function normalizeCheckpoints(value: unknown): Checkpoint[] {
+    const parsed = parseJsonValue(value)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item): item is Checkpoint => !!item && typeof item === 'object' && typeof (item as Record<string, unknown>).test === 'string')
+}
+
+function normalizeRunState(value: unknown): TestRunState {
+    const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+    const rawStatus = String(raw.status ?? 'idle')
+    const status: TestRunState['status'] =
+        rawStatus === 'failed' ? 'error' :
+            rawStatus === 'idle' || rawStatus === 'starting' || rawStatus === 'running' || rawStatus === 'completed' || rawStatus === 'error'
+                ? rawStatus
+                : 'error'
+    return {
+        ...raw,
+        status,
+        tests: normalizeTests(raw.tests),
+        results: normalizeResults(raw.results),
+        checkpoints: normalizeCheckpoints(raw.checkpoints),
+        logs: Array.isArray(raw.logs) ? raw.logs as LogEntry[] : [],
+    } as TestRunState
+}
 
 interface Props {
     ip: string
@@ -137,6 +191,10 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
     const { selected, runState, sseLogs, pbLogs, busy } = state
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const esRef = useRef<EventSource | null>(null)
+    const activeRunIdRef = useRef<string | null>(runState.run_id ?? null)
+    const externalRunRef = useRef(false)
+    const sseHealthyRef = useRef(false)
+    const [sseHealthy, setSseHealthy] = useState(false)
 
     const isRunning = runState.status === 'running'
     const isStarting = runState.status === 'starting'
@@ -153,16 +211,35 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
         return [...new Set(serverTests)]
     })()
 
+    useEffect(() => {
+        activeRunIdRef.current = runState.run_id ?? null
+        externalRunRef.current = !!runState.source && runState.source !== 'web'
+    }, [runState.run_id, runState.source])
+
     const fetchStatus = useCallback(async () => {
         try {
             const r = await fetch('/test-run/status')
             if (!r.ok) return
-            const d: TestRunState = await r.json()
+            const d = normalizeRunState(await r.json())
+            if (d.status === 'idle' && externalRunRef.current) return
             dispatch({ type: 'SET_RUN_STATE', state: d })
             if (d.status !== 'running' && d.status !== 'starting') {
                 dispatch({ type: 'SET_BUSY', busy: false })
             }
         } catch { /* backend may be restarting */ }
+    }, [])
+
+    const fetchRunDetail = useCallback(async (runId: string) => {
+        try {
+            const r = await fetch(`/test-run/${encodeURIComponent(runId)}`)
+            if (!r.ok) return
+            const d = normalizeRunState(await r.json())
+            dispatch({ type: 'SET_RUN_STATE', state: d })
+            const status = d.status
+            if (status !== 'running' && status !== 'starting') {
+                dispatch({ type: 'SET_BUSY', busy: false })
+            }
+        } catch { /* external run may be briefly unavailable */ }
     }, [])
 
     // Always poll — even when idle — so externally-started runs are detected
@@ -185,23 +262,27 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
     // ── PocketBase realtime: instant run detection + log streaming ───────
     // The SSE log guard: only forward PB logs while no SSE stream is active
     // (avoids duplicates when both are streaming the same run).
-    const sseActiveRef = useRef(false)
-    useEffect(() => { sseActiveRef.current = sseLogs.length > 0 }, [sseLogs.length])
+    // PocketBase is the fallback until the local SSE connection is healthy.
 
     usePocketBaseRealtime({
         activeRunId: runState.run_id ?? null,
-        onRunStarted: useCallback(() => {
+        onRunStarted: useCallback((runId, source) => {
             // A run was started externally — refresh immediately to get run_id
             // and switch to active polling speed.
-            fetchStatus()
-        }, [fetchStatus]),
-        onRunCompleted: useCallback(() => {
+            activeRunIdRef.current = runId
+            externalRunRef.current = source !== 'web'
+            dispatch({ type: 'SET_RUN_STATE', state: {
+                run_id: runId, source, status: 'running', tests: [], logs: [], checkpoints: [], results: [],
+            } })
+            void fetchRunDetail(runId)
+        }, [fetchRunDetail]),
+        onRunCompleted: useCallback((runId) => {
             // Run finished externally — fetch final results.
-            fetchStatus()
-        }, [fetchStatus]),
-        onLog: useCallback((entry) => {
+            if (activeRunIdRef.current === runId) void fetchRunDetail(runId)
+        }, [fetchRunDetail]),
+        onLog: useCallback((entry, runId) => {
             // Only use PB logs as fallback when the SSE stream isn't active yet
-            if (!sseActiveRef.current) {
+            if (activeRunIdRef.current === runId && !sseHealthyRef.current) {
                 dispatch({ type: 'APPEND_PB_LOG', log: entry })
             }
         }, []),
@@ -210,10 +291,18 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
     // ── SSE: open a log stream as soon as we have a run_id ──────────────
     useEffect(() => {
         const runId = runState.run_id
-        if (!runId) return
+        if (!runId || externalRunRef.current) {
+            sseHealthyRef.current = false
+            setSseHealthy(false)
+            return
+        }
         dispatch({ type: 'SET_SSE_LOGS', logs: [] })   // clear previous run logs
         const es = new EventSource(`/test-run/${runId}/stream`)
         esRef.current = es
+        es.onopen = () => {
+            sseHealthyRef.current = true
+            setSseHealthy(true)
+        }
         es.onmessage = (e) => {
             if (e.origin !== window.location.origin) return
             try {
@@ -224,13 +313,23 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
                 }
             } catch { /* ignore malformed frames */ }
         }
-        es.onerror = () => { es.close(); esRef.current = null }
-        return () => { es.close(); esRef.current = null }
+        es.onerror = () => {
+            sseHealthyRef.current = false
+            setSseHealthy(false)
+            es.close(); esRef.current = null
+        }
+        return () => {
+            sseHealthyRef.current = false
+            setSseHealthy(false)
+            es.close(); esRef.current = null
+        }
     }, [runState.run_id])
 
     // Log priority: SSE stream (richest, real-time) → PocketBase realtime
     // (external runs before SSE opens) → polling snapshot (last resort).
-    const displayLogs = sseLogs.length > 0 ? sseLogs : pbLogs.length > 0 ? pbLogs : (runState.logs ?? [])
+    const displayLogs = sseHealthy && sseLogs.length > 0
+        ? sseLogs
+        : pbLogs.length > 0 ? pbLogs : (runState.logs ?? [])
 
     async function doStart() {
         if (selected.length === 0) return
@@ -338,7 +437,7 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
             {/* ── Right column: live log ── */}
             <TestLiveLog
                 displayLogs={displayLogs}
-                sseLogsActive={sseLogs.length > 0}
+                sseLogsActive={sseHealthy && sseLogs.length > 0}
                 hasLogs={!!runState.logs && runState.logs.length > 0}
             />
 

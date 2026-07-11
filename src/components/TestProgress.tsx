@@ -31,6 +31,10 @@ export default function TestProgress({
     onRefresh,
 }: TestProgressProps) {
     const cpMap = new Map(checkpoints.map(c => [c.test, c]))
+    // PocketBase and legacy API history can provide JSON strings or objects
+    // at runtime even though the live API type is an array. Never let a
+    // malformed final payload crash the whole test-run page.
+    const safeResults = Array.isArray(results) ? results : []
 
     // Count unique tests that have reached a terminal status — not inflated
     // by per-module instances like progressDetail.total.
@@ -85,7 +89,7 @@ export default function TestProgress({
                                 cStatus === 'skipped' ? 'warning' :
                                     cStatus === 'running' ? 'info' : 'default'
 
-                    const matchResult = results.find(r => r.test_id === testId)
+                    const matchResult = safeResults.find(r => r.test_id === testId)
                     const testDur = matchResult?.duration_ms
 
                     return (

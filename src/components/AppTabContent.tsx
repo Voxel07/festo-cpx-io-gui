@@ -9,6 +9,7 @@ const HistoryTab = lazy(() => import('./HistoryTab'))
 const ConnectionsFlow = lazy(() => import('./ConnectionsFlow'))
 const RawModeTab = lazy(() => import('./RawModeTab'))
 const MockBuilderTab = lazy(() => import('./MockBuilderTab'))
+const ArchitectureFlow = lazy(() => import('./ArchitectureFlow'))
 
 interface AppTabContentProps {
     tab: number
@@ -99,6 +100,11 @@ export default function AppTabContent(props: AppTabContentProps) {
                         />
                     </Suspense>
                 </Box>
+            )}
+            {tab === 6 && (
+                <Suspense fallback={<LoadingChunk label="Loading architecture mapâ€¦" />}>
+                    <ArchitectureFlow />
+                </Suspense>
             )}
         </Box>
     )

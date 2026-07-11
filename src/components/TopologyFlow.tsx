@@ -47,20 +47,28 @@ function wiringToEdges(wiring: WiringConnection[], instances: ModuleInstance[]):
     }
 
     const edges: Edge[] = []
+    const pairCounts = new Map<string, number>()
+
+    const addressOf = (instanceId: string): number => {
+        const instance = instances.find(item => item.instance_id === instanceId)
+        if (instance) return instance.address
+        const match = instanceId.match(/(?:mod-)?0*(\d+)$/)
+        return match ? Number(match[1]) : 0
+    }
 
     wiring.forEach(c => {
-        const srcAddrStr = c.source_instance_id.replace(/^mod-0*/, '') || '0'
-        const tgtAddrStr = c.target_instance_id.replace(/^mod-0*/, '') || '0'
-        const srcAddr = parseInt(srcAddrStr) || 0
-        const tgtAddr = parseInt(tgtAddrStr) || 0
-        const sh = `src-${srcKind(srcAddr)}-${c.source_channel}`
-        const th = `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`
+        const srcAddr = addressOf(c.source_instance_id)
+        const tgtAddr = addressOf(c.target_instance_id)
+        const sh = c.source_handle || `src-${srcKind(srcAddr)}-${c.source_channel}`
+        const th = c.target_handle || `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`
 
         const outKind = srcKind(srcAddr)
         let wireColor = outKind === 'out' ? '#2e7d32' : outKind === 'in' ? '#1565c0' : '#e65100'
 
         // Multi-color logic for redundant edges
-        const existingEdges = edges.filter(e => e.source === String(srcAddr) && e.target === String(tgtAddr))
+        const pairKey = `${srcAddr}->${tgtAddr}`
+        const existingCount = pairCounts.get(pairKey) ?? 0
+        pairCounts.set(pairKey, existingCount + 1)
         const colorPalette = [
             wireColor,
             '#d81b60', // Pink/Red
@@ -71,8 +79,8 @@ function wiringToEdges(wiring: WiringConnection[], instances: ModuleInstance[]):
             '#c0ca33', // Lime
             '#546e7a', // Blue Grey
         ]
-        if (existingEdges.length > 0) {
-            wireColor = colorPalette[existingEdges.length % colorPalette.length]
+        if (existingCount > 0) {
+            wireColor = colorPalette[existingCount % colorPalette.length]
         }
 
         edges.push({
@@ -252,6 +260,7 @@ export default function TopologyFlow({
                 editMode={false}
                 nodesDraggable={true}
                 fitView
+                fitViewOnLayoutChange
                 onNodeClick={handleNodeClick}
                 elementsSelectable={!!onSelectModuleAddr}
             />

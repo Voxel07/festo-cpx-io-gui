@@ -120,6 +120,7 @@ export function useModifiedSvgText(svgUrl: string, hiddenIds: string[], numValve
 
     useEffect(() => {
         if (!svgUrl) return
+        let cancelled = false
         if (hiddenIds.length === 0 && numValves === undefined) {
             // Just use the raw fetched text directly if no modifications are needed
             const cachedText = textCache.get(svgUrl)
@@ -130,13 +131,12 @@ export function useModifiedSvgText(svgUrl: string, hiddenIds: string[], numValve
             fetchSvgText(svgUrl).then(fetchedText => {
                 if (fetchedText) {
                     textCache.set(svgUrl, fetchedText)
-                    setSvgText(fetchedText)
+                    if (!cancelled) setSvgText(fetchedText)
                 }
             })
-            return
+            return () => { cancelled = true }
         }
 
-        let cancelled = false
         const cacheKey = `${svgUrl}|${numValves ?? ''}|${hiddenKey}`
         const cached = dataUrlCache.get(cacheKey)
         if (cached) {
