@@ -93,6 +93,17 @@ export function resolveIcon(
 
     if (!file) {
         const upperName = name.toUpperCase()
+        const fallbackName = Object.keys(maps.byName)
+            .filter(key => {
+                const upperKey = key.toUpperCase()
+                return upperName === upperKey || upperName.startsWith(`${upperKey}-`)
+            })
+            .sort((a, b) => b.length - a.length)[0]
+        if (fallbackName) file = maps.byName[fallbackName]
+    }
+
+    if (!file) {
+        const upperName = name.toUpperCase()
         if (upperName.includes('CPX-AP-I') || upperName.includes('AP-I')) {
             // 16-channel AP-I devices use the Wide module SVG (more connector positions)
             const isWide = /(?:16(?:DI|DIO|NDI|NDIO|NIDO))/.test(upperName)
