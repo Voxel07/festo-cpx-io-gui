@@ -110,7 +110,8 @@ function isValveInterface(name: string): boolean {
 
 /** Standalone valve modules on the AP bus (VAEM, VMPAL) */
 function isStandaloneValve(name: string): boolean {
-    return name.startsWith('VAEM') || name.startsWith('VMPAL')
+    const upperName = name.toUpperCase()
+    return upperName.startsWith('VAEM') || upperName.startsWith('VMPAL') || upperName.startsWith('VABA-S6-1-X5')
 }
 
 // ─── Segmentation ─────────────────────────────────────────────────────────────
@@ -216,10 +217,11 @@ export function buildLayout(
         if (isGroup) {
             let segW = -INLINE_G
             maxSegH = 0
-            for (const m of seg.mods) {
+            for (const [index, m] of seg.mods.entries()) {
                 // Add 8 pixels of extra padding that ModuleNode adds to the wrapper
                 const { w, h } = getModuleDispSize(m)
-                const dispW = w + (seg.kind === 'apa' ? 0 : 8)
+                const isValveBodyNode = seg.kind === 'valve' && index > 0
+                const dispW = w + (seg.kind === 'apa' || isValveBodyNode ? 0 : 8)
                 segW += dispW + INLINE_G
                 if (h > maxSegH) maxSegH = h
             }
@@ -284,7 +286,8 @@ export function buildLayout(
                 },
             })
             // advance local segment X by this module's width (plus the padding added by the node component)
-            curSegX += rawModW + (seg.kind === 'apa' ? 0 : 8) + INLINE_G
+            const nodePaddingW = seg.kind === 'apa' || (seg.kind === 'valve' && !isFirst) ? 0 : 8
+            curSegX += rawModW + nodePaddingW + INLINE_G
             if (modH > rowMaxH) rowMaxH = modH
             lastId = id
         })

@@ -71,7 +71,7 @@ export default function MockBuilderTab({ mockTopology, setMockTopology }: Props)
             NumOfInputs: matchedMeta?.num_inputs ?? 0,
             NumOfOutputs: matchedMeta?.num_outputs ?? 0,
             NumOfInOuts: matchedMeta?.num_inouts ?? 0,
-            ValveSlots: matchedMeta?.valve_slots ?? 32,
+            ValveSlots: matchedMeta?.valve_slots ?? undefined,
             MountedValves: [],
         }
 

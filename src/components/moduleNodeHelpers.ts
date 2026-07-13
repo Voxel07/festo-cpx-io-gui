@@ -122,9 +122,21 @@ export function supportsMountedValves(name: string, type: string): boolean {
     return type.toLowerCase() === 'valve' || upName.startsWith('VMPAL') || upName.startsWith('VAEM') || upName.startsWith('VTUX') || /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(upName)
 }
 
+export function isValveInterfaceModule(name: string): boolean {
+    return /^VABX-A-(?:S-)?EL-/.test(name.toUpperCase())
+}
+
+export function isVabaX5ValveTerminal(name: string): boolean {
+    return name.toUpperCase().startsWith('VABA-S6-1-X5')
+}
+
 export function defaultValveSlots(name: string, explicitSlots?: number): number | undefined {
-    if (explicitSlots !== undefined) return explicitSlots
     const upName = name.toUpperCase()
+    // X5 is a fixed four-position interface SVG. Its order-code variants can
+    // report 0 or an unrelated slot count in topology/config metadata, but
+    // all views must render the same physical asset.
+    if (upName.startsWith('VABA-S6-1-X5')) return 4
+    if (explicitSlots !== undefined) return explicitSlots
     if (upName.startsWith('VTUX')) return 4
     if (upName.startsWith('VMPAL')) return 16
     return undefined
@@ -199,6 +211,7 @@ export function getModuleDispSize(mod: { Name: string, ValveSlots?: number }): {
     } else if (isVabx) {
         if (upName.includes('-V4A')) return { w: Math.round(43 * SCALE), h: Math.round(109 * SCALE) }
         if (upName.includes('-V4B')) return { w: Math.round(51 * SCALE), h: Math.round(109 * SCALE) }
+        if (isValveInterfaceModule(mod.Name)) return { w: Math.round(46 * SCALE), h: DISP_H }
     }
     
     return { w: knownW ?? DISP_W, h: DISP_H }

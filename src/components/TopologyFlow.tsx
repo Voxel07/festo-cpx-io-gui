@@ -13,6 +13,7 @@ import { WireEdge } from './WireEdge'
 import { buildLayout } from '../utils/layoutBuilder'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig, WiringConnection, ModuleInstance, DiagnosisEntry } from '../types'
 import { AlertsContext } from '../utils/AlertsContext'
+import { isVabaX5ValveTerminal } from './moduleNodeHelpers'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -191,7 +192,9 @@ export default function TopologyFlow({
                 // Valve bodies always get showValves so the ModuleNode effect can
                 // derive the correct hidden set — even when MountedValves is empty
                 // (all unmounted) or full (all mounted).
-                const isValveBody = mod?.Type?.toLowerCase() === 'valve' || (mod?.MountedValves?.length ?? 0) > 0
+                const isValveBody = mod?.Type?.toLowerCase() === 'valve'
+                    || isVabaX5ValveTerminal(mod?.Name ?? '')
+                    || (mod?.MountedValves?.length ?? 0) > 0
                 const active = (activeModuleAddr != null && n.id === String(activeModuleAddr) && n.type === 'mod')
                     || (selectedModuleAddr != null && n.id === String(selectedModuleAddr) && n.type === 'mod')
                 const prev = prevNodeMap.get(n.id)

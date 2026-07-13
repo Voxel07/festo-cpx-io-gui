@@ -23,7 +23,7 @@ import { ModuleNodePorts } from './ModuleNodePorts'
 import {
     PORT_COLOR, PORT_HIT_D,
     getGenericInStyle, getGenericOutStyle, getApInStyle, getApOutStyle,
-    supportsMountedValves, defaultValveSlots, getModuleDispSize
+    supportsMountedValves, isValveInterfaceModule, isVabaX5ValveTerminal, defaultValveSlots, getModuleDispSize
 } from './moduleNodeHelpers'
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -59,8 +59,9 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const svgUrl = resolveIcon(mod.Name, svgMaps, mod.Modulecode)
 
     const is16Dio = /(?:16DIO|16NDIO|16NIDO)/.test(mod.Name.toUpperCase())
-    const numIn = is16Dio ? 0 : mod.NumOfInputs
-    const numOut = is16Dio ? 0 : mod.NumOfOutputs
+    const isValveTerminal = isVabaX5ValveTerminal(mod.Name)
+    const numIn = is16Dio || isValveTerminal ? 0 : mod.NumOfInputs
+    const numOut = is16Dio || isValveTerminal ? 0 : mod.NumOfOutputs
     const numInOut = is16Dio ? Math.max(mod.NumOfInputs, mod.NumOfOutputs, 16) : mod.NumOfInOuts
 
     // Port positions come from SVG; port counts/kinds come from bench_config (mod.NumOf*)
@@ -70,7 +71,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         numInOut,
     })
     const isVtux = mod.Name.toUpperCase().startsWith('VTUX')
-    const canConfigureValves = supportsMountedValves(mod.Name, mod.Type)
+    const canConfigureValves = supportsMountedValves(mod.Name, mod.Type) || isValveTerminal
     const numValves = defaultValveSlots(mod.Name, mod.ValveSlots)
 
 
@@ -157,7 +158,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
         if (diagnoses && diagnoses.length > 0) {
             const hasError = diagnoses.some(d => d.severity === 'error')
             const hasWarning = diagnoses.some(d => d.severity === 'warning')
-            
+
             if (hasError) {
                 diagColor = '#e53935' // red
             } else if (hasWarning) {
@@ -204,7 +205,7 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
             status={status}
             compareActive={compareActive}
             active={active}
-            noBorder={isBackplane}
+            noBorder={isBackplane || isValveInterfaceModule(mod.Name)}
             width={dispW + (isBackplane ? 0 : 8)}
             padding={isBackplane ? '2px 0' : '4px 4px 6px'}
         >
