@@ -1,4 +1,4 @@
-import { lazy, Suspense, useReducer, useRef, useEffect, useMemo, useCallback } from 'react'
+import { lazy, Suspense, useReducer, useRef, useEffect, useMemo, useCallback, useState } from 'react'
 import { Box, Tabs, Tab } from '@mui/material'
 import AppHeader from './components/AppHeader'
 import TopologyToolbar from './components/TopologyToolbar'
@@ -275,6 +275,7 @@ async function pollTestRunStatus(onStatusUpdate: (active: boolean, currentModule
 
 export default function App() {
     const [state, dispatch] = useReducer(appReducer, initialAppState)
+    const [mockBuilderSection, setMockBuilderSection] = useState(() => Number(window.localStorage.getItem('festo.mock-builder.section.v1')) === 1 ? 1 : 0)
     const {
         tab,
         ip,
@@ -302,6 +303,7 @@ export default function App() {
         hwConnected,
         hwConnecting,
     } = state
+    const topologyVisibleForTab = tab !== 6 && (tab !== 5 || mockBuilderSection === 1)
 
     const alertsRef = useRef<AlertsManagerRef>(null)
 
@@ -538,7 +540,7 @@ export default function App() {
                 />
 
                 {/* ── Topology toolbar (below AppHeader) ── */}
-                {showTopology && tab !== 6 && (
+                {showTopology && topologyVisibleForTab && (
                     <TopologyToolbar
                         showApCables={showApCables}
                         onToggleApCables={() => dispatch({ type: 'TOGGLE_AP_CABLES' })}
@@ -555,7 +557,7 @@ export default function App() {
                 )}
 
                 {/* ── Topology canvas (collapsible) ── */}
-                {showTopology && tab !== 6 && (
+                {showTopology && topologyVisibleForTab && (
                     <Box sx={fullscreen
                         ? { position: 'fixed', inset: 0, zIndex: 1300, bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }
                         : {
@@ -624,7 +626,7 @@ export default function App() {
                 )}
 
                 {/* ── Drag-resize handle ── */}
-                {!fullscreen && showTopology && tab !== 6 && (
+                {!fullscreen && showTopology && topologyVisibleForTab && (
                     <Box onMouseDown={onDragStart} sx={{
                         height: 6, flexShrink: 0, cursor: 'row-resize',
                         bgcolor: 'divider',
@@ -644,7 +646,7 @@ export default function App() {
                             <Tab label="Test Run" sx={{ minHeight: 38 }} />
                             <Tab label="Raw Mode" sx={{ minHeight: 38 }} />
                             <Tab label="History" sx={{ minHeight: 38 }} />
-                            <Tab label="Mock Builder" sx={{ minHeight: 38 }} />
+                            <Tab label="Automation" sx={{ minHeight: 38 }} />
                             <Tab label="Architecture" sx={{ minHeight: 38 }} />
                         </Tabs>
                     </Box>
@@ -672,6 +674,7 @@ export default function App() {
                         onConfigLoad={onConfigLoad}
                         onSetRawSelectedAddr={addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })}
                         onSetMockTopology={topo => dispatch({ type: 'SET_MOCK_TOPOLOGY', topo })}
+                        onMockBuilderSectionChange={setMockBuilderSection}
                     />
                 )}
                 {diagOpen && (

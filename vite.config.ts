@@ -27,6 +27,7 @@ export default defineConfig({
             '/metadata':    { target: 'http://localhost:8000', changeOrigin: true },
             '/dashboard':   { target: 'http://localhost:8000', changeOrigin: true },
             '/architecture': { target: 'http://localhost:8000', changeOrigin: true },
+            '/automation':   { target: 'http://localhost:8000', changeOrigin: true },
         },
     },
     build: {

@@ -27,6 +27,7 @@ interface AppTabContentProps {
     onConfigLoad: (config: BenchConfig) => void
     onSetRawSelectedAddr: (addr: number | null) => void
     onSetMockTopology?: (topo: Topology | null) => void
+    onMockBuilderSectionChange: (section: number) => void
     wrapThreshold: number
     onWrapThresholdChange: (val: number) => void
     cableGap: number
@@ -38,7 +39,7 @@ export default function AppTabContent(props: AppTabContentProps) {
         tab, ip, timeout, topology, diffStatus,
         rawSelectedAddr, rawConfig, configPath, hwConnected, mockTopology,
         wrapThreshold, onWrapThresholdChange, cableGap, onCableGapChange,
-        onResult, onModuleValveChange, onConfigLoad, onSetRawSelectedAddr, onSetMockTopology
+        onResult, onModuleValveChange, onConfigLoad, onSetRawSelectedAddr, onSetMockTopology, onMockBuilderSectionChange
     } = props
 
     return (
@@ -96,7 +97,11 @@ export default function AppTabContent(props: AppTabContentProps) {
                     <Suspense fallback={<LoadingChunk label="Loading mock builder…" />}>
                         <MockBuilderTab 
                             mockTopology={mockTopology || null} 
-                            setMockTopology={onSetMockTopology || (() => {})} 
+                            setMockTopology={onSetMockTopology || (() => {})}
+                            topology={topology}
+                            ip={ip}
+                            hwConnected={hwConnected}
+                            onSectionChange={onMockBuilderSectionChange}
                         />
                     </Suspense>
                 </Box>
