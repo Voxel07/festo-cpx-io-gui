@@ -146,13 +146,35 @@ type RunTabAction =
     | { type: 'SET_BUSY'; busy: boolean }
     | { type: 'START_RUN'; selected: string[] }
     | { type: 'RUN_START_FAIL'; error: string }
+    | { type: 'DISMISS_RUN_ERROR' }
+
+function mergeRunState(current: TestRunState, incoming: TestRunState): TestRunState {
+    const sameRun = !current.run_id || !incoming.run_id || current.run_id === incoming.run_id
+    if (!sameRun) return incoming
+    return {
+        ...current,
+        ...incoming,
+        run_id: incoming.run_id ?? current.run_id,
+        source: incoming.source ?? current.source,
+        tests: incoming.tests?.length ? incoming.tests : current.tests,
+        progress: incoming.progress ?? current.progress,
+        results: incoming.results?.length ? incoming.results : current.results,
+        checkpoints: incoming.checkpoints?.length ? incoming.checkpoints : current.checkpoints,
+        logs: incoming.logs?.length ? incoming.logs : current.logs,
+        error: incoming.status === 'error' ? incoming.error ?? current.error : undefined,
+    }
+}
 
 function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
     switch (action.type) {
         case 'SET_SELECTED':
             return { ...state, selected: action.selected }
         case 'SET_RUN_STATE':
-            return { ...state, runState: action.state }
+            // The API can briefly report idle while a worker is starting,
+            // restarting, or persisting its terminal result. Never erase the
+            // visible run card because of that transient snapshot.
+            if (action.state.status === 'idle' && state.runState.status !== 'idle') return state
+            return { ...state, runState: mergeRunState(state.runState, action.state) }
         case 'SET_SSE_LOGS':
             return { ...state, sseLogs: action.logs }
         case 'APPEND_SSE_LOG': {
@@ -181,6 +203,8 @@ function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
                 runState: { ...state.runState, status: 'error', error: action.error },
                 busy: false,
             }
+        case 'DISMISS_RUN_ERROR':
+            return { ...state, runState: { ...state.runState, error: undefined } }
         default:
             return state
     }
@@ -204,7 +228,6 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
     const progress = runState.progress
         ? (runState.progress.completed / Math.max(runState.progress.total, 1)) * 100
         : 0
-
     // Display only the unique selected tests (backend may report per-module instances).
     const displayTests = (() => {
         const serverTests = runState.tests
@@ -212,6 +235,7 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
         // Deduplicate while preserving order.
         return [...new Set(serverTests)]
     })()
+    const showProgress = runState.status !== 'idle' && displayTests.length > 0
 
     useEffect(() => {
         activeRunIdRef.current = runState.run_id ?? null
@@ -401,7 +425,7 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
 
                 {/* ── Error ── */}
                 {runState.status === 'error' && runState.error && (
-                    <Alert severity="error" onClose={() => dispatch({ type: 'SET_RUN_STATE', state: { status: 'idle' } })}>
+                    <Alert severity="error" onClose={() => dispatch({ type: 'DISMISS_RUN_ERROR' })}>
                         {runState.error}
                     </Alert>
                 )}
@@ -417,7 +441,7 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
                 )}
 
                 {/* ── Progress ── */}
-                {(isRunning || runState.status === 'completed') && (
+                {showProgress && (
                     <TestProgress
                         status={runState.status}
                         progress={progress}
@@ -431,7 +455,7 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
                 )}
 
                 {/* ── Results ── */}
-                {(runState.status === 'completed' || isRunning) && runState.results && runState.results.length > 0 && (
+                {(runState.status === 'completed' || runState.status === 'error' || isRunning) && runState.results && runState.results.length > 0 && (
                     <TestResults
                         status={runState.status}
                         results={runState.results}

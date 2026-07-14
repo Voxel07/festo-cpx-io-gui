@@ -147,8 +147,33 @@ function MockTopologyBuilder({ mockTopology, setMockTopology }: Pick<Props, 'moc
                     sx={{ minWidth: 360 }}
                     options={mappings}
                     getOptionLabel={option => `${option.OrderCode} (${option.FileName})`}
+                    isOptionEqualToValue={(option, value) => option.OrderCode === value.OrderCode}
                     value={mappings.find(mapping => mapping.OrderCode === selectedCode) ?? null}
                     onChange={(_event, value) => setSelectedCode(value?.OrderCode ?? null)}
+                    renderOption={(optionProps, option) => {
+                        const { key, ...listItemProps } = optionProps
+                        return (
+                            <li
+                                key={key}
+                                {...listItemProps}
+                                onMouseDown={event => {
+                                    if (event.button === 1) {
+                                        event.preventDefault()
+                                        event.stopPropagation()
+                                    }
+                                }}
+                                onAuxClick={event => {
+                                    if (event.button !== 1) return
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    setSelectedCode(option.OrderCode)
+                                    addModule(option.OrderCode)
+                                }}
+                            >
+                                {option.OrderCode} ({option.FileName})
+                            </li>
+                        )
+                    }}
                     renderInput={params => <TextField {...params} label="Search module type" size="small" />}
                 />
                 <TextField size="small" label="Address (optional)" type="number" sx={{ width: 160 }} value={addAddress} onChange={event => setAddAddress(event.target.value)} placeholder={String(mockTopology?.Topology.length ?? 0)} />
@@ -166,11 +191,12 @@ function MockTopologyBuilder({ mockTopology, setMockTopology }: Pick<Props, 'moc
 
 export default function MockBuilderTab(props: Props) {
     const [section, setSection] = useState(() => Number(window.localStorage.getItem(MOCK_SECTION_STORAGE_KEY)) === 1 ? 1 : 0)
+    const { onSectionChange } = props
 
     useEffect(() => {
         window.localStorage.setItem(MOCK_SECTION_STORAGE_KEY, String(section))
-        props.onSectionChange(section)
-    }, [props.onSectionChange, section])
+        onSectionChange(section)
+    }, [onSectionChange, section])
 
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

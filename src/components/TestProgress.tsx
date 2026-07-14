@@ -48,12 +48,20 @@ export default function TestProgress({
     const testProgress = tests.length > 0
         ? (completedCount / tests.length) * 100
         : 0
+    const active = status === 'running' || status === 'starting'
+    const statusLabel = status === 'starting'
+        ? 'Starting…'
+        : status === 'running'
+            ? 'Running…'
+            : status === 'error'
+                ? 'Stopped with error'
+                : 'Completed'
 
     return (
         <Paper variant="outlined" sx={{ p: 2 }}>
             <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }} spacing={1}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    {status === 'running' ? 'Running…' : 'Completed'}
+                    {statusLabel}
                 </Typography>
                 <Box sx={{ flex: 1 }} />
                 <Tooltip title="Refresh">
@@ -64,10 +72,10 @@ export default function TestProgress({
             </Stack>
 
             <LinearProgress
-                variant={status === 'running' ? 'indeterminate' : 'determinate'}
+                variant={active ? 'indeterminate' : 'determinate'}
                 value={testProgress}
                 sx={{ mb: 2, height: 6, borderRadius: 3 }}
-                color={status === 'completed' ? 'success' : 'primary'}
+                color={status === 'completed' ? 'success' : status === 'error' ? 'error' : 'primary'}
             />
 
             {progressDetail && (
