@@ -12,6 +12,8 @@ interface TestSelectionProps {
     isRunning: boolean
     isStarting: boolean
     busy: boolean
+    canAbort: boolean
+    isAborting: boolean
     hwConnected?: boolean
     runSource?: string
     onToggleTest: (id: string) => void
@@ -25,6 +27,8 @@ export default function TestSelection({
     isRunning,
     isStarting,
     busy,
+    canAbort,
+    isAborting,
     hwConnected = true,
     runSource,
     onToggleTest,
@@ -45,7 +49,7 @@ export default function TestSelection({
                                 size="small"
                                 checked={selected.includes(t.id)}
                                 onChange={() => onToggleTest(t.id)}
-                                disabled={isRunning || isStarting}
+                                disabled={canAbort}
                             />
                         }
                         label={<Typography variant="caption">{t.label}</Typography>}
@@ -53,7 +57,7 @@ export default function TestSelection({
                     />
                 ))}
             </Box>
-            <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
+            <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }} spacing={1}>
                 <Button
                     variant="contained"
                     color="primary"
@@ -64,14 +68,16 @@ export default function TestSelection({
                 >
                     {isStarting ? 'Starting…' : isRunning ? 'Running…' : busy ? 'Waiting…' : !hwConnected ? 'Not Connected' : 'Start Test Run'}
                 </Button>
-                {isRunning && (
+                {canAbort && (
                     <Button
                         variant="outlined"
                         color="error"
                         onClick={onAbort}
+                        disabled={isAborting}
+                        startIcon={isAborting ? <CircularProgress size={16} color="inherit" /> : undefined}
                         size="small"
                     >
-                        Abort
+                        {isAborting ? 'Aborting…' : 'Abort test run'}
                     </Button>
                 )}
                 {runSource && runSource !== 'web' && (

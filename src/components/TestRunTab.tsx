@@ -221,6 +221,8 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
     const externalRunRef = useRef(false)
     const sseHealthyRef = useRef(false)
     const [sseHealthy, setSseHealthy] = useState(false)
+    const [abortPending, setAbortPending] = useState(false)
+    const [abortError, setAbortError] = useState<string | null>(null)
 
     const isRunning = runState.status === 'running'
     const isStarting = runState.status === 'starting'
@@ -236,6 +238,10 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
         return [...new Set(serverTests)]
     })()
     const showProgress = runState.status !== 'idle' && displayTests.length > 0
+
+    useEffect(() => {
+        if (!isActive) setAbortPending(false)
+    }, [isActive])
 
     useEffect(() => {
         activeRunIdRef.current = runState.run_id ?? null
@@ -400,9 +406,27 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
     }
 
     async function doAbort() {
+        if (!isActive || abortPending) return
+        setAbortError(null)
+        setAbortPending(true)
         try {
-            await fetch('/test-run/abort', { method: 'POST' })
-        } catch { /* ignore */ }
+            const response = await fetch('/test-run/abort', { method: 'POST' })
+            if (!response.ok) {
+                let message = 'Failed to abort the test run.'
+                try {
+                    const payload = await response.json() as { detail?: string }
+                    if (payload.detail) message = payload.detail
+                } catch { /* response did not contain JSON */ }
+                throw new Error(message)
+            }
+            // Keep the button in its pending state until polling observes that
+            // the worker has stopped. The backend checks the abort flag at a
+            // safe boundary between hardware test operations.
+            await fetchStatus()
+        } catch (error) {
+            setAbortPending(false)
+            setAbortError(error instanceof Error ? error.message : 'Failed to abort the test run.')
+        }
     }
 
     return (
@@ -416,6 +440,8 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
                     isRunning={isRunning}
                     isStarting={isStarting}
                     busy={busy}
+                    canAbort={isActive}
+                    isAborting={abortPending}
                     hwConnected={hwConnected}
                     runSource={runState.source}
                     onToggleTest={toggleTest}
@@ -427,6 +453,11 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
                 {runState.status === 'error' && runState.error && (
                     <Alert severity="error" onClose={() => dispatch({ type: 'DISMISS_RUN_ERROR' })}>
                         {runState.error}
+                    </Alert>
+                )}
+                {abortError && (
+                    <Alert severity="error" onClose={() => setAbortError(null)}>
+                        {abortError}
                     </Alert>
                 )}
 
