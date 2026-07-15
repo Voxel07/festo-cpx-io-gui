@@ -133,6 +133,8 @@ export interface ModuleInstance {
     address: number
     category: 'input' | 'output' | 'inout' | 'bus' | 'valve'
     module_type_ref: string
+    /** Exact capabilities for this module; omitted only for legacy type inheritance. */
+    capabilities?: string[] | null
     firmware_version?: string | null
     serial_number?: string | null
     presence_state?: 'expected' | 'optional' | 'present' | 'missing'

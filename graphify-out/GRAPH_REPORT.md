@@ -1,7 +1,7 @@
 # Graph Report - festo-cpx-io-gui  (2026-07-15)
 
 ## Corpus Check
-- 91 files · ~93,467 words
+- 91 files · ~93,484 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `83ed67e8`
+- Built from commit: `61a591a0`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
