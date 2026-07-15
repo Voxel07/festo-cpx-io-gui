@@ -187,7 +187,6 @@ function MockTopologyBuilder({ mockTopology, setMockTopology }: Pick<Props, 'moc
                                     if (event.button !== 1) return
                                     event.preventDefault()
                                     event.stopPropagation()
-                                    setSelectedCode(option.OrderCode)
                                     addModule(option.OrderCode)
                                 }}
                             >

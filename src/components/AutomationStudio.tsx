@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useState, type DragEvent } from 'react'
 import {
     Alert,
     Box,
@@ -13,7 +13,6 @@ import {
     MenuItem,
     Paper,
     Select,
-    Snackbar,
     Stack,
     Switch,
     TextField,
@@ -27,11 +26,11 @@ import {
     Air,
     CallSplit,
     Delete,
+    DeleteSweep,
     ElectricMeter,
     Filter9Plus,
     Input,
     Memory,
-    Notes,
     Output,
     PlayArrow,
     Router,
@@ -39,6 +38,7 @@ import {
     Science,
     SettingsInputComponent,
     Stop,
+    SwapHoriz,
     Speed,
     Thermostat,
     Timer,
@@ -71,6 +71,7 @@ import type {
     AutomationStatus,
     AutomationTarget,
 } from './automationTypes'
+import { AlertsContext } from '../utils/AlertsContext'
 
 interface Props {
     realTopology: Topology | null
@@ -84,7 +85,7 @@ interface PaletteItem {
     type: AutomationBlockType
     label: string
     description: string
-    group: 'Events' | 'Control' | 'Actions' | 'Pneumatics' | 'Notes'
+    group: 'Events' | 'Control' | 'Actions' | 'Pneumatics'
     color: string
     icon: typeof Input
 }
@@ -98,14 +99,12 @@ const PALETTE: PaletteItem[] = [
     { type: 'timer', label: 'Timer / clock', description: 'Trigger an event once or repeatedly from elapsed time', group: 'Control', color: '#3949ab', icon: Timer },
     { type: 'delay', label: 'Delay', description: 'Emit and hold a signal after a non-blocking timer', group: 'Control', color: '#7b1fa2', icon: Timer },
     { type: 'counter', label: 'Event counter', description: 'Emit one event on every configured Nth rising event', group: 'Control', color: '#6a1b9a', icon: Filter9Plus },
-    { type: 'and', label: 'AND', description: 'True when every connected signal is true', group: 'Control', color: '#5d4037', icon: CallSplit },
-    { type: 'or', label: 'OR', description: 'True when any connected signal is true', group: 'Control', color: '#5d4037', icon: CallSplit },
-    { type: 'not', label: 'NOT', description: 'Invert a connected signal', group: 'Control', color: '#5d4037', icon: CallSplit },
+    { type: 'nand', label: 'NAND', description: 'False only when both connected signals are true; combine NAND blocks to build every other logic gate', group: 'Control', color: '#5d4037', icon: CallSplit },
+    { type: 'conversion', label: 'Unit conversion', description: 'Convert an incoming analog value with output = input × scale + offset', group: 'Control', color: '#00695c', icon: SwapHoriz },
     { type: 'output', label: 'Digital output', description: 'Set, reset, toggle, or follow a CPX output', group: 'Actions', color: '#ef6c00', icon: Output },
     { type: 'analog_out', label: 'Analog output', description: 'Write a numeric value to a CPX analog output channel', group: 'Actions', color: '#e65100', icon: Tune },
     { type: 'valve', label: 'Valve coil', description: 'Control a valve-terminal output channel', group: 'Pneumatics', color: '#d32f2f', icon: Air },
     { type: 'cylinder', label: 'Cylinder', description: 'Virtual actuator with extended/retracted end events', group: 'Pneumatics', color: '#00897b', icon: SettingsInputComponent },
-    { type: 'comment', label: 'Comment', description: 'Document the purpose or safety behavior', group: 'Notes', color: '#616161', icon: Notes },
 ]
 
 const EMPTY_STATUS: AutomationStatus = {
@@ -152,6 +151,7 @@ function readDraft(): AutomationDraft {
             ...parsed,
             nodes,
             edges,
+            programId: parsed.selectedProgramId ? parsed.programId ?? null : null,
             target: parsed.target === 'real' ? 'real' : 'simulated',
         }
     } catch {
@@ -163,7 +163,7 @@ function normalizeLogicGateEdges(nodes: AutomationNode[], edges: AutomationEdge[
     const nodeTypes = new Map(nodes.map(node => [node.id, node.type]))
     const incomingCounts = new Map<string, number>()
     return edges.map(edge => {
-        if (!['and', 'or'].includes(nodeTypes.get(edge.target) ?? '')) return edge
+        if (nodeTypes.get(edge.target) !== 'nand') return edge
         const normalized = nodeTypes.get(edge.source) === 'input' ? { ...edge, sourceHandle: 'state' } : { ...edge }
         if (['input-a', 'input-b'].includes(edge.targetHandle ?? '')) return normalized
         const index = incomingCounts.get(edge.target) ?? 0
@@ -232,12 +232,12 @@ function defaultData(type: AutomationBlockType): AutomationNodeData {
     if (type === 'timer') return { ...common, initial_delay_ms: 1000, interval_ms: 1000, repeat: false }
     if (type === 'delay') return { ...common, delay_ms: 1000 }
     if (type === 'counter') return { ...common, events_per_toggle: 3 }
+    if (type === 'conversion') return { ...common, scale: 1, offset: 0, input_unit: 'input unit', output_unit: 'output unit' }
     if (type === 'output') return { ...common, module_addr: 0, channel: 0, action: 'follow' }
     if (type === 'valve') return { ...common, module_addr: 0, channel: 0, action: 'toggle' }
     if (type === 'cylinder') return { ...common, travel_time_s: 1 }
     if (type === 'analog_in') return { ...common, module_addr: 0, channel: 0, scale: 1, offset: 0 }
     if (type === 'analog_out') return { ...common, module_addr: 0, channel: 0, scale: 1, offset: 0 }
-    if (type === 'comment') return { ...common, text: 'Describe this sequence or add a safety note.' }
     return common
 }
 
@@ -545,7 +545,29 @@ function NodeInspector({ node, topology, onChange, onDelete }: {
                     />
                 </>
             )}
-            {node.type === 'comment' && <TextField size="small" multiline minRows={5} label="Note" value={node.data.text ?? ''} onChange={event => onChange({ text: event.target.value })} />}
+            {node.type === 'conversion' && (
+                <>
+                    <TextField size="small" label="Input unit" value={node.data.input_unit ?? ''} onChange={event => onChange({ input_unit: event.target.value })} />
+                    <TextField size="small" label="Output unit" value={node.data.output_unit ?? ''} onChange={event => onChange({ output_unit: event.target.value })} />
+                    <TextField
+                        size="small"
+                        type="number"
+                        label="Scale"
+                        slotProps={{ htmlInput: { step: 'any' } }}
+                        value={node.data.scale ?? 1}
+                        onChange={event => onChange({ scale: Number(event.target.value) })}
+                    />
+                    <TextField
+                        size="small"
+                        type="number"
+                        label="Offset"
+                        slotProps={{ htmlInput: { step: 'any' } }}
+                        value={node.data.offset ?? 0}
+                        onChange={event => onChange({ offset: Number(event.target.value) })}
+                        helperText="Output = input × scale + offset"
+                    />
+                </>
+            )}
             {node.data.runtime && (
                 <Box>
                     <Typography variant="overline">Live state</Typography>
@@ -559,6 +581,7 @@ function NodeInspector({ node, topology, onChange, onDelete }: {
 }
 
 function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnected, onOpenMockTopology }: Props) {
+    const alerts = useContext(AlertsContext)
     const [initialDraft] = useState(readDraft)
     const [nodes, setNodes, onNodesChange] = useNodesState<AutomationNode>(initialDraft.nodes)
     const [edges, setEdges, onEdgesChange] = useEdgesState<AutomationEdge>(initialDraft.edges)
@@ -570,12 +593,13 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
     const [target, setTarget] = useState<AutomationTarget>(initialDraft.target)
     const [programs, setPrograms] = useState<AutomationProgram[]>([])
     const [selectedProgramId, setSelectedProgramId] = useState(initialDraft.selectedProgramId)
-    const [persistence, setPersistence] = useState<'pocketbase' | 'memory' | 'unknown'>('unknown')
     const [status, setStatus] = useState<AutomationStatus>(EMPTY_STATUS)
     const [busy, setBusy] = useState(false)
-    const [message, setMessage] = useState<{ severity: 'success' | 'error' | 'warning' | 'info', text: string } | null>(null)
     const { screenToFlowPosition, fitView } = useReactFlow()
     const topology = target === 'simulated' ? simulatedTopology : realTopology
+    const notify = useCallback((severity: 'success' | 'error' | 'warning' | 'info', text: string) => {
+        alerts?.showAlert(severity, text)
+    }, [alerts])
 
     const selected = useMemo(() => nodes.find(node => node.id === selectedId) ?? null, [nodes, selectedId])
     const renderedEdges = useMemo(() => {
@@ -616,11 +640,10 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
         try {
             const data = await apiJson<{ items: AutomationProgram[], persistence: 'pocketbase' | 'memory' }>('/automation/programs')
             setPrograms(data.items)
-            setPersistence(data.persistence)
         } catch (error) {
-            setMessage({ severity: 'error', text: `Could not load programs: ${(error as Error).message}` })
+            notify('error', `Could not load programs: ${(error as Error).message}`)
         }
-    }, [])
+    }, [notify])
 
     useEffect(() => { void refreshPrograms() }, [refreshPrograms])
 
@@ -642,26 +665,38 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
     useEffect(() => {
         setNodes(current => current.map(node => ({
             ...node,
-            data: { ...node.data, runtime: status.node_states[node.id] },
+            data: {
+                ...node.data,
+                runtime: {
+                    ...status.node_states[node.id],
+                    simulation_mode: target === 'simulated',
+                    simulation_input: node.type === 'input'
+                        ? Boolean(status.simulation?.node_inputs[node.id])
+                        : false,
+                    simulation_analog: ['temperature', 'voltage', 'pressure', 'analog_in'].includes(node.type)
+                        ? Number(status.simulation?.node_analogs[node.id] ?? 0)
+                        : 0,
+                },
+            },
         })))
-    }, [status.node_states, setNodes])
+    }, [status.node_states, status.simulation?.node_analogs, status.simulation?.node_inputs, setNodes, target])
 
     const onConnect = useCallback((connection: Connection) => {
         const targetNode = nodes.find(node => node.id === connection.target)
         const sourceNode = nodes.find(node => node.id === connection.source)
-        const normalizedConnection = targetNode && ['and', 'or'].includes(targetNode.type) && sourceNode?.type === 'input'
+        const normalizedConnection = targetNode?.type === 'nand' && sourceNode?.type === 'input'
             ? { ...connection, sourceHandle: 'state' }
             : connection
-        if (targetNode && ['and', 'or'].includes(targetNode.type)) {
+        if (targetNode?.type === 'nand') {
             if (!['input-a', 'input-b'].includes(normalizedConnection.targetHandle ?? '')) return
             const occupied = edges.some(edge => edge.target === normalizedConnection.target && edge.targetHandle === normalizedConnection.targetHandle)
             if (occupied) {
-                setMessage({ severity: 'warning', text: 'Each AND/OR input accepts one connection. Use the other input connector.' })
+                notify('warning', 'Each NAND input accepts one connection. Use the other input connector.')
                 return
             }
         }
         setEdges(current => addEdge({ ...normalizedConnection, id: `edge_${crypto.randomUUID()}` }, current))
-    }, [edges, nodes, setEdges])
+    }, [edges, nodes, notify, setEdges])
 
     const addBlock = useCallback((type: AutomationBlockType, position?: { x: number, y: number }) => {
         const id = `${type}_${crypto.randomUUID()}`
@@ -701,6 +736,15 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
         setSelectedId(null)
     }, [selectedId, setEdges, setNodes])
 
+    const clearCanvas = useCallback(() => {
+        setNodes([])
+        setEdges([])
+        setSelectedId(null)
+        setProgramId(null)
+        setSelectedProgramId('')
+        notify('info', 'Canvas cleared. Saved programs were not deleted.')
+    }, [notify, setEdges, setNodes])
+
     const currentProgram = useCallback(() => cleanProgram(nodes, edges, {
         id: programId,
         name: programName,
@@ -711,35 +755,48 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
     const saveProgram = useCallback(async () => {
         setBusy(true)
         try {
+            const isUpdate = Boolean(programId)
             const response = await apiJson<{ program: AutomationProgram, persistence: 'pocketbase' | 'memory' }>(
-                programId ? `/automation/programs/${programId}` : '/automation/programs',
-                { method: programId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentProgram()) },
+                isUpdate ? `/automation/programs/${programId}` : '/automation/programs',
+                { method: isUpdate ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentProgram()) },
             )
             setProgramId(response.program.id ?? null)
             setSelectedProgramId(response.program.id ?? '')
-            setPersistence(response.persistence)
             await refreshPrograms()
-            setMessage({ severity: response.persistence === 'pocketbase' ? 'success' : 'warning', text: response.persistence === 'pocketbase' ? 'Program saved to PocketBase' : 'PocketBase unavailable; program is stored only in API memory' })
+            notify(response.persistence === 'pocketbase' ? 'success' : 'warning', response.persistence === 'pocketbase' ? `Program ${isUpdate ? 'updated in' : 'saved to'} PocketBase` : 'PocketBase unavailable; the program is stored only in API memory')
         } catch (error) {
-            setMessage({ severity: 'error', text: `Save failed: ${(error as Error).message}` })
+            notify('error', `Save failed: ${(error as Error).message}`)
         } finally {
             setBusy(false)
         }
-    }, [currentProgram, programId, refreshPrograms])
+    }, [currentProgram, notify, programId, refreshPrograms])
 
-    const loadProgram = useCallback((id: string) => {
+    const loadProgram = useCallback(async (id: string) => {
         setSelectedProgramId(id)
-        const program = programs.find(item => item.id === id)
-        if (!program) return
-        setProgramId(program.id ?? null)
-        setProgramName(program.name)
-        setDescription(program.description)
-        setScanInterval(program.scan_interval_ms)
-        setNodes(program.nodes.map(node => ({ ...node, data: { ...node.data } })))
-        setEdges(normalizeLogicGateEdges(program.nodes, program.edges))
-        setSelectedId(null)
-        window.setTimeout(() => fitView({ padding: .2, duration: 300 }), 50)
-    }, [fitView, programs, setEdges, setNodes])
+        if (!id) {
+            setProgramId(null)
+            setSelectedId(null)
+            notify('info', 'This canvas will be saved as a new program.')
+            return
+        }
+        setBusy(true)
+        try {
+            const program = await apiJson<AutomationProgram>(`/automation/programs/${id}`)
+            setProgramId(program.id ?? id)
+            setProgramName(program.name)
+            setDescription(program.description)
+            setScanInterval(program.scan_interval_ms)
+            setNodes(program.nodes.map(node => ({ ...node, data: { ...node.data } })))
+            setEdges(normalizeLogicGateEdges(program.nodes, program.edges))
+            setSelectedId(null)
+            window.setTimeout(() => fitView({ padding: .2, duration: 300 }), 50)
+        } catch (error) {
+            setSelectedProgramId('')
+            notify('error', `Load failed: ${(error as Error).message}`)
+        } finally {
+            setBusy(false)
+        }
+    }, [fitView, notify, setEdges, setNodes])
 
     const removeProgram = useCallback(async () => {
         if (!programId) return
@@ -749,15 +806,15 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
             setProgramId(null)
             setSelectedProgramId('')
             await refreshPrograms()
-            setMessage({ severity: 'success', text: 'Program deleted' })
+            notify('success', 'Program deleted')
         } catch (error) {
-            setMessage({ severity: 'error', text: `Delete failed: ${(error as Error).message}` })
+            notify('error', `Delete failed: ${(error as Error).message}`)
         } finally { setBusy(false) }
-    }, [programId, refreshPrograms])
+    }, [notify, programId, refreshPrograms])
 
     const startProgram = useCallback(async () => {
         if (target === 'real' && !hwConnected) {
-            setMessage({ severity: 'warning', text: `Connect to CPX at ${ip} before starting the program` })
+            notify('warning', `Connect to CPX at ${ip} before starting the program`)
             return
         }
         setBusy(true)
@@ -765,22 +822,22 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
             await apiJson('/automation/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentProgram()) })
             const next = await apiJson<AutomationStatus>('/automation/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ program: currentProgram(), target }) })
             setStatus(next)
-            setMessage({ severity: 'success', text: `${target === 'real' ? 'Real' : 'Simulated'} automation started with ${scanInterval} ms scan interval` })
+            notify('success', `${target === 'real' ? 'Real' : 'Simulated'} automation started with ${scanInterval} ms scan interval`)
         } catch (error) {
-            setMessage({ severity: 'error', text: `Start failed: ${(error as Error).message}` })
+            notify('error', `Start failed: ${(error as Error).message}`)
         } finally { setBusy(false) }
-    }, [currentProgram, hwConnected, ip, scanInterval, target])
+    }, [currentProgram, hwConnected, ip, notify, scanInterval, target])
 
     const stopProgram = useCallback(async () => {
         setBusy(true)
         try {
             const next = await apiJson<AutomationStatus>('/automation/stop', { method: 'POST' })
             setStatus(next)
-            setMessage({ severity: 'info', text: 'Automation stopped; owned outputs reset to LOW' })
+            notify('info', 'Automation stopped; owned outputs reset to LOW')
         } catch (error) {
-            setMessage({ severity: 'error', text: `Stop failed: ${(error as Error).message}` })
+            notify('error', `Stop failed: ${(error as Error).message}`)
         } finally { setBusy(false) }
-    }, [])
+    }, [notify])
 
     const loadExample = useCallback(() => {
         const inputModules = modulesForBlock(topology?.Topology ?? [], 'input')
@@ -816,12 +873,12 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
             await apiJson('/automation/simulation/input', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ module_addr: node.data.module_addr, channel: node.data.channel, value }),
+                body: JSON.stringify({ node_id: node.id, module_addr: node.data.module_addr, channel: node.data.channel, value }),
             })
         } catch (error) {
-            setMessage({ severity: 'error', text: `Simulation input failed: ${(error as Error).message}` })
+            notify('error', `Simulation input failed: ${(error as Error).message}`)
         }
-    }, [])
+    }, [notify])
 
     const setSimulationAnalog = useCallback(async (node: AutomationNode, value: number) => {
         if (!Number.isFinite(value)) return
@@ -829,12 +886,31 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
             await apiJson('/automation/simulation/analog', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ module_addr: node.data.module_addr, channel: node.data.channel, value }),
+                body: JSON.stringify({ node_id: node.id, module_addr: node.data.module_addr, channel: node.data.channel, value }),
             })
         } catch (error) {
-            setMessage({ severity: 'error', text: `Simulation analog value failed: ${(error as Error).message}` })
+            notify('error', `Simulation analog value failed: ${(error as Error).message}`)
         }
-    }, [])
+    }, [notify])
+
+    useEffect(() => {
+        const handleFakeInput = (event: Event) => {
+            const { nodeId, value } = (event as CustomEvent<{ nodeId: string, value: boolean }>).detail
+            const node = nodes.find(item => item.id === nodeId)
+            if (node?.type === 'input') void setSimulationInput(node, value)
+        }
+        const handleFakeAnalog = (event: Event) => {
+            const { nodeId, value } = (event as CustomEvent<{ nodeId: string, value: number }>).detail
+            const node = nodes.find(item => item.id === nodeId)
+            if (node && ['temperature', 'voltage', 'pressure', 'analog_in'].includes(node.type)) void setSimulationAnalog(node, value)
+        }
+        window.addEventListener('festo-automation-fake-input', handleFakeInput)
+        window.addEventListener('festo-automation-fake-analog', handleFakeAnalog)
+        return () => {
+            window.removeEventListener('festo-automation-fake-input', handleFakeInput)
+            window.removeEventListener('festo-automation-fake-analog', handleFakeAnalog)
+        }
+    }, [nodes, setSimulationAnalog, setSimulationInput])
 
     const onNodeClick: NodeMouseHandler<AutomationNode> = useCallback((_event, node) => setSelectedId(node.id), [])
 
@@ -854,23 +930,23 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
                         <ToggleButton value="real" aria-label="real CPX system"><Router fontSize="small" sx={{ mr: .5 }} />Real CPX</ToggleButton>
                     </ToggleButtonGroup>
                     <TextField size="small" label="Program name" value={programName} onChange={event => setProgramName(event.target.value)} sx={{ minWidth: 230 }} />
-                    <EditableNumberField label="Scan (ms)" value={scanInterval} min={10} max={2000} step={10} onCommit={setScanInterval} width={110} />
+                    <EditableNumberField label="Cycle time (ms)" value={scanInterval} min={10} max={2000} step={10} onCommit={setScanInterval} width={140} />
                     <FormControl size="small" sx={{ minWidth: 230 }}>
                         <InputLabel>Saved program</InputLabel>
-                        <Select value={selectedProgramId} label="Saved program" onChange={event => loadProgram(event.target.value)}>
+                        <Select value={selectedProgramId} label="Saved program" onOpen={() => void refreshPrograms()} onChange={event => void loadProgram(String(event.target.value))}>
                             <MenuItem value=""><em>Unsaved program</em></MenuItem>
-                            {programs.map(program => <MenuItem key={program.id} value={program.id ?? ''}>{program.name}</MenuItem>)}
+                            {programs.map(program => <MenuItem key={program.id} value={program.id ?? ''}>{program.name} · {program.id?.slice(0, 6)}</MenuItem>)}
                         </Select>
                     </FormControl>
-                    <Button variant="outlined" startIcon={<Save />} disabled={busy || nodes.length === 0} onClick={() => void saveProgram()}>Save</Button>
+                    <Button variant="outlined" startIcon={<Save />} disabled={busy || nodes.length === 0} onClick={() => void saveProgram()}>{programId ? 'Update' : 'Save new'}</Button>
+                    <Button variant="text" startIcon={<DeleteSweep />} disabled={busy || status.running || nodes.length === 0} onClick={clearCanvas}>Clear canvas</Button>
                     <Button color="error" variant="text" startIcon={<Delete />} disabled={busy || !programId} onClick={() => void removeProgram()}>Delete</Button>
                     <Divider orientation="vertical" flexItem />
                     <Tooltip title={target === 'simulated' ? 'Run against the API in-memory I/O simulator' : hwConnected ? `Run through the API scan loop on ${ip}` : `Connect to ${ip} first`}>
                         <span><Button variant="contained" color="success" startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <PlayArrow />} disabled={busy || status.running || nodes.length === 0 || (target === 'real' && !hwConnected)} onClick={() => void startProgram()}>Run</Button></span>
                     </Tooltip>
                     <Button variant="contained" color="error" startIcon={<Stop />} disabled={busy || !status.running} onClick={() => void stopProgram()}>Stop</Button>
-                    <Chip size="small" color={status.running ? 'success' : status.last_error ? 'error' : 'default'} label={status.running ? `RUNNING ${status.target?.toUpperCase() ?? ''} · ${status.last_cycle_ms ?? '—'} ms` : status.last_error ? 'FAULT' : 'STOPPED'} />
-                    <Chip size="small" variant="outlined" color={persistence === 'pocketbase' ? 'success' : persistence === 'memory' ? 'warning' : 'default'} label={persistence === 'pocketbase' ? 'PocketBase' : persistence === 'memory' ? 'Memory only' : 'Storage unknown'} />
+                    <Chip size="small" color={status.running ? 'success' : status.last_error ? 'error' : 'default'} label={status.running ? `RUNNING ${status.target?.toUpperCase() ?? ''} · Cycle time: ${status.last_cycle_ms ?? '—'} ms` : status.last_error ? 'FAULT' : 'STOPPED'} />
                 </Stack>
             </Paper>
 
@@ -878,45 +954,6 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
                 <Alert severity="warning" action={<Button color="inherit" size="small" onClick={onOpenMockTopology}>Build topology</Button>}>
                     Add a mock CPX topology so input, analog, output, and valve blocks can select compatible modules.
                 </Alert>
-            )}
-            {target === 'simulated' && nodes.some(node => node.type === 'input') && (
-                <Paper square variant="outlined" sx={{ px: 1.5, py: .5 }}>
-                    <Stack direction="row" spacing={1.5} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Typography variant="caption" sx={{ fontWeight: 700 }}>Virtual inputs</Typography>
-                        {nodes.filter(node => node.type === 'input').map(node => {
-                            const key = `${node.data.module_addr ?? 0}:${node.data.channel ?? 0}`
-                            return (
-                                <FormControlLabel
-                                    key={node.id}
-                                    label={`${node.data.label} (M${node.data.module_addr ?? 0} I${node.data.channel ?? 0})`}
-                                    control={<Switch size="small" checked={Boolean(status.simulation?.inputs[key])} onChange={event => void setSimulationInput(node, event.target.checked)} />}
-                                />
-                            )
-                        })}
-                    </Stack>
-                </Paper>
-            )}
-            {target === 'simulated' && nodes.some(node => ['temperature', 'voltage', 'pressure', 'analog_in'].includes(node.type)) && (
-                <Paper square variant="outlined" sx={{ px: 1.5, py: .75 }}>
-                    <Stack direction="row" spacing={1.5} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Typography variant="caption" sx={{ fontWeight: 700 }}>Virtual analog values (raw)</Typography>
-                        {nodes.filter(node => ['temperature', 'voltage', 'pressure', 'analog_in'].includes(node.type)).map(node => {
-                            const key = `${node.data.module_addr ?? 0}:${node.data.channel ?? 0}`
-                            return (
-                                <TextField
-                                    key={`${node.id}:${status.simulation?.analogs[key] ?? 0}`}
-                                    size="small"
-                                    type="number"
-                                    label={`${node.data.label} (M${node.data.module_addr ?? 0} AI${node.data.channel ?? 0})`}
-                                    defaultValue={status.simulation?.analogs[key] ?? 0}
-                                    slotProps={{ htmlInput: { step: 'any' } }}
-                                    onChange={event => void setSimulationAnalog(node, Number(event.target.value))}
-                                    sx={{ width: 230 }}
-                                />
-                            )
-                        })}
-                    </Stack>
-                </Paper>
             )}
             {status.last_error && <Alert severity="error" onClose={() => setStatus(current => ({ ...current, last_error: null }))}>{status.last_error}</Alert>}
 
@@ -926,7 +963,7 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
                         <Typography variant="subtitle2">Block library</Typography>
                         <Tooltip title="Load a ready-to-edit module 3 → valve → cylinder example"><Button size="small" startIcon={<Science />} onClick={loadExample}>Example</Button></Tooltip>
                     </Stack>
-                    {(['Events', 'Control', 'Actions', 'Pneumatics', 'Notes'] as const).map(group => (
+                    {(['Events', 'Control', 'Actions', 'Pneumatics'] as const).map(group => (
                         <Box key={group} sx={{ mb: 1.5 }}>
                             <ListSubheader disableSticky sx={{ px: 0, lineHeight: '26px', bgcolor: 'transparent' }}>{group}</ListSubheader>
                             <Stack spacing={.75}>{PALETTE.filter(item => item.group === group).map(item => <PaletteBlock key={item.type} item={item} onAdd={addBlock} />)}</Stack>
@@ -953,6 +990,22 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
                             textAlign: 'initial',
                         },
                         '& .react-flow__node:focus, & .react-flow__node:focus-visible': { outline: 'none' },
+                        '& .react-flow__controls': {
+                            border: 1,
+                            borderColor: 'divider',
+                            boxShadow: 2,
+                        },
+                        '& .react-flow__controls-button': {
+                            bgcolor: 'background.paper',
+                            color: 'text.primary',
+                            borderBottomColor: 'divider',
+                            '&:hover': { bgcolor: 'action.hover' },
+                            '&:disabled': {
+                                bgcolor: 'action.disabledBackground',
+                                color: 'text.disabled',
+                            },
+                        },
+                        '& .react-flow__controls-button svg': { fill: 'currentColor' },
                     }}
                 >
                     <ReactFlow<AutomationNode, AutomationEdge>
@@ -990,10 +1043,6 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
                     <NodeInspector node={selected} topology={topology} onChange={updateSelected} onDelete={deleteSelected} />
                 </Paper>
             </Box>
-
-            <Snackbar open={Boolean(message)} autoHideDuration={5000} onClose={() => setMessage(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-                {message ? <Alert severity={message.severity} variant="filled" onClose={() => setMessage(null)}>{message.text}</Alert> : undefined}
-            </Snackbar>
         </Box>
     )
 }

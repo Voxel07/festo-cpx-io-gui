@@ -9,15 +9,13 @@ export type AutomationBlockType =
     | 'timer'
     | 'delay'
     | 'counter'
-    | 'and'
-    | 'or'
-    | 'not'
+    | 'nand'
+    | 'conversion'
     | 'output'
     | 'valve'
     | 'cylinder'
     | 'analog_in'
     | 'analog_out'
-    | 'comment'
 
 export type AutomationTarget = 'real' | 'simulated'
 
@@ -32,6 +30,8 @@ export interface AutomationNodeData extends Record<string, unknown> {
     hysteresis?: number
     scale?: number
     offset?: number
+    input_unit?: string
+    output_unit?: string
     events_per_toggle?: number
     initial_delay_ms?: number
     interval_ms?: number
@@ -39,7 +39,6 @@ export interface AutomationNodeData extends Record<string, unknown> {
     delay_ms?: number
     action?: 'on' | 'off' | 'toggle' | 'follow'
     travel_time_s?: number
-    text?: string
     runtime?: Record<string, boolean | number>
 }
 
@@ -69,6 +68,8 @@ export interface AutomationStatus {
     simulation?: {
         inputs: Record<string, boolean>
         analogs: Record<string, number>
+        node_inputs: Record<string, boolean>
+        node_analogs: Record<string, number>
         outputs: Record<string, boolean>
     }
 }

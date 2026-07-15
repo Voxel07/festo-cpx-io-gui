@@ -8,7 +8,8 @@
  * node/edge rendering logic to its parent components.
  */
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useRef } from 'react'
+import { useContext, useEffect, useMemo, useRef } from 'react'
+import { Box } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import {
     ReactFlow,
@@ -19,6 +20,7 @@ import {
     useNodesInitialized,
 } from '@xyflow/react'
 import type { Node, Edge, NodeTypes, EdgeTypes, OnNodesChange, OnEdgesChange, OnConnect, OnReconnect, IsValidConnection, NodeMouseHandler } from '@xyflow/react'
+import { AlertsContext } from '../utils/AlertsContext'
 
 interface Props {
     nodes: Node[]
@@ -79,6 +81,7 @@ export default function TopologyCanvas({
     children,
 }: Props) {
     const theme = useTheme()
+    const alerts = useContext(AlertsContext)
     const layoutKey = useMemo(() => JSON.stringify(nodes.map(n => ({
         id: n.id,
         x: n.position.x,
@@ -88,35 +91,59 @@ export default function TopologyCanvas({
     }))), [nodes])
 
     return (
-        <ReactFlow
-            colorMode={theme.palette.mode}
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onReconnect={onReconnect}
-            isValidConnection={isValidConnection}
-            onNodeContextMenu={onNodeContextMenu}
-            onNodeClick={onNodeClick}
-            edgesReconnectable={editMode}
-            elementsSelectable={elementsSelectable}
-            nodesDraggable={nodesDraggable}
-            nodesConnectable={editMode}
-            fitView={fitView}
-            fitViewOptions={{ padding: fitViewPadding }}
-            minZoom={0.1}
-            maxZoom={4}
+        <Box
+            sx={{
+                width: '100%',
+                height: '100%',
+                '& .react-flow__controls': {
+                    border: 1,
+                    borderColor: 'divider',
+                    boxShadow: 2,
+                },
+                '& .react-flow__controls-button': {
+                    bgcolor: 'background.paper',
+                    color: 'text.primary',
+                    borderBottomColor: 'divider',
+                    '&:hover': { bgcolor: 'action.hover' },
+                    '&:disabled': {
+                        bgcolor: 'action.disabledBackground',
+                        color: 'text.disabled',
+                    },
+                },
+                '& .react-flow__controls-button svg': { fill: 'currentColor' },
+            }}
         >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} color={theme.palette.mode === 'dark' ? '#555' : '#81818a'} />
-            <Controls />
-            {fitView && fitViewOnLayoutChange && <FitViewTrigger
-                layoutKey={layoutKey}
-                padding={fitViewPadding}
-            />}
-            {children}
-        </ReactFlow>
+            <ReactFlow
+                colorMode={theme.palette.mode}
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onReconnect={onReconnect}
+                isValidConnection={isValidConnection}
+                onNodeContextMenu={onNodeContextMenu}
+                onNodeClick={onNodeClick}
+                onError={(code, message) => alerts?.showAlert('error', `Canvas error ${code}: ${message}`)}
+                edgesReconnectable={editMode}
+                elementsSelectable={elementsSelectable}
+                nodesDraggable={nodesDraggable}
+                nodesConnectable={editMode}
+                fitView={fitView}
+                fitViewOptions={{ padding: fitViewPadding }}
+                minZoom={0.1}
+                maxZoom={4}
+            >
+                <Background variant={BackgroundVariant.Dots} gap={16} size={1} color={theme.palette.mode === 'dark' ? '#555' : '#81818a'} />
+                <Controls />
+                {fitView && fitViewOnLayoutChange && <FitViewTrigger
+                    layoutKey={layoutKey}
+                    padding={fitViewPadding}
+                />}
+                {children}
+            </ReactFlow>
+        </Box>
     )
 }

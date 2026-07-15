@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Box, Chip, Paper, Stack, Typography, useTheme } from '@mui/material'
+import { Box, Chip, Paper, Stack, Switch, TextField, Typography, useTheme } from '@mui/material'
 import {
     AccessTime,
     Air,
@@ -8,9 +8,9 @@ import {
     ElectricBolt,
     Filter9Plus,
     Input,
-    Notes,
     Output,
     SettingsInputComponent,
+    SwapHoriz,
     Speed,
     Thermostat,
     TrendingUp,
@@ -27,15 +27,13 @@ const COLORS: Record<AutomationBlockType, string> = {
     timer: '#3949ab',
     delay: '#7b1fa2',
     counter: '#6a1b9a',
-    and: '#5d4037',
-    or: '#5d4037',
-    not: '#5d4037',
+    nand: '#5d4037',
+    conversion: '#00695c',
     output: '#ef6c00',
     valve: '#d32f2f',
     cylinder: '#00897b',
     analog_in: '#0277bd',
     analog_out: '#e65100',
-    comment: '#616161',
 }
 
 const ICONS = {
@@ -46,15 +44,13 @@ const ICONS = {
     timer: AccessTime,
     delay: AccessTime,
     counter: Filter9Plus,
-    and: CallSplit,
-    or: CallSplit,
-    not: CallSplit,
+    nand: CallSplit,
+    conversion: SwapHoriz,
     output: Output,
     valve: Air,
     cylinder: SettingsInputComponent,
     analog_in: TrendingUp,
     analog_out: Tune,
-    comment: Notes,
 } satisfies Record<AutomationBlockType, typeof ElectricBolt>
 
 function Port({ type, id, top, label }: {
@@ -96,21 +92,21 @@ function Port({ type, id, top, label }: {
     )
 }
 
-function AutomationBlockNodeComponent({ data, type, selected }: NodeProps<AutomationNode>) {
+function AutomationBlockNodeComponent({ id, data, type, selected }: NodeProps<AutomationNode>) {
     const theme = useTheme()
     const blockType = type as AutomationBlockType
     const Icon = ICONS[blockType]
-    const iecLogicSymbol = blockType === 'and' ? '&' : blockType === 'or' ? '≥1' : null
+    const iecLogicSymbol = blockType === 'nand' ? '&' : null
     const runtime = data.runtime ?? {}
+    const simulationMode = Boolean(runtime.simulation_mode)
+    const fakeAnalogInput = simulationMode && ['temperature', 'voltage', 'pressure', 'analog_in'].includes(blockType)
     const active = Boolean(runtime.signal || runtime.state || (blockType === 'delay' && runtime.pending))
     const subtitle = (() => {
         if (blockType === 'input') return `M${data.module_addr ?? '?'} · I${data.channel ?? '?'}`
         if (blockType === 'temperature' || blockType === 'voltage' || blockType === 'pressure') {
             const unit = blockType === 'temperature' ? '°C' : blockType === 'voltage' ? 'V' : 'bar'
             const limit = Number(data.limit ?? (blockType === 'temperature' ? 25 : blockType === 'voltage' ? 5 : 6))
-            return typeof runtime.value === 'number'
-                ? `${runtime.value.toFixed(2)} ${unit} · limit ${limit} ${unit}`
-                : `M${data.module_addr ?? '?'} · AI${data.channel ?? '?'} · ≥ ${limit} ${unit}`
+            return `M${data.module_addr ?? '?'} · AI${data.channel ?? '?'} · ≥ ${limit} ${unit}`
         }
         if (blockType === 'timer') {
             const configured = data.repeat
@@ -129,7 +125,11 @@ function AutomationBlockNodeComponent({ data, type, selected }: NodeProps<Automa
         if (blockType === 'analog_out') return typeof runtime.value === 'number'
             ? `→ ${runtime.value.toFixed(3)} · M${data.module_addr ?? '?'} AO${data.channel ?? '?'}`
             : `M${data.module_addr ?? '?'} · AO${data.channel ?? '?'}`
-        if (blockType === 'comment') return String(data.text ?? 'Double-click to edit')
+        if (blockType === 'conversion') {
+            const inputUnit = String(data.input_unit ?? 'input')
+            const outputUnit = String(data.output_unit ?? 'output')
+            return `${inputUnit} × ${data.scale ?? 1} + ${data.offset ?? 0} → ${outputUnit}`
+        }
         return blockType.toUpperCase()
     })()
     const position = Number(runtime.position ?? 0)
@@ -138,8 +138,8 @@ function AutomationBlockNodeComponent({ data, type, selected }: NodeProps<Automa
         <Paper
             elevation={selected ? 8 : 2}
             sx={{
-                width: blockType === 'comment' ? 240 : 220,
-                minHeight: blockType === 'cylinder' ? 122 : 96,
+                width: 220,
+                minHeight: blockType === 'cylinder' ? 122 : fakeAnalogInput ? 158 : blockType === 'input' && simulationMode ? 126 : 96,
                 border: 2,
                 borderColor: selected ? 'primary.main' : active ? COLORS[blockType] : 'divider',
                 overflow: 'visible',
@@ -147,17 +147,17 @@ function AutomationBlockNodeComponent({ data, type, selected }: NodeProps<Automa
                 transition: 'border-color .15s, background-color .15s',
             }}
         >
-            {!['input', 'temperature', 'voltage', 'pressure', 'timer', 'comment', 'and', 'or', 'analog_in', 'analog_out'].includes(blockType) && <Port type="target" id={blockType === 'cylinder' ? 'extend' : 'trigger'} top="50%" label={blockType === 'cylinder' ? 'extend' : undefined} />}
-            {['temperature', 'voltage', 'pressure'].includes(blockType) && <Port type="target" id="value" top="36%" label="analog" />}
+            {!['input', 'temperature', 'voltage', 'pressure', 'timer', 'nand', 'analog_in', 'analog_out', 'conversion'].includes(blockType) && <Port type="target" id={blockType === 'cylinder' ? 'extend' : 'trigger'} top="50%" label={blockType === 'cylinder' ? 'extend' : undefined} />}
+            {['temperature', 'voltage', 'pressure'].includes(blockType) && <Port type="target" id="value" top={fakeAnalogInput ? '25%' : '36%'} />}
             {blockType === 'analog_in' && <Port type="source" id="value" top="50%" label="value" />}
             {blockType === 'analog_out' && <Port type="target" id="value" top="50%" label="value" />}
-            {['and', 'or'].includes(blockType) && <><Port type="target" id="input-a" top="40%" /><Port type="target" id="input-b" top="72%" /></>}
+            {blockType === 'conversion' && <><Port type="target" id="value" top="50%" /><Port type="source" id="value" top="50%" /></>}
+            {blockType === 'nand' && <><Port type="target" id="input-a" top="40%" /><Port type="target" id="input-b" top="72%" /></>}
             {blockType === 'cylinder' && <Port type="target" id="retract" top="75%" label="retract" />}
-            {blockType === 'input' && <><Port type="source" id="state" top="57%" label="state" /><Port type="source" id="signal" top="82%" label="event" /></>}
-            {['temperature', 'voltage'].includes(blockType) && <Port type="source" id="signal" top="72%" label="≥ limit" />}
-            {blockType === 'pressure' && <Port type="source" id="signal" top="72%" label="qualified" />}
-            {['timer', 'delay', 'counter', 'not'].includes(blockType) && <Port type="source" id="signal" top="50%" />}
-            {['and', 'or'].includes(blockType) && <Port type="source" id="signal" top="56%" />}
+            {blockType === 'input' && <><Port type="source" id="state" top={simulationMode ? '45%' : '57%'} label="state" /><Port type="source" id="signal" top={simulationMode ? '65%' : '82%'} label="event" /></>}
+            {['temperature', 'voltage', 'pressure'].includes(blockType) && <Port type="source" id="signal" top={fakeAnalogInput ? '48%' : '72%'} />}
+            {['timer', 'delay', 'counter'].includes(blockType) && <Port type="source" id="signal" top="50%" />}
+            {blockType === 'nand' && <Port type="source" id="signal" top="56%" />}
             {blockType === 'valve' && <><Port type="source" id="extend" top="57%" label="extend" /><Port type="source" id="retract" top="82%" label="retract" /></>}
             {blockType === 'cylinder' && <><Port type="source" id="extended-event" top="34%" label="end +" /><Port type="source" id="retracted-event" top="68%" label="end −" /></>}
 
@@ -165,12 +165,13 @@ function AutomationBlockNodeComponent({ data, type, selected }: NodeProps<Automa
             <Stack direction="row" spacing={1} sx={{
                 p: 1.25,
                 pr: ['input', 'temperature', 'voltage', 'pressure', 'valve', 'cylinder', 'analog_in'].includes(blockType) ? 7 : 1.25,
-                minHeight: ['temperature', 'voltage', 'pressure', 'analog_in', 'analog_out'].includes(blockType) ? 52 : blockType === 'cylinder' ? 62 : 84,
+                minHeight: ['temperature', 'voltage', 'pressure', 'analog_in', 'analog_out', 'conversion'].includes(blockType) ? 52 : blockType === 'cylinder' ? 62 : 84,
                 alignItems: 'center',
             }}>
                 {iecLogicSymbol ? (
-                    <Box sx={{ minWidth: 34, height: 34, border: 2, borderColor: COLORS[blockType], display: 'grid', placeItems: 'center' }}>
+                    <Box sx={{ minWidth: 34, height: 34, border: 2, borderColor: COLORS[blockType], display: 'grid', placeItems: 'center', position: 'relative' }}>
                         <Typography component="span" sx={{ color: COLORS[blockType], fontWeight: 800, fontSize: 17, lineHeight: 1 }}>{iecLogicSymbol}</Typography>
+                        {blockType === 'nand' && <Box sx={{ position: 'absolute', right: -7, top: '50%', width: 8, height: 8, border: 2, borderColor: COLORS[blockType], bgcolor: 'background.paper', borderRadius: '50%', transform: 'translateY(-50%)' }} />}
                     </Box>
                 ) : <Icon fontSize="small" sx={{ color: COLORS[blockType] }} />}
                 <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -179,10 +180,44 @@ function AutomationBlockNodeComponent({ data, type, selected }: NodeProps<Automa
                 </Box>
                 {active && <Chip label="LIVE" color="success" size="small" sx={{ height: 18, fontSize: 9 }} />}
             </Stack>
-            {['temperature', 'voltage', 'pressure', 'analog_in'].includes(blockType) && (() => {
+            {blockType === 'input' && simulationMode && (
+                <Stack direction="row" className="nodrag nowheel" sx={{ px: 1.25, pb: .75, alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">Fake input</Typography>
+                    <Switch
+                        size="small"
+                        checked={Boolean(runtime.simulation_input)}
+                        onChange={event => window.dispatchEvent(new CustomEvent('festo-automation-fake-input', {
+                            detail: { nodeId: id, value: event.target.checked },
+                        }))}
+                        slotProps={{ input: { 'aria-label': `Fake ${data.label} input` } }}
+                    />
+                </Stack>
+            )}
+            {fakeAnalogInput && (
+                <Box className="nodrag nowheel" sx={{ px: 1.25, pb: 1 }}>
+                    <TextField
+                        key={String(runtime.simulation_analog ?? 0)}
+                        fullWidth
+                        size="small"
+                        type="number"
+                        label="Fake raw input"
+                        defaultValue={runtime.simulation_analog ?? 0}
+                        slotProps={{ htmlInput: { step: 'any' } }}
+                        onBlur={event => {
+                            const value = Number(event.target.value)
+                            if (Number.isFinite(value)) {
+                                window.dispatchEvent(new CustomEvent('festo-automation-fake-analog', {
+                                    detail: { nodeId: id, value },
+                                }))
+                            }
+                        }}
+                    />
+                </Box>
+            )}
+            {['temperature', 'voltage', 'pressure', 'analog_in', 'conversion'].includes(blockType) && (() => {
                 const liveValue = typeof runtime.value === 'number' ? runtime.value : null
-                const unit = blockType === 'temperature' ? '°C' : blockType === 'voltage' ? 'V' : blockType === 'pressure' ? 'bar' : ''
-                const limit = blockType !== 'analog_in' ? Number(data.limit ?? (blockType === 'temperature' ? 25 : blockType === 'voltage' ? 5 : 6)) : null
+                const unit = blockType === 'temperature' ? '°C' : blockType === 'voltage' ? 'V' : blockType === 'pressure' ? 'bar' : blockType === 'conversion' ? String(data.output_unit ?? '') : ''
+                const limit = !['analog_in', 'conversion'].includes(blockType) ? Number(data.limit ?? (blockType === 'temperature' ? 25 : blockType === 'voltage' ? 5 : 6)) : null
                 return (
                     <Box sx={{ mx: 1.2, mb: 1, px: .5 }}>
                         <Stack direction="row" sx={{ justifyContent: 'space-between', mb: .25 }}>
@@ -222,13 +257,11 @@ export const automationNodeTypes: NodeTypes = Object.freeze({
     timer: AutomationBlockNode,
     delay: AutomationBlockNode,
     counter: AutomationBlockNode,
-    and: AutomationBlockNode,
-    or: AutomationBlockNode,
-    not: AutomationBlockNode,
+    nand: AutomationBlockNode,
+    conversion: AutomationBlockNode,
     output: AutomationBlockNode,
     valve: AutomationBlockNode,
     cylinder: AutomationBlockNode,
     analog_in: AutomationBlockNode,
     analog_out: AutomationBlockNode,
-    comment: AutomationBlockNode,
 })
