@@ -29,6 +29,13 @@ interface MappingEntry {
     FileName: string
 }
 
+interface RawMappingEntry {
+    OrderCode?: string
+    PartNumber?: string
+    FileName: string
+    Variants?: Array<{ OrderCode: string; PartNumber: string; ModuleCode?: string }>
+}
+
 interface ModuleMetadata {
     category: string
     mounted_valves: number[]
@@ -72,7 +79,21 @@ function MockTopologyBuilder({ mockTopology, setMockTopology }: Pick<Props, 'moc
     useEffect(() => {
         fetch('/svg/IconFileMapping.json')
             .then(response => response.json())
-            .then(data => { if (data.IconFileMapping) setMappings(data.IconFileMapping) })
+            .then(data => {
+                if (data.IconFileMapping) {
+                    const flat: MappingEntry[] = []
+                    for (const entry of data.IconFileMapping as RawMappingEntry[]) {
+                        if (entry.Variants) {
+                            for (const variant of entry.Variants) {
+                                flat.push({ OrderCode: variant.OrderCode, PartNumber: variant.PartNumber, FileName: entry.FileName })
+                            }
+                        } else if (entry.OrderCode) {
+                            flat.push({ OrderCode: entry.OrderCode, PartNumber: entry.PartNumber ?? '', FileName: entry.FileName })
+                        }
+                    }
+                    setMappings(flat)
+                }
+            })
             .catch(error => console.error('Failed to load mappings', error))
         fetch('/metadata/modules')
             .then(response => response.json())

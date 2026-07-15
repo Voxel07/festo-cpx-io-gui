@@ -15,6 +15,8 @@ export type AutomationBlockType =
     | 'output'
     | 'valve'
     | 'cylinder'
+    | 'analog_in'
+    | 'analog_out'
     | 'comment'
 
 export type AutomationTarget = 'real' | 'simulated'

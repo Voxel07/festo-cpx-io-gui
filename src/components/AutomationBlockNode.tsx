@@ -13,6 +13,8 @@ import {
     SettingsInputComponent,
     Speed,
     Thermostat,
+    TrendingUp,
+    Tune,
 } from '@mui/icons-material'
 import { Handle, Position, type NodeProps, type NodeTypes } from '@xyflow/react'
 import type { AutomationBlockType, AutomationNode } from './automationTypes'
@@ -31,6 +33,8 @@ const COLORS: Record<AutomationBlockType, string> = {
     output: '#ef6c00',
     valve: '#d32f2f',
     cylinder: '#00897b',
+    analog_in: '#0277bd',
+    analog_out: '#e65100',
     comment: '#616161',
 }
 
@@ -48,6 +52,8 @@ const ICONS = {
     output: Output,
     valve: Air,
     cylinder: SettingsInputComponent,
+    analog_in: TrendingUp,
+    analog_out: Tune,
     comment: Notes,
 } satisfies Record<AutomationBlockType, typeof ElectricBolt>
 
@@ -117,6 +123,12 @@ function AutomationBlockNodeComponent({ data, type, selected }: NodeProps<Automa
         if (blockType === 'valve') return `M${data.module_addr ?? '?'} · coil ${data.channel ?? '?'} · ${data.action ?? 'toggle'}`
         if (blockType === 'delay') return `${data.delay_ms ?? 1000} ms`
         if (blockType === 'cylinder') return `${data.travel_time_s ?? 1}s stroke`
+        if (blockType === 'analog_in') return typeof runtime.value === 'number'
+            ? `${runtime.value.toFixed(3)} · M${data.module_addr ?? '?'} AI${data.channel ?? '?'}`
+            : `M${data.module_addr ?? '?'} · AI${data.channel ?? '?'}`
+        if (blockType === 'analog_out') return typeof runtime.value === 'number'
+            ? `→ ${runtime.value.toFixed(3)} · M${data.module_addr ?? '?'} AO${data.channel ?? '?'}`
+            : `M${data.module_addr ?? '?'} · AO${data.channel ?? '?'}`
         if (blockType === 'comment') return String(data.text ?? 'Double-click to edit')
         return blockType.toUpperCase()
     })()
@@ -135,12 +147,15 @@ function AutomationBlockNodeComponent({ data, type, selected }: NodeProps<Automa
                 transition: 'border-color .15s, background-color .15s',
             }}
         >
-            {!['input', 'temperature', 'voltage', 'timer', 'comment', 'and', 'or'].includes(blockType) && <Port type="target" id={blockType === 'cylinder' ? 'extend' : 'trigger'} top="50%" label={blockType === 'cylinder' ? 'extend' : undefined} />}
+            {!['input', 'temperature', 'voltage', 'pressure', 'timer', 'comment', 'and', 'or', 'analog_in', 'analog_out'].includes(blockType) && <Port type="target" id={blockType === 'cylinder' ? 'extend' : 'trigger'} top="50%" label={blockType === 'cylinder' ? 'extend' : undefined} />}
+            {['temperature', 'voltage', 'pressure'].includes(blockType) && <Port type="target" id="value" top="36%" label="analog" />}
+            {blockType === 'analog_in' && <Port type="source" id="value" top="50%" label="value" />}
+            {blockType === 'analog_out' && <Port type="target" id="value" top="50%" label="value" />}
             {['and', 'or'].includes(blockType) && <><Port type="target" id="input-a" top="40%" /><Port type="target" id="input-b" top="72%" /></>}
             {blockType === 'cylinder' && <Port type="target" id="retract" top="75%" label="retract" />}
             {blockType === 'input' && <><Port type="source" id="state" top="57%" label="state" /><Port type="source" id="signal" top="82%" label="event" /></>}
-            {['temperature', 'voltage'].includes(blockType) && <Port type="source" id="signal" top="57%" label="≥ limit" />}
-            {blockType === 'pressure' && <Port type="source" id="signal" top="57%" label="qualified" />}
+            {['temperature', 'voltage'].includes(blockType) && <Port type="source" id="signal" top="72%" label="≥ limit" />}
+            {blockType === 'pressure' && <Port type="source" id="signal" top="72%" label="qualified" />}
             {['timer', 'delay', 'counter', 'not'].includes(blockType) && <Port type="source" id="signal" top="50%" />}
             {['and', 'or'].includes(blockType) && <Port type="source" id="signal" top="56%" />}
             {blockType === 'valve' && <><Port type="source" id="extend" top="57%" label="extend" /><Port type="source" id="retract" top="82%" label="retract" /></>}
@@ -149,8 +164,8 @@ function AutomationBlockNodeComponent({ data, type, selected }: NodeProps<Automa
             <Box sx={{ height: 8, bgcolor: COLORS[blockType], borderRadius: '5px 5px 0 0' }} />
             <Stack direction="row" spacing={1} sx={{
                 p: 1.25,
-                pr: ['input', 'temperature', 'voltage', 'pressure', 'valve', 'cylinder'].includes(blockType) ? 7 : 1.25,
-                minHeight: blockType === 'cylinder' ? 62 : 84,
+                pr: ['input', 'temperature', 'voltage', 'pressure', 'valve', 'cylinder', 'analog_in'].includes(blockType) ? 7 : 1.25,
+                minHeight: ['temperature', 'voltage', 'pressure', 'analog_in', 'analog_out'].includes(blockType) ? 52 : blockType === 'cylinder' ? 62 : 84,
                 alignItems: 'center',
             }}>
                 {iecLogicSymbol ? (
@@ -164,6 +179,29 @@ function AutomationBlockNodeComponent({ data, type, selected }: NodeProps<Automa
                 </Box>
                 {active && <Chip label="LIVE" color="success" size="small" sx={{ height: 18, fontSize: 9 }} />}
             </Stack>
+            {['temperature', 'voltage', 'pressure', 'analog_in'].includes(blockType) && (() => {
+                const liveValue = typeof runtime.value === 'number' ? runtime.value : null
+                const unit = blockType === 'temperature' ? '°C' : blockType === 'voltage' ? 'V' : blockType === 'pressure' ? 'bar' : ''
+                const limit = blockType !== 'analog_in' ? Number(data.limit ?? (blockType === 'temperature' ? 25 : blockType === 'voltage' ? 5 : 6)) : null
+                return (
+                    <Box sx={{ mx: 1.2, mb: 1, px: .5 }}>
+                        <Stack direction="row" sx={{ justifyContent: 'space-between', mb: .25 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+                                {liveValue !== null ? `${liveValue.toFixed(3)}${unit ? ' ' + unit : ''}` : '—'}
+                            </Typography>
+                            {limit !== null && (
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>limit {limit}{unit ? ' ' + unit : ''}</Typography>
+                            )}
+                        </Stack>
+                        {liveValue !== null && limit !== null && (
+                            <Box sx={{ height: 4, borderRadius: 1, bgcolor: theme.palette.action.hover, position: 'relative', overflow: 'hidden' }}>
+                                <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, Math.abs(liveValue / limit) * 100)}%`, bgcolor: active ? COLORS[blockType] : theme.palette.action.active, transition: 'width 150ms linear' }} />
+                                <Box sx={{ position: 'absolute', left: '100%', top: -2, bottom: -2, width: 2, bgcolor: COLORS[blockType], transform: 'translateX(-50%)' }} />
+                            </Box>
+                        )}
+                    </Box>
+                )
+            })()}
             {blockType === 'cylinder' && (
                 <Box sx={{ mx: 1.2, mb: 1.2, height: 22, border: 1, borderColor: 'divider', borderRadius: 1, position: 'relative', bgcolor: theme.palette.action.hover }}>
                     <Box sx={{ position: 'absolute', left: 2, top: 2, bottom: 2, width: 28, bgcolor: COLORS.cylinder, borderRadius: .5, transform: `translateX(${position * 128}px)`, transition: 'transform 80ms linear' }} />
@@ -190,5 +228,7 @@ export const automationNodeTypes: NodeTypes = Object.freeze({
     output: AutomationBlockNode,
     valve: AutomationBlockNode,
     cylinder: AutomationBlockNode,
+    analog_in: AutomationBlockNode,
+    analog_out: AutomationBlockNode,
     comment: AutomationBlockNode,
 })

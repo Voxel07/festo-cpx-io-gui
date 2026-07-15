@@ -42,6 +42,8 @@ import {
     Speed,
     Thermostat,
     Timer,
+    TrendingUp,
+    Tune,
 } from '@mui/icons-material'
 import {
     addEdge,
@@ -92,6 +94,7 @@ const PALETTE: PaletteItem[] = [
     { type: 'temperature', label: 'Temperature limit', description: 'True when a scaled analog temperature reaches its limit', group: 'Events', color: '#e53935', icon: Thermostat },
     { type: 'voltage', label: 'Voltage limit', description: 'True when a scaled analog voltage reaches its limit', group: 'Events', color: '#f9a825', icon: ElectricMeter },
     { type: 'pressure', label: 'Pressure event', description: 'Forward an incoming signal only while the configured pressure is reached', group: 'Events', color: '#00838f', icon: Speed },
+    { type: 'analog_in', label: 'Analog input', description: 'Read a raw analog channel value and pass it downstream as a numeric signal', group: 'Events', color: '#0277bd', icon: TrendingUp },
     { type: 'timer', label: 'Timer / clock', description: 'Trigger an event once or repeatedly from elapsed time', group: 'Control', color: '#3949ab', icon: Timer },
     { type: 'delay', label: 'Delay', description: 'Emit and hold a signal after a non-blocking timer', group: 'Control', color: '#7b1fa2', icon: Timer },
     { type: 'counter', label: 'Event counter', description: 'Emit one event on every configured Nth rising event', group: 'Control', color: '#6a1b9a', icon: Filter9Plus },
@@ -99,6 +102,7 @@ const PALETTE: PaletteItem[] = [
     { type: 'or', label: 'OR', description: 'True when any connected signal is true', group: 'Control', color: '#5d4037', icon: CallSplit },
     { type: 'not', label: 'NOT', description: 'Invert a connected signal', group: 'Control', color: '#5d4037', icon: CallSplit },
     { type: 'output', label: 'Digital output', description: 'Set, reset, toggle, or follow a CPX output', group: 'Actions', color: '#ef6c00', icon: Output },
+    { type: 'analog_out', label: 'Analog output', description: 'Write a numeric value to a CPX analog output channel', group: 'Actions', color: '#e65100', icon: Tune },
     { type: 'valve', label: 'Valve coil', description: 'Control a valve-terminal output channel', group: 'Pneumatics', color: '#d32f2f', icon: Air },
     { type: 'cylinder', label: 'Cylinder', description: 'Virtual actuator with extended/retracted end events', group: 'Pneumatics', color: '#00897b', icon: SettingsInputComponent },
     { type: 'comment', label: 'Comment', description: 'Document the purpose or safety behavior', group: 'Notes', color: '#616161', icon: Notes },
@@ -179,6 +183,10 @@ function isAnalogInputModule(module: TopologyModule): boolean {
         && /analog|(?:^|[-_])\d*AI(?:[-_]|$)|RTD|U-I|(?:^|[-_])UI(?:[-_]|$)/i.test(identity)
 }
 
+function isAnalogOutputModule(module: TopologyModule): boolean {
+    return /(?:^|[-_])\d*AO(?:[-_]|$)/i.test(module.Name) && module.NumOfOutputs + module.NumOfInOuts > 0
+}
+
 function isTemperatureModule(module: TopologyModule): boolean {
     return isAnalogInputModule(module) && /RTD|temp/i.test(`${module.Type} ${module.Name}`)
 }
@@ -205,6 +213,12 @@ export function modulesForBlock(
     if (blockType === 'valve') {
         return modules.filter(module => isValveModule(module) && module.NumOfOutputs + module.NumOfInOuts > 0)
     }
+    if (blockType === 'analog_in') {
+        return modules.filter(isAnalogInputModule)
+    }
+    if (blockType === 'analog_out') {
+        return modules.filter(isAnalogOutputModule)
+    }
     return modules
 }
 
@@ -221,6 +235,8 @@ function defaultData(type: AutomationBlockType): AutomationNodeData {
     if (type === 'output') return { ...common, module_addr: 0, channel: 0, action: 'follow' }
     if (type === 'valve') return { ...common, module_addr: 0, channel: 0, action: 'toggle' }
     if (type === 'cylinder') return { ...common, travel_time_s: 1 }
+    if (type === 'analog_in') return { ...common, module_addr: 0, channel: 0, scale: 1, offset: 0 }
+    if (type === 'analog_out') return { ...common, module_addr: 0, channel: 0, scale: 1, offset: 0 }
     if (type === 'comment') return { ...common, text: 'Describe this sequence or add a safety note.' }
     return common
 }
@@ -356,13 +372,13 @@ function NodeInspector({ node, topology, onChange, onDelete }: {
     const compatibleModules = node ? modulesForBlock(modules, node.type) : []
     const selectedModule = modules.find(module => module.Adress === Number(node?.data.module_addr))
     const compatibleSelectedModule = compatibleModules.find(module => module.Adress === Number(node?.data.module_addr))
-    const physical = node && ['input', 'temperature', 'voltage', 'pressure', 'output', 'valve'].includes(node.type)
+    const physical = node && ['input', 'temperature', 'voltage', 'pressure', 'output', 'valve', 'analog_in', 'analog_out'].includes(node.type)
     const analog = node && ['temperature', 'voltage', 'pressure'].includes(node.type)
     const analogUnit = node?.type === 'temperature' ? '°C' : node?.type === 'voltage' ? 'V' : 'bar'
     const analogLimit = node?.type === 'temperature' ? 25 : node?.type === 'voltage' ? 5 : 6
     const analogHysteresis = node?.type === 'temperature' ? .5 : .1
     const channelCount = compatibleSelectedModule
-        ? node?.type === 'input' || analog
+        ? node?.type === 'input' || analog || node?.type === 'analog_in'
             ? compatibleSelectedModule.NumOfInputs + compatibleSelectedModule.NumOfInOuts
             : compatibleSelectedModule.NumOfOutputs + compatibleSelectedModule.NumOfInOuts
         : 0
@@ -506,7 +522,29 @@ function NodeInspector({ node, topology, onChange, onDelete }: {
                     <MenuItem value="follow">Follow signal level</MenuItem>
                 </TextField>
             )}
-            {node.type === 'cylinder' && <TextField size="small" type="number" label="Stroke time (seconds)" slotProps={{ htmlInput: { min: .05, step: .1 } }} value={node.data.travel_time_s ?? 1} onChange={event => onChange({ travel_time_s: Math.max(.05, Number(event.target.value)) })} />}
+            {node.type === 'cylinder' && <TextField size="small" type="number" label="Stroke time (seconds)" slotProps={{ htmlInput: { min: .05, step: .1 } }} value={node.data.travel_time_s ?? 1} onChange={event => onChange({ travel_time_s: Math.max(.05, Number(event.target.value)) })} />
+            }
+            {(node.type === 'analog_in' || node.type === 'analog_out') && (
+                <>
+                    <TextField
+                        size="small"
+                        type="number"
+                        label="Scale"
+                        slotProps={{ htmlInput: { step: 'any' } }}
+                        value={node.data.scale ?? 1}
+                        onChange={event => onChange({ scale: Number(event.target.value) })}
+                        helperText={node.type === 'analog_in' ? 'Scaled value = raw × scale + offset' : 'Raw value = (input ÷ scale) − offset'}
+                    />
+                    <TextField
+                        size="small"
+                        type="number"
+                        label="Offset"
+                        slotProps={{ htmlInput: { step: 'any' } }}
+                        value={node.data.offset ?? 0}
+                        onChange={event => onChange({ offset: Number(event.target.value) })}
+                    />
+                </>
+            )}
             {node.type === 'comment' && <TextField size="small" multiline minRows={5} label="Note" value={node.data.text ?? ''} onChange={event => onChange({ text: event.target.value })} />}
             {node.data.runtime && (
                 <Box>
@@ -629,7 +667,7 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
         const id = `${type}_${crypto.randomUUID()}`
         const data = defaultData(type)
         const firstCompatible = modulesForBlock(topology?.Topology ?? [], type)[0]
-        if (firstCompatible && ['input', 'temperature', 'voltage', 'pressure', 'output', 'valve'].includes(type)) {
+        if (firstCompatible && ['input', 'temperature', 'voltage', 'pressure', 'output', 'valve', 'analog_in', 'analog_out'].includes(type)) {
             data.module_addr = firstCompatible.Adress
             data.module_name = firstCompatible.Name
             data.channel = 0
@@ -858,11 +896,11 @@ function AutomationStudioCanvas({ realTopology, simulatedTopology, ip, hwConnect
                     </Stack>
                 </Paper>
             )}
-            {target === 'simulated' && nodes.some(node => ['temperature', 'voltage', 'pressure'].includes(node.type)) && (
+            {target === 'simulated' && nodes.some(node => ['temperature', 'voltage', 'pressure', 'analog_in'].includes(node.type)) && (
                 <Paper square variant="outlined" sx={{ px: 1.5, py: .75 }}>
                     <Stack direction="row" spacing={1.5} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                         <Typography variant="caption" sx={{ fontWeight: 700 }}>Virtual analog values (raw)</Typography>
-                        {nodes.filter(node => ['temperature', 'voltage', 'pressure'].includes(node.type)).map(node => {
+                        {nodes.filter(node => ['temperature', 'voltage', 'pressure', 'analog_in'].includes(node.type)).map(node => {
                             const key = `${node.data.module_addr ?? 0}:${node.data.channel ?? 0}`
                             return (
                                 <TextField
