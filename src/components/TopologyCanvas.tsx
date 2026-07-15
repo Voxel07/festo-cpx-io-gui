@@ -8,7 +8,7 @@
  * node/edge rendering logic to its parent components.
  */
 import type { ReactNode } from 'react'
-import { useContext, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef } from 'react'
 import { Box } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import {
@@ -54,13 +54,17 @@ function FitViewTrigger({ layoutKey, padding }: { layoutKey: string, padding: nu
 
     useEffect(() => {
         if (layoutKey && initialized && fitStrRef.current !== layoutKey) {
+            let animationFrame = 0
             const timer = setTimeout(() => {
-                window.requestAnimationFrame(() => {
+                animationFrame = window.requestAnimationFrame(() => {
                     fitView({ padding, duration: 400 })
                     fitStrRef.current = layoutKey
                 })
             }, 50)
-            return () => clearTimeout(timer)
+            return () => {
+                clearTimeout(timer)
+                if (animationFrame) window.cancelAnimationFrame(animationFrame)
+            }
         }
     }, [layoutKey, initialized, fitView, padding])
     return null
@@ -82,13 +86,17 @@ export default function TopologyCanvas({
 }: Props) {
     const theme = useTheme()
     const alerts = useContext(AlertsContext)
-    const layoutKey = useMemo(() => JSON.stringify(nodes.map(n => ({
+    const layoutKey = useMemo(() => !fitView || !fitViewOnLayoutChange ? '' : JSON.stringify(nodes.map(n => ({
         id: n.id,
         x: n.position.x,
         y: n.position.y,
         width: n.measured?.width ?? n.width ?? n.style?.width,
         height: n.measured?.height ?? n.height ?? n.style?.height,
-    }))), [nodes])
+    }))), [fitView, fitViewOnLayoutChange, nodes])
+    const fitViewOptions = useMemo(() => ({ padding: fitViewPadding }), [fitViewPadding])
+    const handleError = useCallback((code: string, message: string) => {
+        alerts?.showAlert('error', `Canvas error ${code}: ${message}`)
+    }, [alerts])
 
     return (
         <Box
@@ -126,13 +134,13 @@ export default function TopologyCanvas({
                 isValidConnection={isValidConnection}
                 onNodeContextMenu={onNodeContextMenu}
                 onNodeClick={onNodeClick}
-                onError={(code, message) => alerts?.showAlert('error', `Canvas error ${code}: ${message}`)}
+                onError={handleError}
                 edgesReconnectable={editMode}
                 elementsSelectable={elementsSelectable}
                 nodesDraggable={nodesDraggable}
                 nodesConnectable={editMode}
                 fitView={fitView}
-                fitViewOptions={{ padding: fitViewPadding }}
+                fitViewOptions={fitViewOptions}
                 minZoom={0.1}
                 maxZoom={4}
             >

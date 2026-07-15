@@ -101,17 +101,28 @@ export interface ChannelDefinition {
     default_mode?: string
     current_mode?: string
     capabilities: string[]
+    ui_anchor_x?: number
+    ui_anchor_y?: number
+    ui_hotspot_radius?: number
+    limits?: {
+        max_voltage_v?: number
+        max_current_ma?: number
+        max_pressure_bar?: number
+    }
 }
 
 export interface ModuleTypeDefinition {
     module_code: number
+    product_family?: string
     capabilities: string[]
     num_inputs: number
     num_outputs: number
     num_configurable: number
     valve_count: number
+    channels_per_valve?: number
     channels: ChannelDefinition[]
     image_asset?: string
+    test_parameters?: Record<string, Record<string, unknown>>
 }
 
 export interface ModuleInstance {
@@ -122,6 +133,9 @@ export interface ModuleInstance {
     address: number
     category: 'input' | 'output' | 'inout' | 'bus' | 'valve'
     module_type_ref: string
+    firmware_version?: string | null
+    serial_number?: string | null
+    presence_state?: 'expected' | 'optional' | 'present' | 'missing'
     mounted_valves?: number[]
     valve_slots?: number
     num_inputs?: number
@@ -157,6 +171,10 @@ export interface TestDefinition {
     safety_class: 'safe' | 'caution' | 'destructive'
     allowed_in_ci: boolean
     can_run_parallel?: boolean
+    assignment_scope?: 'system' | 'module' | 'channel' | 'wiring'
+    required_channel_capabilities?: string[]
+    required_channel_modes?: string[]
+    target_module_instance_ids?: string[]
     parameters?: Record<string, unknown>
 }
 

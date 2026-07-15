@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from 'react'
+import { useCallback, useEffect, useContext, useMemo } from 'react'
 import { Box, Typography } from '@mui/material'
 import {
     useNodesState,
@@ -22,6 +22,8 @@ const NODE_TYPES: NodeTypes = {
     backplane: BackplaneNode as NodeTypes[string],
 }
 
+const NO_REMOVED_MODULES: TopologyModule[] = []
+
 
 
 const EDGE_TYPES: EdgeTypes = {
@@ -32,17 +34,18 @@ const EDGE_TYPES: EdgeTypes = {
 // ── Helper: convert BenchConfig wiring → ReactFlow IO edges ────────────────
 function wiringToEdges(wiring: WiringConnection[], instances: ModuleInstance[]): Edge[] {
     // Build address → category map to derive correct handle kind (in/out/inout)
-    const catByAddr: Record<number, string> = {}
+    const instanceById = new Map(instances.map(instance => [instance.instance_id, instance]))
+    const categoryById = new Map(instances.map(instance => [instance.instance_id, instance.category]))
     for (const inst of instances) {
-        catByAddr[inst.address] = inst.category
+        instanceById.set(inst.instance_id, inst)
     }
-    const srcKind = (addr: number): string => {
-        const cat = catByAddr[addr] ?? 'inout'
+    const srcKind = (instanceId: string): string => {
+        const cat = categoryById.get(instanceId) ?? 'inout'
         if (cat === 'inout') return 'inout'
         return 'out'
     }
-    const tgtKind = (addr: number): string => {
-        const cat = catByAddr[addr] ?? 'inout'
+    const tgtKind = (instanceId: string): string => {
+        const cat = categoryById.get(instanceId) ?? 'inout'
         if (cat === 'inout') return 'inout'
         return 'in'
     }
@@ -50,24 +53,16 @@ function wiringToEdges(wiring: WiringConnection[], instances: ModuleInstance[]):
     const edges: Edge[] = []
     const pairCounts = new Map<string, number>()
 
-    const addressOf = (instanceId: string): number => {
-        const instance = instances.find(item => item.instance_id === instanceId)
-        if (instance) return instance.address
-        const match = instanceId.match(/(?:mod-)?0*(\d+)$/)
-        return match ? Number(match[1]) : 0
-    }
-
     wiring.forEach(c => {
-        const srcAddr = addressOf(c.source_instance_id)
-        const tgtAddr = addressOf(c.target_instance_id)
-        const sh = c.source_handle || `src-${srcKind(srcAddr)}-${c.source_channel}`
-        const th = c.target_handle || `tgt-${tgtKind(tgtAddr)}-${c.target_channel}`
+        if (!instanceById.has(c.source_instance_id) || !instanceById.has(c.target_instance_id)) return
+        const sh = c.source_handle || `src-${srcKind(c.source_instance_id)}-${c.source_channel}`
+        const th = c.target_handle || `tgt-${tgtKind(c.target_instance_id)}-${c.target_channel}`
 
-        const outKind = srcKind(srcAddr)
+        const outKind = srcKind(c.source_instance_id)
         let wireColor = outKind === 'out' ? '#2e7d32' : outKind === 'in' ? '#1565c0' : '#e65100'
 
         // Multi-color logic for redundant edges
-        const pairKey = `${srcAddr}->${tgtAddr}`
+        const pairKey = `${c.source_instance_id}->${c.target_instance_id}`
         const existingCount = pairCounts.get(pairKey) ?? 0
         pairCounts.set(pairKey, existingCount + 1)
         const colorPalette = [
@@ -86,9 +81,9 @@ function wiringToEdges(wiring: WiringConnection[], instances: ModuleInstance[]):
 
         edges.push({
             id: c.id,
-            source: String(srcAddr),
+            source: c.source_instance_id,
             sourceHandle: sh,
-            target: String(tgtAddr),
+            target: c.target_instance_id,
             targetHandle: th,
             type: 'wire',
             animated: true,
@@ -125,34 +120,21 @@ interface Props {
 
 
 export default function TopologyFlow({
-    topology, diffStatus, removedModules = [],
+    topology, diffStatus, removedModules = NO_REMOVED_MODULES,
     activeModuleAddr = null, selectedModuleAddr = null, onSelectModuleAddr,
     rawConfig, showApCables, showIoCables, diagnoses,
     wrapThreshold, cableGap, isMockMode, onModuleValveChange, onRemoveModule, onMoveModule
 }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
-    const [ioEdges, setIoEdges] = useState<Edge[]>([])
     useContext(AlertsContext)
 
-    // ── Derive ioEdges from rawConfig (no need to fetch again) ────────────
-    useEffect(() => {
-        if (!rawConfig) {
-            setIoEdges([])
-            return
-        }
+    // Derive wiring edges directly from canonical configuration.
+    const ioEdges = useMemo(() => {
+        if (!rawConfig) return []
         const wiring = rawConfig.wiring ?? []
-        const edges = wiringToEdges(wiring, rawConfig.module_instances ?? [])
-        setIoEdges(edges)
+        return wiringToEdges(wiring, rawConfig.module_instances ?? [])
     }, [rawConfig])
-
-    // When ioEdges load (possibly after topology is already set), merge them in
-    useEffect(() => {
-        setEdges(prev => {
-            const nonIo = prev.filter(e => (e.data as Record<string, unknown>)?.kind !== 'io')
-            return [...nonIo, ...ioEdges]
-        })
-    }, [ioEdges, setEdges])
 
     // ── Rebuild layout when topology / diff / modules change ────────────
     useEffect(() => {
@@ -182,7 +164,23 @@ export default function TopologyFlow({
                 }
             }
         }
-        const { nodes: newNodes, edges: chainEdges } = buildLayout(allMods, mergedStatus, !!isMockMode, wrapThreshold, cableGap)
+        const built = buildLayout(allMods, mergedStatus, !!isMockMode, wrapThreshold, cableGap)
+        const instanceByAddress = new Map(
+            (rawConfig?.module_instances ?? []).map(instance => [instance.address, instance.instance_id]),
+        )
+        const stableNodeId = (id: string) => {
+            const address = Number(id)
+            return Number.isFinite(address) ? (instanceByAddress.get(address) ?? id) : id
+        }
+        const newNodes = built.nodes.map(node => (
+            node.type === 'mod' ? { ...node, id: stableNodeId(node.id) } : node
+        ))
+        const chainEdges = built.edges.map(edge => ({
+            ...edge,
+            id: `chain:${stableNodeId(edge.source)}:${edge.sourceHandle ?? ''}->${stableNodeId(edge.target)}:${edge.targetHandle ?? ''}`,
+            source: stableNodeId(edge.source),
+            target: stableNodeId(edge.target),
+        }))
 
         setNodes(prevNodes => {
             const prevNodeMap = new Map(prevNodes.map(n => [n.id, n]))
@@ -195,8 +193,6 @@ export default function TopologyFlow({
                 const isValveBody = mod?.Type?.toLowerCase() === 'valve'
                     || isVabaX5ValveTerminal(mod?.Name ?? '')
                     || (mod?.MountedValves?.length ?? 0) > 0
-                const active = (activeModuleAddr != null && n.id === String(activeModuleAddr) && n.type === 'mod')
-                    || (selectedModuleAddr != null && n.id === String(selectedModuleAddr) && n.type === 'mod')
                 const prev = prevNodeMap.get(n.id)
                 const prevHidden = prev ? (prev.data as Record<string, unknown>).hiddenValves : undefined
                 const addr = mod?.Adress
@@ -211,35 +207,53 @@ export default function TopologyFlow({
                         onValveChange: (isValveBody && onModuleValveChange) ? onModuleValveChange : undefined,
                         onRemoveModule: (isMockMode && onRemoveModule) ? () => onRemoveModule(addr!) : undefined,
                         onMoveModule: (isMockMode && onMoveModule) ? onMoveModule : undefined,
-                        active,
+                        active: false,
                         diagnoses: addr != null ? (diagByAddr[addr] ?? []) : [],
                     },
                 }
             })
         })
         setEdges([...chainEdges, ...ioEdges])
-    }, [topology, diffStatus, removedModules, activeModuleAddr, selectedModuleAddr, ioEdges, diagnoses, wrapThreshold, cableGap, setNodes, setEdges, isMockMode, onMoveModule, onRemoveModule, onModuleValveChange])
+    }, [topology, diffStatus, removedModules, rawConfig, ioEdges, diagnoses, wrapThreshold, cableGap, setNodes, setEdges, isMockMode, onMoveModule, onRemoveModule, onModuleValveChange])
+
+    // Selection only changes two node objects; it must not rebuild the complete layout.
+    useEffect(() => {
+        setNodes(previous => {
+            let changed = false
+            const next = previous.map(node => {
+                if (node.type !== 'mod') return node
+                const mod = (node.data as Record<string, unknown>).mod as TopologyModule | undefined
+                const active = mod != null && (
+                    mod.Adress === activeModuleAddr || mod.Adress === selectedModuleAddr
+                )
+                if (Boolean((node.data as Record<string, unknown>).active) === active) return node
+                changed = true
+                return { ...node, data: { ...node.data, active } }
+            })
+            return changed ? next : previous
+        })
+    }, [activeModuleAddr, selectedModuleAddr, setNodes])
 
     const onEdgesChange = (changes: EdgeChange[]) => {
         _onEdgesChange(changes.filter(c => c.type !== 'remove'))
     }
 
     // ── Visible edges based on toggles ──────────────────────────────────
-    const visibleEdges = edges.filter(e => {
+    const visibleEdges = useMemo(() => edges.filter(e => {
         const kind = (e.data as Record<string, unknown>)?.kind
         if (kind === 'cable') return showApCables
         if (kind === 'io') return showIoCables
         return true
-    })
+    }), [edges, showApCables, showIoCables])
 
-    const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
+    const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
         if (onSelectModuleAddr && node.type === 'mod') {
             const mod = (node.data as any).mod as TopologyModule
             if (mod) {
                 onSelectModuleAddr(mod.Adress)
             }
         }
-    }
+    }, [onSelectModuleAddr])
 
     if (!topology) {
         return (

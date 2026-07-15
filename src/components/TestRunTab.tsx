@@ -116,7 +116,6 @@ function normalizeRunState(value: unknown): TestRunState {
 
 interface Props {
     ip: string
-    hwConnected: boolean
 }
 
 interface RunTabState {
@@ -210,7 +209,7 @@ function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
     }
 }
 
-export default function TestRunTab({ ip, hwConnected }: Props) {
+export default function TestRunTab({ ip }: Props) {
     const [state, dispatch] = useReducer(runTabReducer, initialRunTabState)
     const { selected, runState, sseLogs, pbLogs, busy } = state
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -238,10 +237,6 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
         return [...new Set(serverTests)]
     })()
     const showProgress = runState.status !== 'idle' && displayTests.length > 0
-
-    useEffect(() => {
-        if (!isActive) setAbortPending(false)
-    }, [isActive])
 
     useEffect(() => {
         activeRunIdRef.current = runState.run_id ?? null
@@ -292,7 +287,7 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
         return () => {
             stopped = true
             statusControllerRef.current?.abort()
-            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+            if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
         }
     }, [isActive, fetchStatus])
 
@@ -375,6 +370,7 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
 
     async function doStart() {
         if (selected.length === 0) return
+        setAbortPending(false)
         if (esRef.current) { esRef.current.close(); esRef.current = null }
         dispatch({ type: 'START_RUN', selected })
 
@@ -417,7 +413,9 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
                     const payload = await response.json() as { detail?: string }
                     if (payload.detail) message = payload.detail
                 } catch { /* response did not contain JSON */ }
-                throw new Error(message)
+                setAbortPending(false)
+                setAbortError(message)
+                return
             }
             // Keep the button in its pending state until polling observes that
             // the worker has stopped. The backend checks the abort flag at a
@@ -442,7 +440,6 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
                     busy={busy}
                     canAbort={isActive}
                     isAborting={abortPending}
-                    hwConnected={hwConnected}
                     runSource={runState.source}
                     onToggleTest={toggleTest}
                     onStart={doStart}

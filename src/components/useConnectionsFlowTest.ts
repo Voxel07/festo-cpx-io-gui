@@ -41,11 +41,14 @@ export function useConnectionsFlowTest(
     dispatch: React.Dispatch<ConnectionsFlowAction>
 ) {
     const testConns: TestConn[] = useMemo(() => {
+        const modulesByAddress = new Map(
+            (topology?.Topology ?? []).map(module => [String(module.Adress), module]),
+        )
         return edges.reduce<TestConn[]>((acc, e) => {
             if ((e.data as Record<string, unknown>)?.kind === 'io') {
                 const d = e.data as Record<string, unknown>
-                const srcMod = topology?.Topology?.find(m => String(m.Adress) === String(e.source))
-                const tgtMod = topology?.Topology?.find(m => String(m.Adress) === String(e.target))
+                const srcMod = modulesByAddress.get(String(e.source))
+                const tgtMod = modulesByAddress.get(String(e.target))
                 acc.push({
                     id: e.id,
                     srcAddr: parseInt(e.source),
@@ -130,51 +133,46 @@ export function useConnectionsFlowTest(
     async function testAll() {
         dispatch({ type: 'SET_TEST_ALL_BUSY', busy: true })
         try {
-            for (const conn of testConns) {
-                dispatch({ type: 'SET_TEST_BUSY', edgeId: conn.id, busy: true })
-                try {
-                    const rOn = await fetch('/io/set-output', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            ip_address: ip ?? '',
-                            module_addr: conn.srcAddr,
-                            channel: conn.srcCh,
-                            value: true,
-                            channels_per_port: conn.srcCPP,
-                            subchannel: conn.srcSubchannel
-                        }),
-                        signal: AbortSignal.timeout(8000),
-                    })
-                    dispatch({ type: 'SET_OUTPUT_STATE', edgeId: conn.id, value: true })
-                    if (rOn.ok) {
-                        await new Promise(res => setTimeout(res, 300))
-                        await doReadInput(conn)
-                    } else {
-                        const errMsg = await extractErrMsg(rOn)
-                        dispatch({ type: 'SET_TEST_RESULT', edgeId: conn.id, result: { value: null, error: errMsg } })
-                    }
-                    await fetch('/io/set-output', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            ip_address: ip ?? '',
-                            module_addr: conn.srcAddr,
-                            channel: conn.srcCh,
-                            value: false,
-                            channels_per_port: conn.srcCPP,
-                            subchannel: conn.srcSubchannel
-                        }),
-                        signal: AbortSignal.timeout(8000),
-                    }).catch(() => {})
-                    dispatch({ type: 'SET_OUTPUT_STATE', edgeId: conn.id, value: false })
-                    dispatch({ type: 'SET_TEST_BUSY', edgeId: conn.id, busy: false })
-                } catch {
-                    dispatch({ type: 'SET_TEST_BUSY', edgeId: conn.id, busy: false })
-                }
+            const response = await fetch('/io/check-wiring', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ip_address: ip ?? '',
+                    settle_time_ms: 100,
+                    connections: testConns.map(conn => ({
+                        edge_id: conn.id,
+                        source_module_addr: conn.srcAddr,
+                        source_channel: conn.srcCh,
+                        target_module_addr: conn.tgtAddr,
+                        target_channel: conn.tgtCh,
+                        source_channels_per_port: conn.srcCPP,
+                        target_channels_per_port: conn.tgtCPP,
+                        source_subchannel: conn.srcSubchannel,
+                        target_subchannel: conn.tgtSubchannel,
+                    })),
+                }),
+                signal: AbortSignal.timeout(Math.max(15000, testConns.length * 3000)),
+            })
+            if (!response.ok) throw new Error(await extractErrMsg(response))
+            const data = await response.json()
+            for (const result of data.results ?? []) {
+                dispatch({
+                    type: 'SET_TEST_RESULT',
+                    edgeId: String(result.edge_id),
+                    result: {
+                        values: Array.isArray(result.values) ? result.values.map(Boolean) : undefined,
+                        value: result.value == null ? null : Boolean(result.value),
+                        error: result.error ? String(result.error) : undefined,
+                    },
+                })
             }
-            dispatch({ type: 'SET_TEST_ALL_BUSY', busy: false })
-        } catch {
+            dispatch({ type: 'SET_OUTPUT_STATES', states: {} })
+        } catch (error) {
+            const message = (error as Error).message
+            for (const conn of testConns) {
+                dispatch({ type: 'SET_TEST_RESULT', edgeId: conn.id, result: { value: null, error: message } })
+            }
+        } finally {
             dispatch({ type: 'SET_TEST_ALL_BUSY', busy: false })
         }
     }

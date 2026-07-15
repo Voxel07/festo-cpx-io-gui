@@ -132,16 +132,18 @@ export function useModifiedSvgText(svgUrl: string, hiddenIds: string[], numValve
     const hiddenKey = hiddenIds.join('\u0000')
 
     useEffect(() => {
-        if (!svgUrl) return
         let cancelled = false
-        let timer: ReturnType<typeof setTimeout> | null = null
+        const cleanup = () => {
+            cancelled = true
+        }
+        if (!svgUrl) return cleanup
         const currentHiddenIds = hiddenKey ? hiddenKey.split('\u0000') : []
         if (currentHiddenIds.length === 0 && numValves === undefined) {
             // Just use the raw fetched text directly if no modifications are needed
             const cachedText = textCache.get(svgUrl)
             if (cachedText) {
-                setSvgText(cachedText)
-                return
+                queueMicrotask(() => { if (!cancelled) setSvgText(cachedText) })
+                return cleanup
             }
             fetchSvgText(svgUrl).then(fetchedText => {
                 if (fetchedText) {
@@ -149,14 +151,14 @@ export function useModifiedSvgText(svgUrl: string, hiddenIds: string[], numValve
                     if (!cancelled) setSvgText(fetchedText)
                 }
             })
-            return () => { cancelled = true }
+            return cleanup
         }
 
         const cacheKey = `${svgUrl}|${numValves ?? ''}|${hiddenKey}`
         const cached = dataUrlCache.get(cacheKey)
         if (cached) {
-            setSvgText(cached)
-            return
+            queueMicrotask(() => { if (!cancelled) setSvgText(cached) })
+            return cleanup
         }
 
         const text = textCache.get(svgUrl)
@@ -164,30 +166,19 @@ export function useModifiedSvgText(svgUrl: string, hiddenIds: string[], numValve
             fetchSvgText(svgUrl).then(fetchedText => {
                 if (fetchedText && !cancelled) {
                     textCache.set(svgUrl, fetchedText)
-                    timer = setTimeout(() => {
-                        const next = buildSvgText(fetchedText, currentHiddenIds, numValves, svgUrl)
-                        dataUrlCache.set(cacheKey, next)
-                        if (!cancelled) setSvgText(next)
-                    }, 0)
+                    const next = buildSvgText(fetchedText, currentHiddenIds, numValves, svgUrl)
+                    dataUrlCache.set(cacheKey, next)
+                    setSvgText(next)
                 }
             })
-            return () => {
-                cancelled = true
-                if (timer) clearTimeout(timer)
-            }
+            return cleanup
         }
 
-        // We have text, build async so we don't block the UI thread during React render
-        timer = setTimeout(() => {
-            const next = buildSvgText(text, currentHiddenIds, numValves, svgUrl)
-            dataUrlCache.set(cacheKey, next)
-            if (!cancelled) setSvgText(next)
-        }, 0)
+        const next = buildSvgText(text, currentHiddenIds, numValves, svgUrl)
+        dataUrlCache.set(cacheKey, next)
+        queueMicrotask(() => { if (!cancelled) setSvgText(next) })
 
-        return () => {
-            cancelled = true
-            if (timer) clearTimeout(timer)
-        }
+        return cleanup
     }, [svgUrl, hiddenKey, numValves])
 
     return svgText

@@ -9,13 +9,16 @@ export function DebugPanel({ onClose }: { onClose: () => void }) {
     const totalNodes = useStore(s => s.nodes.length)
 
     const frameRef = useRef(0)
-    const lastTimeRef = useRef(performance.now())
+    const lastTimeRef = useRef(0)
     const frameCountRef = useRef(0)
-    const lastFpsTimeRef = useRef(performance.now())
+    const lastFpsTimeRef = useRef(0)
     const droppedRef = useRef(0)
     const currentDtRef = useRef(0)
 
     useEffect(() => {
+        const startedAt = performance.now()
+        lastTimeRef.current = startedAt
+        lastFpsTimeRef.current = startedAt
         const loop = (time: number) => {
             const currentDt = time - lastTimeRef.current
             lastTimeRef.current = time

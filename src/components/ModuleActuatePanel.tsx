@@ -43,8 +43,8 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
 
 
     const channels = mod ? buildChannels(mod, mountedValves, includeUnmounted) : []
-    const isValve = mod ? isValveBody(mod.Name) : false
-    const cpv = mod ? channelsPerValve(mod.Name) : 2
+    const isValve = mod ? isValveBody(mod) : false
+    const cpv = mod ? channelsPerValve(mod) : 2
     const allChannelIndices = channels.map(c => c.index)
 
     // Unique valve slots present in the current channel list
@@ -136,7 +136,6 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
             ip_address: ip,
             module_addr: mod.Adress,
             value,
-            module_name: mod.Name,
             channels: indices,
         }
 
@@ -177,7 +176,7 @@ export default function ModuleActuatePanel({ module: mod, ip, mountedValves }: P
         )
     }
 
-    const isIface = isValveInterface(mod.Name)
+    const isIface = isValveInterface(mod)
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

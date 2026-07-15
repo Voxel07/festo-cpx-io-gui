@@ -13,7 +13,7 @@
  * Waypoints are stored in ``edge.data.waypoints`` and persisted to
  * connections.jsonc.
  */
-import { useRef, useEffect, useMemo, useCallback, useContext } from 'react'
+import { useRef, useEffect, useMemo, useContext } from 'react'
 import { BaseEdge, useReactFlow, Position } from '@xyflow/react'
 import type { EdgeProps } from '@xyflow/react'
 import { AlertsContext } from '../utils/AlertsContext'
@@ -167,17 +167,17 @@ export function WireEdge({
     // All handlers read FRESH state from edge data to avoid stale closures.
 
     /** Snapshot the current visual routed corners, or copy existing waypoints */
-    const snapshotOrCopy = useCallback((): Array<{ x: number; y: number }> => {
+    const snapshotOrCopy = (): Array<{ x: number; y: number }> => {
         const allEdges = getEdges()
         const edge = allEdges.find(e => e.id === id)
         const existing = edge ? readWaypoints(edge.data) : []
         if (existing.length > 0) return existing.map(w => ({ ...w }))
         // Snapshot the auto-generated routed corners
         return cornersRef.current.map(c => ({ x: c.x, y: c.y }))
-    }, [getEdges, id])
+    }
 
     /** Click a routed segment to insert a new corner at its midpoint */
-    const onSegmentClick = useCallback((segIdx: number) => (e: React.MouseEvent) => {
+    const onSegmentClick = (segIdx: number) => (e: React.MouseEvent) => {
         e.stopPropagation()
         const activeWps = snapshotOrCopy()
 
@@ -199,10 +199,10 @@ export function WireEdge({
             if (edge.id !== id) return edge
             return { ...edge, data: { ...edge.data, waypoints: activeWps, straight: false } }
         }))
-    }, [id, setEdges, snapshotOrCopy, shiftedRouted, alerts])
+    }
 
     /** Drag a corner waypoint to a new position */
-    const onWaypointMD = useCallback((idx: number) => (e: React.MouseEvent) => {
+    const onWaypointMD = (idx: number) => (e: React.MouseEvent) => {
         e.stopPropagation()
         e.preventDefault()
         const cur = cornersRef.current[idx]
@@ -237,10 +237,10 @@ export function WireEdge({
         }
         window.addEventListener('mousemove', onMove)
         window.addEventListener('mouseup', onUp)
-    }, [id, setEdges, getZoom, snapshotOrCopy, alerts])
+    }
 
     /** Right-click a corner waypoint to remove it */
-    const onWaypointCtx = useCallback((idx: number) => (e: React.MouseEvent) => {
+    const onWaypointCtx = (idx: number) => (e: React.MouseEvent) => {
         e.stopPropagation()
         e.preventDefault()
         const activeWps = snapshotOrCopy()
@@ -253,10 +253,10 @@ export function WireEdge({
             if (edge.id !== id) return edge
             return { ...edge, data: { ...edge.data, waypoints: activeWps } }
         }))
-    }, [id, setEdges, snapshotOrCopy, alerts])
+    }
 
     /** Drag the label to a new offset */
-    const onLabelMD = useCallback((e: React.MouseEvent) => {
+    const onLabelMD = (e: React.MouseEvent) => {
         e.stopPropagation()
         e.preventDefault()
         
@@ -281,15 +281,15 @@ export function WireEdge({
         }
         window.addEventListener('mousemove', onMove)
         window.addEventListener('mouseup', onUp)
-    }, [id, setEdges, getZoom, getEdges])
+    }
 
     /** Delete the entire edge */
-    const onRemove = useCallback((e: React.MouseEvent) => {
+    const onRemove = (e: React.MouseEvent) => {
         e.stopPropagation()
         e.preventDefault()
         setEdges(prev => prev.filter(edge => edge.id !== id))
         alerts?.showAlert('info', 'Connection removed')
-    }, [id, setEdges, alerts])
+    }
 
     // ── Snapshot Auto-Routed Path ─────────────────────────────────────────────
     // If this edge was just created (has no waypoints) and uses the smart router,

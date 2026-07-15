@@ -210,34 +210,34 @@ export function useConnectionsFlowLayout(
 
     useEffect(() => {
         const ioEdges = edges.filter(e => (e.data as Record<string, unknown>)?.kind === 'io')
+        const connectionsByNode = new Map<string, ConnectionEntry[]>()
+        const addConnection = (nodeId: string, connection: ConnectionEntry) => {
+            const entries = connectionsByNode.get(nodeId)
+            if (entries) entries.push(connection)
+            else connectionsByNode.set(nodeId, [connection])
+        }
+        for (const edge of ioEdges) {
+            const data = edge.data as Record<string, unknown>
+            addConnection(edge.source, {
+                id: edge.id,
+                portId: portId(String(edge.sourceHandle ?? '')),
+                peerAddr: edge.target,
+                peerPort: portId(String(edge.targetHandle ?? '')),
+                dir: 'src',
+                wireColor: data?.wireColor as string | undefined,
+            })
+            addConnection(edge.target, {
+                id: edge.id,
+                portId: portId(String(edge.targetHandle ?? '')),
+                peerAddr: edge.source,
+                peerPort: portId(String(edge.sourceHandle ?? '')),
+                dir: 'tgt',
+                wireColor: data?.wireColor as string | undefined,
+            })
+        }
         setNodes(prev => prev.map(n => {
             if (n.type !== 'mod') return n
-            const conns: ConnectionEntry[] = ioEdges.reduce<ConnectionEntry[]>((acc, e) => {
-                const isSrc = e.source === n.id
-                const isTgt = e.target === n.id
-                
-                if (isSrc) {
-                    acc.push({
-                        id: e.id,
-                        portId: portId(String(e.sourceHandle ?? '')),
-                        peerAddr: e.target,
-                        peerPort: portId(String(e.targetHandle ?? '')),
-                        dir: 'src',
-                        wireColor: (e.data as Record<string, unknown>)?.wireColor as string | undefined,
-                    })
-                }
-                if (isTgt) {
-                    acc.push({
-                        id: e.id,
-                        portId: portId(String(e.targetHandle ?? '')),
-                        peerAddr: e.source,
-                        peerPort: portId(String(e.sourceHandle ?? '')),
-                        dir: 'tgt',
-                        wireColor: (e.data as Record<string, unknown>)?.wireColor as string | undefined,
-                    })
-                }
-                return acc
-            }, [])
+            const conns = connectionsByNode.get(n.id) ?? []
             return { ...n, data: { ...(n.data as ModuleNodeData), connections: conns } }
         }))
     }, [edges, setNodes])
