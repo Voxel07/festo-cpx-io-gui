@@ -9,6 +9,17 @@ const textCache = new Map<string, string>()
 const dataUrlCache = new Map<string, string>()
 const textPromises = new Map<string, Promise<string>>()
 
+export function getDynamicSvgWidth(svgUrl: string, numValves?: number): number | undefined {
+    if (numValves === undefined) return undefined
+    const upperUrl = svgUrl.toUpperCase()
+    if (upperUrl.includes('VABX-A-P-EL-E12-API')) return 63 + numValves * 11
+    if (upperUrl.includes('VMPAL')) return 33 + numValves * 10
+    if (upperUrl.includes('VABA-S6-1-X5')) return 72 + numValves * 17
+    if (upperUrl.includes('VABA')) return 45 + numValves * 17
+    if (upperUrl.includes('VAEM')) return 55 + numValves * 10
+    return undefined
+}
+
 function buildSvgText(text: string, hiddenIds: string[], numValves?: number, svgUrl?: string): string {
     const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
     
@@ -24,8 +35,15 @@ function buildSvgText(text: string, hiddenIds: string[], numValves?: number, svg
         const isVABA_X5 = svgUrl?.includes('VABA-S6-1-X5')
         const isVABA = svgUrl?.includes('VABA') && !isVABA_X5
         const isVAEM = svgUrl?.includes('VAEM') || doc.documentElement.id.includes('VAEM')
+        const isVabxParallelApi = svgUrl?.toUpperCase().includes('VABX-A-P-EL-E12-API')
+            || doc.documentElement.id.toUpperCase().includes('VABX-A-P-EL-E12-API')
 
-        if (isVMPAL) {
+        if (isVabxParallelApi) {
+            totalWidth = 63 + numValves * 11
+            pitch = 11
+            isDynamic = true
+            resizeBody = false
+        } else if (isVMPAL) {
             totalWidth = 33 + numValves * 10
             body2Width = 1 + numValves * 10
             pitch = 10
@@ -50,6 +68,39 @@ function buildSvgText(text: string, hiddenIds: string[], numValves?: number, svg
         if (isDynamic) {
             const cutOut = doc.getElementById('Cut_out')
             if (cutOut) cutOut.remove()
+
+            if (isVabxParallelApi) {
+                const originalValveCount = 8
+                const endplateOffset = (numValves - originalValveCount) * pitch
+                const base = doc.getElementById('Base')
+                base?.setAttribute('width', String(totalWidth))
+                for (const id of ['Right_Endplate', 'Festo_Logo']) {
+                    const element = doc.getElementById(id)
+                    if (element) element.setAttribute('transform', `translate(${endplateOffset} 0)`)
+                }
+
+                const wrappers = Array.from(doc.querySelectorAll('g[id^="VTUX_Valves_Size_10"]'))
+                const legacyValves = wrappers.flatMap(wrapper =>
+                    Array.from(wrapper.children).filter(child => child.tagName.toLowerCase() === 'g'),
+                )
+                const minX = (group: Element) => Math.min(...Array.from(group.querySelectorAll('[x], [cx]')).map(element => {
+                    const raw = element.getAttribute('x') ?? element.getAttribute('cx') ?? ''
+                    const value = Number.parseFloat(raw)
+                    return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
+                }))
+                legacyValves.sort((a, b) => minX(a) - minX(b))
+                const firstWrapper = wrappers[0]
+                const template = legacyValves[0]
+                if (firstWrapper?.parentNode && template) {
+                    const valvesGroup = doc.createElementNS('http://www.w3.org/2000/svg', 'g')
+                    valvesGroup.id = 'Valves'
+                    const canonicalTemplate = template.cloneNode(true) as Element
+                    canonicalTemplate.id = 'Valve'
+                    valvesGroup.appendChild(canonicalTemplate)
+                    firstWrapper.parentNode.insertBefore(valvesGroup, firstWrapper)
+                    wrappers.forEach(wrapper => wrapper.remove())
+                }
+            }
 
             const svgEl = doc.documentElement
             const currentViewBox = svgEl.getAttribute('viewBox') || '0 0 100 100'

@@ -118,12 +118,13 @@ export function getPortTgtStyle(cx: number, cy: number, editMode: boolean, isSqu
 
 export function supportsMountedValves(name: string, type: string): boolean {
     const upName = name.toUpperCase()
+    if (/^VABX-A-P-EL(?:-E)?12-API\b/.test(upName)) return true
     if (/^VABX-A-(?:S-)?EL-E(?:12|34)-AP[IPA]\b/.test(upName)) return false
     return type.toLowerCase() === 'valve' || upName.startsWith('VMPAL') || upName.startsWith('VAEM') || upName.startsWith('VTUX') || /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(upName)
 }
 
 export function isValveInterfaceModule(name: string): boolean {
-    return /^VABX-A-(?:S-)?EL-/.test(name.toUpperCase())
+    return /^VABX-A-(?:(?:S|P)-)?EL-/.test(name.toUpperCase())
 }
 
 export function isVabaX5ValveTerminal(name: string): boolean {
@@ -139,6 +140,7 @@ export function defaultValveSlots(name: string, explicitSlots?: number): number 
     if (explicitSlots !== undefined) return explicitSlots
     if (upName.startsWith('VTUX')) return 4
     if (upName.startsWith('VMPAL')) return 16
+    if (/^VABX-A-P-EL(?:-E)?12-API\b/.test(upName)) return 16
     return undefined
 }
 
@@ -146,25 +148,25 @@ export function defaultValveSlots(name: string, explicitSlots?: number): number 
 // (svgWidth × DISP_H / svgHeight, rounded). Keyed by exact module OrderCode name.
 const KNOWN_DISP_WIDTHS: Record<string, number> = {
     // VABX interface modules – "API-P" / "APA-P" wide parallel-bus variants (SVG height 109)
-    'VABX-A-EL-API-P':              177,  // 151×109
-    'VABX-A-EL-APA-P':              127,  // 108×109
+    'VABX-A-EL-API-P': 177,  // 151×109
+    'VABX-A-EL-APA-P': 127,  // 108×109
     // VABX-A-P-EL-* parallel port variants (SVG height 109)
-    'VABX-A-P-EL-E12-API':          178,  // 151.178×109
-    'VABX-A-P-EL-E12-APA':          127,  // 108×109
-    'VABX-A-P-E12-CTED':            122,  // 104.179×109
-    'VABX-A-P-EL-E12-CTED-MPM12':   181,  // 154.09×109
-    'VABX-A-P-EL-E12-CTED-MPM8':    181,  // 154.09×109
-    'VABX-A-P-EL-E12-CTED-MPRJ45':  181,  // 154×109
+    'VABX-A-P-EL-E12-API': 178,  // 151.178×109
+    'VABX-A-P-EL-E12-APA': 127,  // 108×109
+    'VABX-A-P-E12-CTED': 122,  // 104.179×109
+    'VABX-A-P-EL-E12-CTED-MPM12': 181,  // 154.09×109
+    'VABX-A-P-EL-E12-CTED-MPM8': 181,  // 154.09×109
+    'VABX-A-P-EL-E12-CTED-MPRJ45': 181,  // 154×109
     // VABX-A-S-EL-* single-bus CTED variants (SVG height 109)
-    'VABX-A-S-EL-E12-CTED-MPM12':   58,   // 49×109
-    'VABX-A-S-EL-E12-CTED-MPM8':    58,   // 49×109
-    'VABX-A-S-EL-E12-CTED-MPRJ45':  58,   // 49×109
+    'VABX-A-S-EL-E12-CTED-MPM12': 58,   // 49×109
+    'VABX-A-S-EL-E12-CTED-MPM8': 58,   // 49×109
+    'VABX-A-S-EL-E12-CTED-MPRJ45': 58,   // 49×109
 }
 
 export function getModuleDispSize(mod: { Name: string, ValveSlots?: number }): { w: number, h: number } {
     // Constant scale factor (approx 1.2 pixels per SVG unit)
     const SCALE = DISP_H / 107; // DISP_H is 128, so 128/107 ≈ 1.196
-    
+
     // Exact-name lookup for widths (if specified, we still scale height according to its known SVG height, which we'd have to guess, so fallback to width-only overrides is tricky. Actually KNOWN_DISP_WIDTHS only has widths. Let's just return fixed heights for those if they are AP-A)
     const upName = mod.Name.toUpperCase()
     const isVmpal = upName.startsWith('VMPAL')
@@ -177,11 +179,15 @@ export function getModuleDispSize(mod: { Name: string, ValveSlots?: number }): {
     const isEpli = upName.includes('EPLI')
     const isApI = upName.startsWith('CPX-AP-I')
     const isVabx = upName.startsWith('VABX')
+    const isVabxParallelApi = /^VABX-A-P-EL(?:-E)?12-API\b/.test(upName)
     const numValves = defaultValveSlots(mod.Name, mod.ValveSlots)
 
     const knownW = KNOWN_DISP_WIDTHS[mod.Name]
-    
-    if (isVmpal && numValves !== undefined) {
+
+    if (isVabxParallelApi && numValves !== undefined) {
+        const svgW = 63 + numValves * 11
+        return { w: Math.round(svgW * (DISP_H / 109)), h: DISP_H }
+    } else if (isVmpal && numValves !== undefined) {
         const svgW = 33 + numValves * 10
         return { w: Math.round(svgW * SCALE), h: Math.round(109 * SCALE) }
     } else if (isVaba && numValves !== undefined) {
@@ -213,7 +219,7 @@ export function getModuleDispSize(mod: { Name: string, ValveSlots?: number }): {
         if (upName.includes('-V4B')) return { w: Math.round(51 * SCALE), h: Math.round(109 * SCALE) }
         if (isValveInterfaceModule(mod.Name)) return { w: Math.round(46 * SCALE), h: DISP_H }
     }
-    
+
     return { w: knownW ?? DISP_W, h: DISP_H }
 }
 

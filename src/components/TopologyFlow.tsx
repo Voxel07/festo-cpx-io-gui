@@ -112,7 +112,6 @@ interface Props {
     wrapThreshold: number
     cableGap: number
     isMockMode?: boolean
-    onModuleValveChange?: (addr: number, mountedValves: number[], valveSlots?: number) => void
     onRemoveModule?: (addr: number) => void
     onMoveModule?: (oldAddr: number, newAddr: number) => void
 }
@@ -123,7 +122,7 @@ export default function TopologyFlow({
     topology, diffStatus, removedModules = NO_REMOVED_MODULES,
     activeModuleAddr = null, selectedModuleAddr = null, onSelectModuleAddr,
     rawConfig, showApCables, showIoCables, diagnoses,
-    wrapThreshold, cableGap, isMockMode, onModuleValveChange, onRemoveModule, onMoveModule
+    wrapThreshold, cableGap, isMockMode, onRemoveModule, onMoveModule
 }: Props) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
     const [edges, setEdges, _onEdgesChange] = useEdgesState<Edge>([])
@@ -144,11 +143,6 @@ export default function TopologyFlow({
             return
         }
         // Build address → diagnoses map for quick lookup
-        const diagByAddr: Record<number, DiagnosisEntry[]> = {}
-        for (const d of diagnoses) {
-            if (!diagByAddr[d.address]) diagByAddr[d.address] = []
-            diagByAddr[d.address].push(d)
-        }
         // Append removed modules (from stored file but absent in live) so they
         // appear in the canvas with a red border, placed after the live modules.
         const allMods = [...topology.Topology]
@@ -175,11 +169,25 @@ export default function TopologyFlow({
         const newNodes = built.nodes.map(node => (
             node.type === 'mod' ? { ...node, id: stableNodeId(node.id) } : node
         ))
+        const routeKey = JSON.stringify(newNodes.map(node => ({
+            id: node.id,
+            parentId: node.parentId,
+            position: node.position,
+            width: node.style?.width,
+            height: node.style?.height,
+            module: node.type === 'mod'
+                ? ((node.data as Record<string, unknown>).mod as TopologyModule | undefined)?.Name
+                : undefined,
+            valveSlots: node.type === 'mod'
+                ? ((node.data as Record<string, unknown>).mod as TopologyModule | undefined)?.ValveSlots
+                : undefined,
+        })))
         const chainEdges = built.edges.map(edge => ({
             ...edge,
             id: `chain:${stableNodeId(edge.source)}:${edge.sourceHandle ?? ''}->${stableNodeId(edge.target)}:${edge.targetHandle ?? ''}`,
             source: stableNodeId(edge.source),
             target: stableNodeId(edge.target),
+            data: { ...edge.data, routeKey },
         }))
 
         setNodes(prevNodes => {
@@ -201,20 +209,45 @@ export default function TopologyFlow({
                     data: {
                         ...data,
                         ...(isValveBody ? { showValves: true } : {}),
-                        ...(isValveBody && onModuleValveChange ? { showValveEditor: true } : {}),
+                        showValveEditor: false,
                         // Preserve hiddenValves across rebuilds only for valve bodies
                         ...(prevHidden != null && isValveBody ? { hiddenValves: prevHidden } : {}),
-                        onValveChange: (isValveBody && onModuleValveChange) ? onModuleValveChange : undefined,
+                        onValveChange: undefined,
                         onRemoveModule: (isMockMode && onRemoveModule) ? () => onRemoveModule(addr!) : undefined,
                         onMoveModule: (isMockMode && onMoveModule) ? onMoveModule : undefined,
                         active: false,
-                        diagnoses: addr != null ? (diagByAddr[addr] ?? []) : [],
+                        diagnoses: prev
+                            ? ((prev.data as Record<string, unknown>).diagnoses ?? [])
+                            : [],
                     },
                 }
             })
         })
-        setEdges([...chainEdges, ...ioEdges])
-    }, [topology, diffStatus, removedModules, rawConfig, ioEdges, diagnoses, wrapThreshold, cableGap, setNodes, setEdges, isMockMode, onMoveModule, onRemoveModule, onModuleValveChange])
+        setEdges(previous => {
+            const previousById = new Map(previous.map(edge => [edge.id, edge]))
+            const stableChainEdges = chainEdges.map(edge => {
+                const oldEdge = previousById.get(edge.id)
+                const oldData = oldEdge?.data as Record<string, unknown> | undefined
+                if (oldData?.routeKey !== routeKey || !oldData.routedPoints) return edge
+                return { ...edge, data: { ...edge.data, routedPoints: oldData.routedPoints } }
+            })
+            return [...stableChainEdges, ...ioEdges]
+        })
+    }, [topology, diffStatus, removedModules, rawConfig, ioEdges, wrapThreshold, cableGap, setNodes, setEdges, isMockMode, onMoveModule, onRemoveModule])
+
+    // Diagnostics refresh frequently; update node data without rebuilding cable edges.
+    useEffect(() => {
+        const diagByAddr: Record<number, DiagnosisEntry[]> = {}
+        for (const diagnosis of diagnoses) {
+            if (!diagByAddr[diagnosis.address]) diagByAddr[diagnosis.address] = []
+            diagByAddr[diagnosis.address].push(diagnosis)
+        }
+        setNodes(previous => previous.map(node => {
+            if (node.type !== 'mod') return node
+            const mod = (node.data as Record<string, unknown>).mod as TopologyModule | undefined
+            return { ...node, data: { ...node.data, diagnoses: mod ? (diagByAddr[mod.Adress] ?? []) : [] } }
+        }))
+    }, [diagnoses, setNodes])
 
     // Selection only changes two node objects; it must not rebuild the complete layout.
     useEffect(() => {
@@ -237,6 +270,16 @@ export default function TopologyFlow({
     const onEdgesChange = (changes: EdgeChange[]) => {
         _onEdgesChange(changes.filter(c => c.type !== 'remove'))
     }
+
+    // Keep the stored route stable while dragging. Re-run A* once, when movement ends.
+    const onNodeDragStop = useCallback(() => {
+        setEdges(previous => previous.map(edge => {
+            const data = edge.data as Record<string, unknown> | undefined
+            if (data?.kind !== 'cable' || !data.routedPoints) return edge
+            const { routedPoints: _routedPoints, ...rest } = data
+            return { ...edge, data: rest }
+        }))
+    }, [setEdges])
 
     // ── Visible edges based on toggles ──────────────────────────────────
     const visibleEdges = useMemo(() => edges.filter(e => {
@@ -279,6 +322,7 @@ export default function TopologyFlow({
                 fitView
                 fitViewOnLayoutChange
                 onNodeClick={handleNodeClick}
+                onNodeDragStop={onNodeDragStop}
                 elementsSelectable={!!onSelectModuleAddr}
             />
         </Box>

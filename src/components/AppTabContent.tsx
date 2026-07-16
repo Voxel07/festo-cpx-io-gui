@@ -47,7 +47,13 @@ export default function AppTabContent(props: AppTabContentProps) {
             {tab === 0 && (
                 <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
                     <Suspense fallback={<LoadingChunk label="Loading topology tools…" />}>
-                        <GenerateCompareTab ip={ip} timeout={timeout} onResult={onResult} configPath={configPath} />
+                        <GenerateCompareTab
+                            ip={ip}
+                            timeout={timeout}
+                            onResult={onResult}
+                            configPath={configPath}
+                            rawConfig={rawConfig}
+                        />
                     </Suspense>
                 </Box>
             )}

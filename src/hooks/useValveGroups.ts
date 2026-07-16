@@ -10,7 +10,7 @@ const cache = new Map<string, string[]>()
 const pending = new Map<string, Promise<string[]>>()
 
 async function fetchAndParseValveGroups(
-    svgUrl: string, 
+    svgUrl: string,
     onSuccess: (found: string[]) => void
 ) {
     try {
@@ -21,7 +21,16 @@ async function fetchAndParseValveGroups(
         const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
         const container = doc.querySelector('g[id="Valves"]')
         if (!container) {
-            onSuccess([])
+            // VABX-A-P-EL-E12-API predates the canonical Valves/Valve IDs.
+            // Its two VTUX groups contain the same valve slots, ordered right-to-left.
+            const legacyGroups = Array.from(doc.querySelectorAll('g[id^="VTUX_Valves_Size_10"] > g[id^="Valve"]'))
+            const minX = (group: Element) => Math.min(...Array.from(group.querySelectorAll('[x], [cx]')).map(element => {
+                const raw = element.getAttribute('x') ?? element.getAttribute('cx') ?? ''
+                const value = Number.parseFloat(raw)
+                return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
+            }))
+            legacyGroups.sort((a, b) => minX(a) - minX(b))
+            onSuccess(legacyGroups.map(group => group.id))
             return
         }
         const found: string[] = []

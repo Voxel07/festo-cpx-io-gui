@@ -88,11 +88,14 @@ export function resolveIcon(
     maps: { byName: SvgMap; byCode: SvgMap },
     moduleCode?: number,
 ): string {
+    // Some topology sources omit the second separator in EL-E12/EL-E34.
+    const canonicalName = name.replace(/-EL(12|34)-/i, '-EL-E$1-')
     let file = maps.byName[name]
+        ?? maps.byName[canonicalName]
         ?? (moduleCode != null ? maps.byCode[String(moduleCode)] : undefined)
 
     if (!file) {
-        const upperName = name.toUpperCase()
+        const upperName = canonicalName.toUpperCase()
         const fallbackName = Object.keys(maps.byName)
             .filter(key => {
                 const upperKey = key.toUpperCase()
@@ -103,7 +106,7 @@ export function resolveIcon(
     }
 
     if (!file) {
-        const upperName = name.toUpperCase()
+        const upperName = canonicalName.toUpperCase()
         if (upperName.includes('CPX-AP-I') || upperName.includes('AP-I')) {
             // 16-channel AP-I devices use the Wide module SVG (more connector positions)
             const isWide = /(?:16(?:DI|DIO|NDI|NDIO|NIDO))/.test(upperName)

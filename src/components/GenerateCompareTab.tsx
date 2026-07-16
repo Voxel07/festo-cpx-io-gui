@@ -5,7 +5,7 @@ import {
 } from '@mui/material'
 import SplitDiff from './SplitDiff'
 import type { Topology, TopologyModule, DiffStatus, CompareResult, BenchConfig } from '../types'
-import { configToTopology } from '../utils/topology'
+import { configToTopology, preserveMountedValveMetadata } from '../utils/topology'
 import { AlertsContext } from '../utils/AlertsContext'
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -137,6 +137,7 @@ interface Props {
     timeout: number
     onResult: (topo: Topology | null, status: DiffStatus | null, removed?: TopologyModule[], rawConfig?: BenchConfig) => void
     configPath: string
+    rawConfig: BenchConfig | null
 }
 
 interface TabState {
@@ -217,7 +218,7 @@ function tabReducer(state: TabState, action: TabAction): TabState {
     }
 }
 
-export default function GenerateCompareTab({ ip, timeout, onResult, configPath }: Props) {
+export default function GenerateCompareTab({ ip, timeout, onResult, configPath, rawConfig }: Props) {
     const [state, dispatch] = useReducer(tabReducer, initialTabState)
     const alerts = useContext(AlertsContext)
     const {
@@ -240,7 +241,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult, configPath }
             const r = await fetch('/config/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ip_address: ip, timeout }),
+                body: JSON.stringify({ ip_address: ip, timeout, save_path: configPath || undefined }),
             })
             const d = await r.json()
             if (!r.ok) {
@@ -248,7 +249,7 @@ export default function GenerateCompareTab({ ip, timeout, onResult, configPath }
                 alerts?.showAlert('error', d.detail ?? 'Unknown error')
                 return
             }
-            const config: BenchConfig = d.config
+            const config = preserveMountedValveMetadata(d.config as BenchConfig, rawConfig)
             const topo = configToTopology(config)
             dispatch({ type: 'READ_SUCCESS', config, topology: topo })
             onResult(topo, null, [], config)

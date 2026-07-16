@@ -19,7 +19,7 @@ function isEpli(name: string): boolean {
 /** VABX valve interface with AP pass-through connectors (e.g. VABX-A-S-EL-E12-API).
  *  XF10 (top) = AP-in, XF20 (bottom) = AP-out — positioned on left side of SVG. */
 function isVabxApInterface(name: string): boolean {
-    return /^VABX-A-(?:S-)?EL-\w+-API/.test(name)
+    return /^VABX-A-(?:(?:S|P)-)?EL-.*-API\b/i.test(name)
 }
 
 /** AP-I module with M12/M8 connector (e.g. CPX-AP-I-PN-M12, CPX-AP-I-16NDIO-M12-5P). */
@@ -56,7 +56,10 @@ function getApHandlePos(mod: TopologyModule): {
     if (isVabxApInterface(name)) {
         // VABX-A-EL-API-S.svg viewBox 46×109; objectFit:contain scale = 128/109 ≈ 1.174
         // XF10 cy=23.5 → 21.6 %  |  XF20 cy=44.5 → 40.8 %  |  cx=12.0 → 28.5 %
-        return { apInTop: '21.6%', apInLeft: '28.5%', apOutTop: '40.8%', apOutLeft: '28.5%' }
+        const isParallelTerminal = /^VABX-A-P-EL-/i.test(name)
+        const svgWidth = isParallelTerminal ? 63 + (mod.ValveSlots ?? 16) * 11 : 46
+        const left = `${(12 / svgWidth * 100).toFixed(2)}%`
+        return { apInTop: '21.56%', apInLeft: left, apOutTop: '40.83%', apOutLeft: left }
     }
     if (isApLModule(name)) {
         const upperName = name.toUpperCase()
@@ -173,7 +176,7 @@ const INLINE_G = 0    // gap between modules on same backplane/rail (none – ti
 const CABLE_G = 160  // gap between cable-connected segments
 const NODE_Y = 70   // canvas Y for all module nodes
 const BP_PAD_TOP = 10   // space above modules in group box
-const BP_PAD_BOT = 18   // space below modules (name/chips extend further down)
+const BP_PAD_BOT = 32   // space below modules so wrapped order-code labels remain inside the group
 const BP_PAD_SIDE = 8    // horizontal padding in group box
 
 // ─── Layout builder ───────────────────────────────────────────────────────────
@@ -281,7 +284,12 @@ export function buildLayout(
                         apInPos: { top: apPos.apInTop, left: apPos.apInLeft },
                         apOutPos: { top: apPos.apOutTop, left: apPos.apOutLeft },
                     } : {}),
-                    showValveEditor: editMode && ((seg.kind === 'valve' && !isFirst) || isDirectValveBody || isStandaloneValve(m.Name)),
+                    showValveEditor: editMode && (
+                        (seg.kind === 'valve' && !isFirst)
+                        || isDirectValveBody
+                        || isStandaloneValve(m.Name)
+                        || (isVabxApInterface(m.Name) && (m.ValveSlots ?? 0) > 0)
+                    ),
                     suppressIoHandles: (seg.kind === 'valve' && !isFirst) || isDirectValveBody || isStandaloneValve(m.Name),
                 },
             })
@@ -305,7 +313,6 @@ export function buildLayout(
     const cableStyle = { strokeDasharray: '6 4', strokeWidth: 2, stroke: '#1565c0' }
 
     placed.slice(0, -1).forEach(({ lastId, epliId }, si) => {
-        const seg = placed[si].seg
         const next = placed[si + 1]
         const nextFirstId = String(next.seg.mods[0].Adress)
 
@@ -315,10 +322,6 @@ export function buildLayout(
         // Route TO next segment's EPLI ap-in (if it has one), else to first module's left
         const tgtNode = next.epliId ?? nextFirstId
         const tgtHandle = next.epliId ? 'ap-in' : 'left'
-
-        const srcMod = mods.find(m => String(m.Adress) === srcNode)
-        const exitRight = srcMod ? isApIM12orM8(srcMod.Name) : false
-        const straight = seg.kind === 'api' && next.seg.kind === 'api'
 
         edges.push({
             id: `cable-${si}`,
@@ -332,7 +335,7 @@ export function buildLayout(
             labelBgStyle: { fill: '#e3f2fd', fillOpacity: 0.9 },
             style: cableStyle,
             zIndex: 2,
-            data: { kind: 'cable', exitRight, straight },
+            data: { kind: 'cable', routeOrder: si },
         })
     })
 

@@ -234,16 +234,11 @@ export default function ConnectionsFlow({
                     if (pendingConn) {
                         const { srcNode, tgtNode, sh, th, srcIsM12, tgtIsM12 } = pendingConn
 
-                        if (srcSub === 'both' || tgtSub === 'both') {
-                            const srcChannels = (srcSub === 'both' && srcIsM12) ? [0, 1] : [srcSub === 'both' ? 0 : srcSub]
-                            const tgtChannels = (tgtSub === 'both' && tgtIsM12) ? [0, 1] : [tgtSub === 'both' ? 0 : tgtSub]
-
-                            const maxLen = Math.max(srcChannels.length, tgtChannels.length)
-                            for (let i = 0; i < maxLen; i++) {
-                                const s = srcChannels[i % srcChannels.length]
-                                const t = tgtChannels[i % tgtChannels.length]
-                                processConnection(srcNode, tgtNode, sh, th, s as number, t as number, direction)
-                            }
+                        if ((srcSub === 'both' || tgtSub === 'both') && srcIsM12 && tgtIsM12) {
+                            // "Both" is an M12/M12 operation and always maps
+                            // channel 0 -> 0 and channel 1 -> 1.
+                            processConnection(srcNode, tgtNode, sh, th, 0, 0, direction)
+                            processConnection(srcNode, tgtNode, sh, th, 1, 1, direction)
                         } else {
                             processConnection(srcNode, tgtNode, sh, th, srcSub as number, tgtSub as number, direction)
                         }
