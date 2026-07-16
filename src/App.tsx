@@ -496,6 +496,10 @@ export default function App() {
 
     function onDisconnect() {
         fetch('/hw/disconnect', { method: 'POST' })
+            .then(r => {
+                if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Disconnect failed') })
+                return r.json()
+            })
             .then(() => {
                 dispatch({ type: 'SET_HW_CONNECTED', connected: false })
                 alertsRef.current?.showAlert('info', 'Disconnected from hardware')

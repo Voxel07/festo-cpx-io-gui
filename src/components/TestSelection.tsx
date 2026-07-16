@@ -12,6 +12,7 @@ interface TestSelectionProps {
     isRunning: boolean
     isStarting: boolean
     busy: boolean
+    hwConnected: boolean
     canAbort: boolean
     isAborting: boolean
     runSource?: string
@@ -26,6 +27,7 @@ export default function TestSelection({
     isRunning,
     isStarting,
     busy,
+    hwConnected,
     canAbort,
     isAborting,
     runSource,
@@ -62,7 +64,7 @@ export default function TestSelection({
                     color="primary"
                     startIcon={isStarting || busy ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
                     onClick={onStart}
-                    disabled={isRunning || isStarting || busy || selected.length === 0}
+                    disabled={!hwConnected || isRunning || isStarting || busy || selected.length === 0}
                     size="small"
                 >
                     {isStarting ? 'Starting…' : isRunning ? 'Running…' : busy ? 'Waiting…' : 'Start Test Run'}
@@ -88,6 +90,11 @@ export default function TestSelection({
                     </Typography>
                 )}
             </Stack>
+            {!hwConnected && !canAbort && (
+                <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1 }}>
+                    Connect to hardware before starting tests.
+                </Typography>
+            )}
         </Paper>
     )
 }

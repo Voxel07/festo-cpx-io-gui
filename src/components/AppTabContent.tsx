@@ -80,7 +80,7 @@ export default function AppTabContent(props: AppTabContentProps) {
             )}
             {tab === 2 && (
                 <Suspense fallback={<LoadingChunk label="Loading test runner…" />}>
-                    <TestRunTab ip={ip} onActiveChange={onTestRunActiveChange} />
+                    <TestRunTab ip={ip} hwConnected={hwConnected} onActiveChange={onTestRunActiveChange} />
                 </Suspense>
             )}
             {tab === 3 && (

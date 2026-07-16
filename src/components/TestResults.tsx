@@ -55,7 +55,11 @@ export default function TestResults({ status, results = [], currentModule }: Tes
     }, [results, isRunning])
 
     return (
-        <Paper ref={containerRef} variant="outlined" sx={{ p: 1.5, overflow: 'auto', maxHeight: 400 }}>
+        <Paper
+            ref={containerRef}
+            variant="outlined"
+            sx={{ p: 1.5, overflow: 'auto', flex: '1 1 260px', minHeight: 200 }}
+        >
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                 {isRunning ? 'Live Results' : 'Detailed Results'}
             </Typography>
