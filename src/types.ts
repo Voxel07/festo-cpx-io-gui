@@ -131,7 +131,7 @@ export interface ModuleInstance {
     module_code: number
     product_key: string
     address: number
-    category: 'input' | 'output' | 'inout' | 'bus' | 'valve'
+    category: 'input' | 'output' | 'inout' | 'bus' | 'valve' | 'interface'
     module_type_ref: string
     /** Exact capabilities for this module; omitted only for legacy type inheritance. */
     capabilities?: string[] | null
