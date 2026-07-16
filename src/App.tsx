@@ -283,6 +283,7 @@ async function pollTestRunStatus(onStatusUpdate: (active: boolean, currentModule
 
 export default function App() {
     const [state, dispatch] = useReducer(appReducer, initialAppState)
+    const [hardwareOwnedByTest, setHardwareOwnedByTest] = useState(false)
     const [mockBuilderSection, setMockBuilderSection] = useState(() => Number(window.localStorage.getItem('festo.mock-builder.section.v1')) === 1 ? 1 : 0)
     const {
         tab,
@@ -509,13 +510,14 @@ export default function App() {
         const poll = () => {
             fetch('/hw/status')
                 .then(r => r.json())
-                .then(d => {
+                .then((d: { connected?: boolean; test_running?: boolean }) => {
                     dispatch({ type: 'SET_HW_CONNECTED', connected: !!d.connected })
+                    setHardwareOwnedByTest(!!d.test_running)
                 })
                 .catch(() => { })
         }
         poll()
-        const timer = setInterval(poll, 5000)
+        const timer = setInterval(poll, 1000)
         return () => clearInterval(timer)
     }, [])
 
@@ -525,7 +527,7 @@ export default function App() {
 
     return (
         <AlertsContext.Provider value={alertsContextValue}>
-            <IoStateProvider ipAddress={ip} intervalMs={500} isConnected={hwConnected}>
+            <IoStateProvider ipAddress={ip} intervalMs={500} isConnected={hwConnected} paused={hardwareOwnedByTest}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
                     <AlertsManager ref={alertsRef} />
                     <AppHeader
@@ -543,6 +545,7 @@ export default function App() {
                         onConfigPathChange={path => dispatch({ type: 'SET_CONFIG_PATH', path })}
                         hwConnected={hwConnected}
                         hwConnecting={hwConnecting}
+                        hwBusy={hardwareOwnedByTest}
                         onConnect={onConnect}
                         onDisconnect={onDisconnect}
                     />
@@ -682,6 +685,9 @@ export default function App() {
                             onSetRawSelectedAddr={addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })}
                             onSetMockTopology={topo => dispatch({ type: 'SET_MOCK_TOPOLOGY', topo })}
                             onMockBuilderSectionChange={setMockBuilderSection}
+                            onTestRunActiveChange={active => {
+                                if (active) setHardwareOwnedByTest(true)
+                            }}
                         />
                     )}
                     {diagOpen && (

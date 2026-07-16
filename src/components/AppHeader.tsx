@@ -42,6 +42,7 @@ interface AppHeaderProps {
     onConfigPathChange: (path: string) => void
     hwConnected: boolean
     hwConnecting: boolean
+    hwBusy: boolean
     onConnect: () => void
     onDisconnect: () => void
 }
@@ -61,6 +62,7 @@ export default function AppHeader({
     onConfigPathChange,
     hwConnected,
     hwConnecting,
+    hwBusy,
     onConnect,
     onDisconnect,
 }: AppHeaderProps) {
@@ -152,8 +154,8 @@ export default function AppHeader({
                         size="small"
                         variant="outlined"
                         onClick={hwConnected ? onDisconnect : onConnect}
-                        disabled={hwConnecting}
-                        tooltip={hwConnected ? `Disconnect from ${ip}` : `Connect to ${ip}`}
+                        disabled={hwConnecting || hwBusy}
+                        tooltip={hwBusy ? 'A test run currently owns the hardware' : hwConnected ? `Disconnect from ${ip}` : `Connect to ${ip}`}
                         icon={hwConnected
                             ? <LinkOffIcon sx={{ fontSize: '1rem', color: '#4caf50' }} />
                             : <PowerSettingsNewIcon sx={{ fontSize: '1rem', color: '#ff0000ff' }} />
@@ -166,7 +168,7 @@ export default function AppHeader({
                             '& .MuiButton-startIcon': { mr: 0.5 }
                         }}
                     >
-                        {hwConnecting ? '...' : hwConnected ? 'Connected' : 'Disconnected'}
+                        {hwBusy ? 'Test running' : hwConnecting ? '...' : hwConnected ? 'Connected' : 'Disconnected'}
                     </TooltipButton>
                     <TooltipButton
                         size="small"

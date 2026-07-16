@@ -106,7 +106,7 @@ export function usePocketBaseRealtime({
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         clientId,
-                        subscriptions: ['festo_test_runs', 'festo_system_logs'],
+                        subscriptions: ['festo_test_runs/*', 'festo_system_logs/*'],
                     }),
                 })
                     .then(response => {

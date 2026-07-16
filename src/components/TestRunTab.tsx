@@ -116,6 +116,7 @@ function normalizeRunState(value: unknown): TestRunState {
 
 interface Props {
     ip: string
+    onActiveChange?: (active: boolean) => void
 }
 
 interface RunTabState {
@@ -209,7 +210,7 @@ function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
     }
 }
 
-export default function TestRunTab({ ip }: Props) {
+export default function TestRunTab({ ip, onActiveChange }: Props) {
     const [state, dispatch] = useReducer(runTabReducer, initialRunTabState)
     const { selected, runState, sseLogs, pbLogs, busy } = state
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -226,6 +227,10 @@ export default function TestRunTab({ ip }: Props) {
     const isRunning = runState.status === 'running'
     const isStarting = runState.status === 'starting'
     const isActive = isRunning || isStarting || busy
+
+    useEffect(() => {
+        onActiveChange?.(isActive)
+    }, [isActive, onActiveChange])
     const progress = runState.progress
         ? (runState.progress.completed / Math.max(runState.progress.total, 1)) * 100
         : 0

@@ -7,13 +7,14 @@ interface Props {
     ipAddress?: string | null
     intervalMs?: number
     isConnected?: boolean
+    paused?: boolean
 }
 
-export function IoStateProvider({ children, ipAddress, intervalMs = 500, isConnected = false }: Props) {
+export function IoStateProvider({ children, ipAddress, intervalMs = 500, isConnected = false, paused = false }: Props) {
     const [states, setStates] = useState<AllIoStates>({})
 
     useEffect(() => {
-        if (!ipAddress || !isConnected) {
+        if (!ipAddress || !isConnected || paused) {
             setStates({})
             return
         }
@@ -52,7 +53,7 @@ export function IoStateProvider({ children, ipAddress, intervalMs = 500, isConne
             controller?.abort()
             if (timer) clearTimeout(timer)
         }
-    }, [ipAddress, intervalMs, isConnected])
+    }, [ipAddress, intervalMs, isConnected, paused])
 
     return (
         <IoStateContext.Provider value={states}>
