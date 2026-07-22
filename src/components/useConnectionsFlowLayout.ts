@@ -87,7 +87,14 @@ export function useConnectionsFlowLayout(
                 try {
                     const r = await fetch(`/io/module/${mod.Adress}/parameter/20201?ip_address=${encodeURIComponent(ip)}`)
                     if (r.ok) {
-                        setVabxInputs(prev => ({ ...prev, [mod.Adress]: true }))
+                        const data = await r.json()
+                        const val: string = data?.value ?? ''
+                        // Only show DI handles when a DI module is actually installed.
+                        // Param 20201 enum: 'no DI module' (8) = absent; all other values mean a PNP or NPN DI module is present.
+                        const hasDi = val !== '' && val !== 'no DI module' && val !== '8'
+                        if (hasDi) {
+                            setVabxInputs(prev => ({ ...prev, [mod.Adress]: true }))
+                        }
                     }
                 } catch { /* unsupported or temporarily unavailable parameter */ }
             }
