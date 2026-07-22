@@ -24,6 +24,16 @@ export interface PortCounts {
     numIn:    number
     numOut:   number
     numInOut: number
+    /** Effective viewBox width after dynamic valve expansion. */
+    viewBoxWidth?: number
+}
+
+interface SvgPortGeometry {
+    id: string
+    cx: number
+    cy: number
+    sourceWidth: number
+    svgKind: PortKind | null
 }
 
 /**
@@ -60,14 +70,14 @@ function deriveKind(portIndex: number, svgKind: PortKind | null, counts: PortCou
 }
 
 // URL-keyed geometry cache (kind is NOT cached – depends on module counts)
-const geoCache   = new Map<string, Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }>>()
+const geoCache   = new Map<string, SvgPortGeometry[]>()
 const pending    = new Set<string>()
 const subscribers = new Map<string, Set<() => void>>()
-const EMPTY_GEO: Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }> = []
+const EMPTY_GEO: SvgPortGeometry[] = []
 
 async function fetchAndParseSvg(
     svgUrl: string, 
-    onSuccess: (found: Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }>) => void,
+    onSuccess: (found: SvgPortGeometry[]) => void,
     onFinish: () => void
 ) {
     try {
@@ -93,7 +103,7 @@ async function fetchAndParseSvg(
         const vbW = vb[2] || 50
         const vbH = vb[3] || 107
 
-        const found: Array<{ id: string; cx: number; cy: number; svgKind: PortKind | null }> = []
+        const found: SvgPortGeometry[] = []
 
         // ── A-series / circle-based connectors (X0, X1, ... as <circle> elements) ──
         doc.querySelectorAll('circle[id]').forEach(c => {
@@ -105,7 +115,7 @@ async function fetchAndParseSvg(
                     raw === 'out' ? 'out' :
                     raw === 'in'  ? 'in'  :
                     raw === 'inout' ? 'inout' : null
-                found.push({ id: c.id, cx, cy, svgKind })
+                found.push({ id: c.id, cx, cy, sourceWidth: vbW, svgKind })
             }
         })
 
@@ -166,15 +176,29 @@ async function fetchAndParseSvg(
                     if (dn.endsWith('-9') || dn.endsWith('-7')) explicitKind = 'out'
                     else if (dn.endsWith('-5')) explicitKind = 'in'
                 }
-                found.push({ id: dn, cx: pos.cx, cy: pos.cy, svgKind: explicitKind })
+                found.push({ id: dn, cx: pos.cx, cy: pos.cy, sourceWidth: vbW, svgKind: explicitKind })
             })
         }
+
+        // Prefer an explicit shape-to-port mapping. This keeps connector geometry
+        // unambiguous in compound SVGs that contain several nested circles.
+        doc.querySelectorAll('[data-port]').forEach(shape => {
+            const id = shape.getAttribute('data-port') ?? ''
+            if (id !== 'XF10' && id !== 'XF20' && id !== 'X10' && id !== 'X20') return
+            const isApIn = id === 'XF10' || id === 'X10'
+            if (shape.tagName.toLowerCase() === 'circle') {
+                const cx = parseFloat(shape.getAttribute('cx') ?? '0') / vbW
+                const cy = parseFloat(shape.getAttribute('cy') ?? '0') / vbH
+                found.push({ id, cx, cy, sourceWidth: vbW, svgKind: isApIn ? 'ap-in' : 'ap-out' })
+            }
+        })
 
         // Also search for AP cable connectors (XF10/X10 = ap-in, XF20/X20 = ap-out)
         // Skip for VMPAL since its SVG width is dynamically resized in the UI.
         if (!svgUrl.includes('VMPAL')) {
             doc.querySelectorAll('g[id^="XF"], g[id="X10"], g[id="X20"]').forEach(g => {
                 const id = g.id
+                if (found.some(port => port.id === id)) return
                 const isL = svgUrl.includes('AP-L')
                 if (id === 'XF10' || id === 'XF20' || (isL && (id === 'X10' || id === 'X20'))) {
                     const isApIn = id === 'XF10' || id === 'X10'
@@ -183,7 +207,7 @@ async function fetchAndParseSvg(
                     if (circle) {
                         const cx = parseFloat(circle.getAttribute('cx') ?? '0') / vbW
                         const cy = parseFloat(circle.getAttribute('cy') ?? '0') / vbH
-                        found.push({ id, cx, cy, svgKind: isApIn ? 'ap-in' : 'ap-out' })
+                        found.push({ id, cx, cy, sourceWidth: vbW, svgKind: isApIn ? 'ap-in' : 'ap-out' })
                     } else if (rect) {
                         const rx = parseFloat(rect.getAttribute('x') ?? '0')
                         const ry = parseFloat(rect.getAttribute('y') ?? '0')
@@ -191,7 +215,7 @@ async function fetchAndParseSvg(
                         const rh = parseFloat(rect.getAttribute('height') ?? '0')
                         const cx = (rx + rw / 2) / vbW
                         const cy = (ry + rh / 2) / vbH
-                        found.push({ id, cx, cy, svgKind: isApIn ? 'ap-in' : 'ap-out' })
+                        found.push({ id, cx, cy, sourceWidth: vbW, svgKind: isApIn ? 'ap-in' : 'ap-out' })
                     }
                 }
             })
@@ -241,6 +265,7 @@ export function useSvgPorts(svgUrl: string, counts?: PortCounts): SvgPort[] {
     const numIn = counts?.numIn ?? 0
     const numOut = counts?.numOut ?? 0
     const numInOut = counts?.numInOut ?? 0
+    const viewBoxWidth = counts?.viewBoxWidth
 
     return useMemo(() => {
         let ioIndex = 0
@@ -253,14 +278,17 @@ export function useSvgPorts(svgUrl: string, counts?: PortCounts): SvgPort[] {
             } else {
                 kind = deriveKind(ioIndex++, p.svgKind, { numIn, numOut, numInOut }, numIoConnectors)
             }
+            const cx = viewBoxWidth && viewBoxWidth > 0
+                ? p.cx * p.sourceWidth / viewBoxWidth
+                : p.cx
             return {
                 id: p.id,
-                cx: p.cx,
+                cx,
                 cy: p.cy,
-                side: p.cx < 0.5 ? Position.Left : Position.Right,
+                side: cx < 0.5 ? Position.Left : Position.Right,
                 kind,
             }
         })
-    }, [raw, numIn, numOut, numInOut])
+    }, [raw, numIn, numOut, numInOut, viewBoxWidth])
 }
 

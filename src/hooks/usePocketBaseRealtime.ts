@@ -93,100 +93,80 @@ export function usePocketBaseRealtime({
 
     // ── Step 2: open EventSource, subscribe, handle events ──
     useEffect(() => {
-        if (!pbUrl) return
-
+        if (!pbUrl) return () => undefined
         let alive = true
-        let es: EventSource | null = null
-        let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+        const eventSource = new EventSource(`${pbUrl}/api/realtime`)
 
-        function connect() {
+        const handleConnect = (event: Event) => {
             if (!alive) return
-            es = new EventSource(`${pbUrl}/api/realtime`)
-
-            // PocketBase sends this immediately after connection with the clientId
-            es.addEventListener('PB_CONNECT', (e) => {
-                if (!alive) return
-                try {
-                    const { clientId } = JSON.parse((e as MessageEvent).data) as { clientId: string }
-                    fetch(`${pbUrl}/api/realtime`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            clientId,
-                            subscriptions: ['festo_test_runs', 'festo_system_logs'],
-                        }),
+            try {
+                const { clientId } = JSON.parse((event as MessageEvent).data) as { clientId: string }
+                fetch(`${pbUrl}/api/realtime`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        clientId,
+                        subscriptions: ['festo_test_runs/*', 'festo_system_logs/*'],
+                    }),
+                })
+                    .then(response => {
+                        if (!response.ok) throw new Error(`PocketBase subscription failed: ${response.status}`)
+                        if (alive) setConnected(true)
                     })
-                        .then(response => {
-                            if (!response.ok) throw new Error(`PocketBase subscription failed: ${response.status}`)
-                            if (alive) setConnected(true)
-                        })
-                        .catch(() => {
-                            if (!alive) return
-                            setConnected(false)
-                            es?.close()
-                            if (reconnectTimer) clearTimeout(reconnectTimer)
-                            reconnectTimer = setTimeout(connect, 8000)
-                        })
-                } catch { /* malformed PB_CONNECT */ }
-            })
-
-            // ── festo_test_runs events ────────────────────────────────────
-            es.addEventListener('festo_test_runs', (e: Event) => {
-                if (!alive) return
-                try {
-                    const { action, record } = JSON.parse((e as MessageEvent).data) as {
-                        action: string
-                        record: PBRunRecord
-                    }
-                    if (action === 'create' && record.status === 'running') {
-                        onRunStartedRef.current?.(record.run_id, record.source ?? 'external')
-                    } else if (
-                        action === 'update' &&
-                        (record.status === 'completed' || record.status === 'error' || record.status === 'failed')
-                    ) {
-                        onRunCompletedRef.current?.(record.run_id)
-                    }
-                } catch { /* ignore malformed event */ }
-            })
-
-            // ── festo_system_logs events ──────────────────────────────────
-            es.addEventListener('festo_system_logs', (e: Event) => {
-                if (!alive) return
-                try {
-                    const { action, record } = JSON.parse((e as MessageEvent).data) as {
-                        action: string
-                        record: PBLogRecord
-                    }
-                    if (action !== 'create') return
-                    // Only forward logs that belong to the active run
-                    if (activeRunIdRef.current && record.run_id !== activeRunIdRef.current) return
-                    onLogRef.current?.({
-                        level: record.level,
-                        message: record.message,
-                        timestamp: record.timestamp,
-                    }, record.run_id)
-                } catch { /* ignore malformed event */ }
-            })
-
-            es.onerror = () => {
-                if (!alive) return
-                setConnected(false)
-                es?.close()
-                es = null
-                // Exponential back-off is handled by the browser for SSE; use a
-                // manual reconnect only if the error is permanent (stream closed).
-                if (reconnectTimer) clearTimeout(reconnectTimer)
-                reconnectTimer = setTimeout(connect, 8000)
-            }
+                    .catch(() => { if (alive) setConnected(false) })
+            } catch { /* malformed PB_CONNECT */ }
         }
 
-        connect()
+        const handleTestRun = (event: Event) => {
+            if (!alive) return
+            try {
+                const { action, record } = JSON.parse((event as MessageEvent).data) as {
+                    action: string
+                    record: PBRunRecord
+                }
+                if (action === 'create' && record.status === 'running') {
+                    onRunStartedRef.current?.(record.run_id, record.source ?? 'external')
+                } else if (
+                    action === 'update' &&
+                    (record.status === 'completed' || record.status === 'error' || record.status === 'failed')
+                ) {
+                    onRunCompletedRef.current?.(record.run_id)
+                }
+            } catch { /* ignore malformed event */ }
+        }
+
+        const handleSystemLog = (event: Event) => {
+            if (!alive) return
+            try {
+                const { action, record } = JSON.parse((event as MessageEvent).data) as {
+                    action: string
+                    record: PBLogRecord
+                }
+                if (action !== 'create') return
+                if (activeRunIdRef.current && record.run_id !== activeRunIdRef.current) return
+                onLogRef.current?.({
+                    level: record.level,
+                    message: record.message,
+                    timestamp: record.timestamp,
+                }, record.run_id)
+            } catch { /* ignore malformed event */ }
+        }
+
+        eventSource.addEventListener('PB_CONNECT', handleConnect)
+        eventSource.addEventListener('festo_test_runs', handleTestRun)
+        eventSource.addEventListener('festo_system_logs', handleSystemLog)
+
+        eventSource.onerror = () => {
+            if (alive) setConnected(false)
+            // Native EventSource reconnects automatically with server backoff.
+        }
 
         return () => {
             alive = false
-            if (reconnectTimer) clearTimeout(reconnectTimer)
-            es?.close()
-            setConnected(false)
+            eventSource.removeEventListener('PB_CONNECT', handleConnect)
+            eventSource.removeEventListener('festo_test_runs', handleTestRun)
+            eventSource.removeEventListener('festo_system_logs', handleSystemLog)
+            eventSource.close()
         }
     }, [pbUrl])
 

@@ -1,5 +1,38 @@
 import type { BenchConfig, Topology } from '../types'
 
+/**
+ * Mounted valves and the configured slot count are installation metadata; live
+ * topology discovery cannot determine them. Keep the stored values when a live
+ * refresh returns the same physical module.
+ */
+export function preserveMountedValveMetadata(live: BenchConfig, stored: BenchConfig | null): BenchConfig {
+    if (!stored?.module_instances?.length) return live
+
+    const storedByProductKey = new Map(stored.module_instances
+        .filter(module => module.product_key)
+        .map(module => [module.product_key, module]))
+    const storedByAddress = new Map(stored.module_instances.map(module => [module.address, module]))
+
+    return {
+        ...live,
+        module_instances: (live.module_instances ?? []).map(module => {
+            const productMatch = module.product_key ? storedByProductKey.get(module.product_key) : undefined
+            const addressMatch = storedByAddress.get(module.address)
+            const previous = productMatch ?? (
+                addressMatch && addressMatch.module_code === module.module_code ? addressMatch : undefined
+            )
+            if (!previous) return module
+            return {
+                ...module,
+                mounted_valves: previous.mounted_valves !== undefined
+                    ? [...previous.mounted_valves]
+                    : module.mounted_valves,
+                valve_slots: previous.valve_slots ?? module.valve_slots,
+            }
+        }),
+    }
+}
+
 export function configToTopology(config: BenchConfig): Topology {
     return {
         Name: config.test_bench.name || 'CPX-AP Bench',

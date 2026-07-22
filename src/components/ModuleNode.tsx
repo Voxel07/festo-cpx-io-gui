@@ -7,7 +7,7 @@ import { useSvgMap, resolveIcon } from '../hooks/useSvgMap'
 import { useSvgPorts } from '../hooks/useSvgPorts'
 
 import { useValveGroups } from '../hooks/useValveGroups'
-import { useModifiedSvgText } from '../hooks/useModifiedSvg'
+import { getDynamicSvgWidth, useModifiedSvgText } from '../hooks/useModifiedSvg'
 import { useLiveIoState } from '../hooks/ioStateContext'
 import type { DiffStatusKind } from '../types'
 import ValveEditorDialog from './ValveEditorDialog'
@@ -63,16 +63,18 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const numIn = is16Dio || isValveTerminal ? 0 : mod.NumOfInputs
     const numOut = is16Dio || isValveTerminal ? 0 : mod.NumOfOutputs
     const numInOut = is16Dio ? Math.max(mod.NumOfInputs, mod.NumOfOutputs, 16) : mod.NumOfInOuts
+    const isVtux = mod.Name.toUpperCase().startsWith('VTUX')
+    const canConfigureValves = supportsMountedValves(mod.Name, mod.Type) || isValveTerminal
+    const numValves = defaultValveSlots(mod.Name, mod.ValveSlots)
+    const dynamicViewBoxWidth = getDynamicSvgWidth(svgUrl, numValves)
 
     // Port positions come from SVG; port counts/kinds come from bench_config (mod.NumOf*)
     const ports = useSvgPorts(svgUrl, {
         numIn,
         numOut,
         numInOut,
+        viewBoxWidth: dynamicViewBoxWidth,
     })
-    const isVtux = mod.Name.toUpperCase().startsWith('VTUX')
-    const canConfigureValves = supportsMountedValves(mod.Name, mod.Type) || isValveTerminal
-    const numValves = defaultValveSlots(mod.Name, mod.ValveSlots)
 
 
     const wantsValves = canConfigureValves && (showValveEditor || showValves)
@@ -97,6 +99,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
     const svgText = useModifiedSvgText(svgUrl, effectiveHiddenValves, numValves)
 
     const hasPorts = ports.length > 0
+    const interfaceConnectorsExitLeft = /(?:EPLI|EPLS)/i.test(mod.Name)
+        || /^VABX-A-(?:(?:S|P)-)?EL-.*-API\b/i.test(mod.Name)
 
     const topCount = numOut + numInOut
     const botCount = numIn + numInOut
@@ -155,9 +159,16 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
 
         // 2. Default LEDs (SD / MD)
         let diagColor = '#00ff22' // default green
+        let isNoPl = false;
         if (diagnoses && diagnoses.length > 0) {
             const hasError = diagnoses.some(d => d.severity === 'error')
             const hasWarning = diagnoses.some(d => d.severity === 'warning')
+            isNoPl = diagnoses.some(d =>
+                d.name.toLowerCase().includes('load voltage') ||
+                (d.description && d.description.toLowerCase().includes('load voltage')) ||
+                d.name.toLowerCase().includes('power load') ||
+                d.name.toLowerCase().includes('undervoltage of load supply')
+            )
 
             if (hasError) {
                 diagColor = '#e53935' // red
@@ -167,13 +178,23 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                 diagColor = '#0288d1' // blue for maintenance/info
             }
         }
-        styles[`& #LED_SD`] = { fill: `${diagColor} !important` }
-        styles[`& #LED_MD`] = { fill: `${diagColor} !important` }
+
+        if (isNoPl) {
+            styles[`& #LED_SD`] = { animation: 'blinkBlueGreen 1s infinite !important' }
+            styles[`& #LED_MD`] = { animation: 'blinkBlueGreen 1s infinite !important' }
+            styles['@keyframes blinkBlueGreen'] = {
+                '0%, 100%': { fill: '#0288d1 !important' },
+                '50%': { fill: '#00ff22 !important' }
+            }
+        } else {
+            styles[`& #LED_SD`] = { fill: `${diagColor} !important` }
+            styles[`& #LED_MD`] = { fill: `${diagColor} !important` }
+        }
 
         // 2. LED animations
         if (modState) {
             // Power load status LED
-            styles[`& #LED_PL`] = { fill: '#00ff22 !important' } // green if we have state
+            styles[`& #LED_PL`] = { fill: isNoPl ? 'rgba(0,0,0,0) !important' : '#00ff22 !important' } // off if no PL, green otherwise
 
             // Input LEDs
             modState.inputs.forEach((val, i) => {
@@ -402,7 +423,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     const left = apInPort ? `${apInPort.cx * 100}%` : apInPos?.left
                     const top = apInPort ? `${apInPort.cy * 100}%` : apInPos?.top
                     return (
-                        <Handle id="ap-in" type="target" position={Position.Left}
+                        <Handle id="ap-in" type="target"
+                            position={interfaceConnectorsExitLeft ? Position.Left : (apInPort?.side ?? Position.Left)}
                             style={getApInStyle(left, top)}
                         />
                     )
@@ -412,7 +434,8 @@ function ModuleNode({ id: nodeId, data }: NodeProps<ModuleNodeType>) {
                     const left = apOutPort ? `${apOutPort.cx * 100}%` : apOutPos?.left
                     const top = apOutPort ? `${apOutPort.cy * 100}%` : apOutPos?.top
                     return (
-                        <Handle id="ap-out" type="source" position={Position.Right}
+                        <Handle id="ap-out" type="source"
+                            position={interfaceConnectorsExitLeft ? Position.Left : (apOutPort?.side ?? Position.Right)}
                             style={getApOutStyle(left, top)}
                         />
                     )

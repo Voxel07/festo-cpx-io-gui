@@ -8,7 +8,7 @@
  * node/edge rendering logic to its parent components.
  */
 import type { ReactNode } from 'react'
-import { useContext, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef } from 'react'
 import { Box } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import {
@@ -19,7 +19,7 @@ import {
     useReactFlow,
     useNodesInitialized,
 } from '@xyflow/react'
-import type { Node, Edge, NodeTypes, EdgeTypes, OnNodesChange, OnEdgesChange, OnConnect, OnReconnect, IsValidConnection, NodeMouseHandler } from '@xyflow/react'
+import type { Node, Edge, NodeTypes, EdgeTypes, OnNodesChange, OnEdgesChange, OnConnect, OnReconnect, IsValidConnection, NodeMouseHandler, OnNodeDrag } from '@xyflow/react'
 import { AlertsContext } from '../utils/AlertsContext'
 
 interface Props {
@@ -42,27 +42,43 @@ interface Props {
     /** Right-click on a module node */
     onNodeContextMenu?: NodeMouseHandler<Node>
     onNodeClick?: NodeMouseHandler<Node>
+    onNodeDragStop?: OnNodeDrag<Node>
     elementsSelectable?: boolean
     nodesDraggable?: boolean
     children?: ReactNode
 }
 
-function FitViewTrigger({ layoutKey, padding }: { layoutKey: string, padding: number }) {
+function FitViewTrigger({
+    layoutKey,
+    padding,
+    refitOnLayoutChange,
+    hasNodes,
+}: {
+    layoutKey: string
+    padding: number
+    refitOnLayoutChange: boolean
+    hasNodes: boolean
+}) {
     const { fitView } = useReactFlow()
     const initialized = useNodesInitialized()
     const fitStrRef = useRef<string | null>(null)
 
     useEffect(() => {
-        if (layoutKey && initialized && fitStrRef.current !== layoutKey) {
+        const fitKey = refitOnLayoutChange ? layoutKey : 'initial'
+        if (hasNodes && initialized && fitStrRef.current !== fitKey) {
+            let animationFrame = 0
             const timer = setTimeout(() => {
-                window.requestAnimationFrame(() => {
+                animationFrame = window.requestAnimationFrame(() => {
                     fitView({ padding, duration: 400 })
-                    fitStrRef.current = layoutKey
+                    fitStrRef.current = fitKey
                 })
             }, 50)
-            return () => clearTimeout(timer)
+            return () => {
+                clearTimeout(timer)
+                if (animationFrame) window.cancelAnimationFrame(animationFrame)
+            }
         }
-    }, [layoutKey, initialized, fitView, padding])
+    }, [layoutKey, initialized, fitView, padding, refitOnLayoutChange, hasNodes])
     return null
 }
 
@@ -76,19 +92,24 @@ export default function TopologyCanvas({
     fitViewPadding = 0.25,
     onNodeContextMenu,
     onNodeClick,
+    onNodeDragStop,
     elementsSelectable = editMode,
     nodesDraggable = editMode,
     children,
 }: Props) {
     const theme = useTheme()
     const alerts = useContext(AlertsContext)
-    const layoutKey = useMemo(() => JSON.stringify(nodes.map(n => ({
+    const layoutKey = useMemo(() => !fitView ? '' : JSON.stringify(nodes.map(n => ({
         id: n.id,
         x: n.position.x,
         y: n.position.y,
         width: n.measured?.width ?? n.width ?? n.style?.width,
         height: n.measured?.height ?? n.height ?? n.style?.height,
-    }))), [nodes])
+    }))), [fitView, nodes])
+    const fitViewOptions = useMemo(() => ({ padding: fitViewPadding }), [fitViewPadding])
+    const handleError = useCallback((code: string, message: string) => {
+        alerts?.showAlert('error', `Canvas error ${code}: ${message}`)
+    }, [alerts])
 
     return (
         <Box
@@ -126,21 +147,24 @@ export default function TopologyCanvas({
                 isValidConnection={isValidConnection}
                 onNodeContextMenu={onNodeContextMenu}
                 onNodeClick={onNodeClick}
-                onError={(code, message) => alerts?.showAlert('error', `Canvas error ${code}: ${message}`)}
+                onNodeDragStop={onNodeDragStop}
+                onError={handleError}
                 edgesReconnectable={editMode}
                 elementsSelectable={elementsSelectable}
                 nodesDraggable={nodesDraggable}
                 nodesConnectable={editMode}
                 fitView={fitView}
-                fitViewOptions={{ padding: fitViewPadding }}
+                fitViewOptions={fitViewOptions}
                 minZoom={0.1}
                 maxZoom={4}
             >
                 <Background variant={BackgroundVariant.Dots} gap={16} size={1} color={theme.palette.mode === 'dark' ? '#555' : '#81818a'} />
                 <Controls />
-                {fitView && fitViewOnLayoutChange && <FitViewTrigger
+                {fitView && <FitViewTrigger
                     layoutKey={layoutKey}
                     padding={fitViewPadding}
+                    refitOnLayoutChange={fitViewOnLayoutChange}
+                    hasNodes={nodes.length > 0}
                 />}
                 {children}
             </ReactFlow>

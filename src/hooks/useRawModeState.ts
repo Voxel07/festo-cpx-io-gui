@@ -1,4 +1,4 @@
-import { useReducer, useContext, useState } from 'react'
+import { useReducer, useContext, useEffect, useRef } from 'react'
 import { AlertsContext } from '../utils/AlertsContext'
 import type { ParameterMetadata } from '../components/ParametersTable'
 import type { TopologyModule } from '../types'
@@ -123,32 +123,39 @@ export function rawModeReducer(state: RawModeState, action: RawModeAction): RawM
 export function useRawMode(selectedModule: TopologyModule | null, ip: string, selectedModuleAddr: number | null) {
     const [state, dispatch] = useReducer(rawModeReducer, initialRawModeState)
     const alerts = useContext(AlertsContext)
+    const parameterCache = useRef(new Map<number, ParameterMetadata[]>())
 
-    async function fetchParams(address: number, ipAddress: string) {
+    async function fetchParams(address: number, ipAddress: string, signal: AbortSignal) {
+        const cached = parameterCache.current.get(address)
+        if (cached) {
+            dispatch({ type: 'FETCH_PARAMS_SUCCESS', parameters: cached })
+            return
+        }
         dispatch({ type: 'FETCH_PARAMS_START' })
         try {
-            const r = await fetch(`/io/module/${address}/parameters?ip_address=${encodeURIComponent(ipAddress)}`)
+            const r = await fetch(`/io/module/${address}/parameters?ip_address=${encodeURIComponent(ipAddress)}`, { signal })
             const d = await r.json()
             if (!r.ok) {
                 dispatch({ type: 'FETCH_PARAMS_FAIL', error: d.detail ?? 'Failed to load parameters.' })
             } else {
+                parameterCache.current.set(address, d)
                 dispatch({ type: 'FETCH_PARAMS_SUCCESS', parameters: d })
             }
         } catch (err) {
+            if ((err as Error).name === 'AbortError') return
             dispatch({ type: 'FETCH_PARAMS_FAIL', error: (err as Error).message })
         }
     }
 
-    const [prevSelectedAddr, setPrevSelectedAddr] = useState<number | null>(null)
-
-    if (selectedModuleAddr !== prevSelectedAddr) {
-        setPrevSelectedAddr(selectedModuleAddr)
+    useEffect(() => {
+        const controller = new AbortController()
         if (!selectedModule || !ip) {
             dispatch({ type: 'RESET_MODULE' })
         } else {
-            fetchParams(selectedModule.Adress, ip)
+            void fetchParams(selectedModule.Adress, ip, controller.signal)
         }
-    }
+        return () => controller.abort()
+    }, [selectedModule, selectedModuleAddr, ip])
 
     const toggleExpand = (paramId: number) => {
         dispatch({ type: 'TOGGLE_EXPAND', paramId })

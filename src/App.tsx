@@ -1,7 +1,7 @@
 import { lazy, Suspense, useReducer, useRef, useEffect, useMemo, useCallback, useState } from 'react'
 import { Box, Tabs, Tab } from '@mui/material'
 import AppHeader from './components/AppHeader'
-import TopologyToolbar from './components/TopologyToolbar'
+import TopologyToolbar, { DEFAULT_MODULES_PER_ROW } from './components/TopologyToolbar'
 import type { Topology, DiffStatus, TopologyModule, BenchConfig, DiagnosisEntry } from './types'
 import { AlertsManager } from './utils/AlertsManager'
 import { AlertsContext } from './utils/AlertsContext'
@@ -71,7 +71,7 @@ const initialAppState: AppState = {
     showIoCables: true,
     diagnoses: [] as DiagnosisEntry[],
     mockTopology: null,
-    wrapThreshold: 5,
+    wrapThreshold: DEFAULT_MODULES_PER_ROW,
     cableGap: 20,
     hwConnected: false,
     hwConnecting: false,
@@ -175,8 +175,16 @@ function appReducer(state: AppState, action: AppAction): AppState {
                     ...mergedTopo,
                     Topology: mergedTopo.Topology.map(m => {
                         const inst = newRaw.module_instances.find(i => i.address === m.Adress)
-                        if (inst && inst.mounted_valves) {
-                            return { ...m, MountedValves: inst.mounted_valves }
+                        if (inst) {
+                            return {
+                                ...m,
+                                ...(inst.mounted_valves !== undefined
+                                    ? { MountedValves: inst.mounted_valves }
+                                    : {}),
+                                ...(inst.valve_slots != null
+                                    ? { ValveSlots: inst.valve_slots }
+                                    : {}),
+                            }
                         }
                         return m
                     })
@@ -231,19 +239,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
             if (!state.mockTopology) return state
             const mods = [...state.mockTopology.Topology]
             mods.sort((a, b) => a.Adress - b.Adress)
-            
+
             const oldIdx = mods.findIndex(m => m.Adress === action.oldAddr)
             if (oldIdx === -1) return state
-            
+
             let newIdx = action.newAddr
             if (newIdx < 0) newIdx = 0
             if (newIdx >= mods.length) newIdx = mods.length - 1
-            
+
             const [movingMod] = mods.splice(oldIdx, 1)
             mods.splice(newIdx, 0, movingMod)
-            
+
             const newMods = mods.map((m, i) => ({ ...m, Adress: i }))
-            
+
             return {
                 ...state,
                 mockTopology: {
@@ -275,6 +283,7 @@ async function pollTestRunStatus(onStatusUpdate: (active: boolean, currentModule
 
 export default function App() {
     const [state, dispatch] = useReducer(appReducer, initialAppState)
+    const [hardwareOwnedByTest, setHardwareOwnedByTest] = useState(false)
     const [mockBuilderSection, setMockBuilderSection] = useState(() => Number(window.localStorage.getItem('festo.mock-builder.section.v1')) === 1 ? 1 : 0)
     const {
         tab,
@@ -487,6 +496,10 @@ export default function App() {
 
     function onDisconnect() {
         fetch('/hw/disconnect', { method: 'POST' })
+            .then(r => {
+                if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Disconnect failed') })
+                return r.json()
+            })
             .then(() => {
                 dispatch({ type: 'SET_HW_CONNECTED', connected: false })
                 alertsRef.current?.showAlert('info', 'Disconnected from hardware')
@@ -501,13 +514,14 @@ export default function App() {
         const poll = () => {
             fetch('/hw/status')
                 .then(r => r.json())
-                .then(d => {
+                .then((d: { connected?: boolean; test_running?: boolean }) => {
                     dispatch({ type: 'SET_HW_CONNECTED', connected: !!d.connected })
+                    setHardwareOwnedByTest(!!d.test_running)
                 })
-                .catch(() => {})
+                .catch(() => { })
         }
         poll()
-        const timer = setInterval(poll, 5000)
+        const timer = setInterval(poll, 1000)
         return () => clearInterval(timer)
     }, [])
 
@@ -517,171 +531,174 @@ export default function App() {
 
     return (
         <AlertsContext.Provider value={alertsContextValue}>
-            <IoStateProvider ipAddress={ip} intervalMs={500} isConnected={hwConnected}>
+            <IoStateProvider ipAddress={ip} intervalMs={500} isConnected={hwConnected} paused={hardwareOwnedByTest}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
                     <AlertsManager ref={alertsRef} />
-                <AppHeader
-                    ip={ip}
-                    onIpChange={v => dispatch({ type: 'SET_IP', ip: v })}
-                    timeout={timeout}
-                    onTimeoutChange={v => dispatch({ type: 'SET_TIMEOUT', timeout: v })}
-                    showTopology={showTopology}
-                    onToggleTopology={() => dispatch({ type: 'TOGGLE_TOPOLOGY' })}
-                    pbChecking={pbChecking}
-                    pbStatus={pbStatus}
-                    onCheckPocketBase={checkPocketBase}
-                    onOpenDiagnostics={() => dispatch({ type: 'SET_DIAG_OPEN', open: true })}
-                    configPath={configPath}
-                    onConfigPathChange={path => dispatch({ type: 'SET_CONFIG_PATH', path })}
-                    hwConnected={hwConnected}
-                    hwConnecting={hwConnecting}
-                    onConnect={onConnect}
-                    onDisconnect={onDisconnect}
-                />
-
-                {/* ── Topology toolbar (below AppHeader) ── */}
-                {showTopology && topologyVisibleForTab && (
-                    <TopologyToolbar
-                        showApCables={showApCables}
-                        onToggleApCables={() => dispatch({ type: 'TOGGLE_AP_CABLES' })}
-                        showIoCables={showIoCables}
-                        onToggleIoCables={() => dispatch({ type: 'TOGGLE_IO_CABLES' })}
-                        fullscreen={fullscreen}
-                        onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
-                        showLegend={!!diffStatus}
-                        wrapThreshold={wrapThreshold}
-                        onWrapThresholdChange={val => dispatch({ type: 'SET_WRAP_THRESHOLD', threshold: val })}
-                        cableGap={cableGap}
-                        onCableGapChange={val => dispatch({ type: 'SET_CABLE_GAP', gap: val })}
-                    />
-                )}
-
-                {/* ── Topology canvas (collapsible) ── */}
-                {showTopology && topologyVisibleForTab && (
-                    <Box sx={fullscreen
-                        ? { position: 'fixed', inset: 0, zIndex: 1300, bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }
-                        : {
-                            display: 'flex', flexDirection: 'row',
-                            height: canvasH, flexShrink: 0,
-                            borderBottom: 1, borderColor: 'divider', bgcolor: 'background.default',
-                        }
-                    }>
-                        {/* Toolbar overlay in fullscreen mode */}
-                        {fullscreen && (
-                            <TopologyToolbar
-                                showApCables={showApCables}
-                                onToggleApCables={() => dispatch({ type: 'TOGGLE_AP_CABLES' })}
-                                showIoCables={showIoCables}
-                                onToggleIoCables={() => dispatch({ type: 'TOGGLE_IO_CABLES' })}
-                                fullscreen={fullscreen}
-                                onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
-                                showLegend={tab === 0 && !!diffStatus}
-                                wrapThreshold={wrapThreshold}
-                                onWrapThresholdChange={val => dispatch({ type: 'SET_WRAP_THRESHOLD', threshold: val })}
-                                cableGap={cableGap}
-                                onCableGapChange={val => dispatch({ type: 'SET_CABLE_GAP', gap: val })}
-                            />
-                        )}
-                        {/* Canvas area (width-constrained when user has dragged) */}
-                        <Box sx={{
-                            width: canvasW ?? undefined,
-                            height: fullscreen ? undefined : '100%',
-                            flex: fullscreen ? 1 : (canvasW ? 'none' : 1),
-                            overflow: 'hidden',
-                            position: 'relative',
-                        }}>
-                            <Suspense fallback={<LoadingChunk label="Loading topology…" />}>
-                                <TopologyFlow
-                                    topology={tab === 5 ? mockTopology : topology}
-                                    diffStatus={tab === 0 ? diffStatus : null}
-                                    removedModules={tab === 0 ? removedModules : []}
-                                    activeModuleAddr={activeModuleAddr}
-                                    selectedModuleAddr={tab === 3 ? rawSelectedAddr : null}
-                                    onSelectModuleAddr={tab === 3 ? (addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })) : undefined}
-                                    rawConfig={rawConfig}
-                                    showApCables={showApCables}
-                                    showIoCables={showIoCables}
-                                    diagnoses={diagnoses}
-                                    wrapThreshold={wrapThreshold}
-                                    cableGap={cableGap}
-                                    isMockMode={tab === 5}
-                                    onModuleValveChange={onModuleValveChange}
-                                    onRemoveModule={onRemoveModule}
-                                    onMoveModule={tab === 5 ? onMoveModule : undefined}
-                                />
-                            </Suspense>
-                        </Box>
-
-                        {/* Right-edge width resize handle */}
-                        {!fullscreen && (
-                            <Box onMouseDown={onWidthDragStart} sx={{
-                                width: 6, flexShrink: 0, cursor: 'col-resize',
-                                bgcolor: 'divider',
-                                '&:hover': { bgcolor: 'primary.main' },
-                                transition: 'background-color 0.15s',
-                                userSelect: 'none',
-                            }} />
-                        )}
-                    </Box>
-                )}
-
-                {/* ── Drag-resize handle ── */}
-                {!fullscreen && showTopology && topologyVisibleForTab && (
-                    <Box onMouseDown={onDragStart} sx={{
-                        height: 6, flexShrink: 0, cursor: 'row-resize',
-                        bgcolor: 'divider',
-                        '&:hover': { bgcolor: 'primary.main' },
-                        transition: 'background-color 0.15s',
-                        userSelect: 'none',
-                    }} />
-                )}
-
-                {/* ── Tab bar ── */}
-                {!fullscreen && (
-                    <Box sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                        <Tabs value={tab} onChange={(_, v) => dispatch({ type: 'SET_TAB', tab: v })} sx={{ minHeight: 38, flex: 1 }}
-                            variant="scrollable" scrollButtons="auto">
-                            <Tab label="Topology" sx={{ minHeight: 38 }} />
-                            <Tab label="Connections" sx={{ minHeight: 38 }} />
-                            <Tab label="Test Run" sx={{ minHeight: 38 }} />
-                            <Tab label="Raw Mode" sx={{ minHeight: 38 }} />
-                            <Tab label="History" sx={{ minHeight: 38 }} />
-                            <Tab label="Automation" sx={{ minHeight: 38 }} />
-                            <Tab label="Architecture" sx={{ minHeight: 38 }} />
-                        </Tabs>
-                    </Box>
-                )}
-
-                {/* ── Tab content ── */}
-                {!fullscreen && (
-                    <AppTabContent
-                        tab={tab}
+                    <AppHeader
                         ip={ip}
+                        onIpChange={v => dispatch({ type: 'SET_IP', ip: v })}
                         timeout={timeout}
-                        topology={topology}
-                        diffStatus={diffStatus}
-                        rawSelectedAddr={rawSelectedAddr}
-                        rawConfig={rawConfig}
+                        onTimeoutChange={v => dispatch({ type: 'SET_TIMEOUT', timeout: v })}
+                        showTopology={showTopology}
+                        onToggleTopology={() => dispatch({ type: 'TOGGLE_TOPOLOGY' })}
+                        pbChecking={pbChecking}
+                        pbStatus={pbStatus}
+                        onCheckPocketBase={checkPocketBase}
+                        onOpenDiagnostics={() => dispatch({ type: 'SET_DIAG_OPEN', open: true })}
                         configPath={configPath}
+                        onConfigPathChange={path => dispatch({ type: 'SET_CONFIG_PATH', path })}
                         hwConnected={hwConnected}
-                        mockTopology={mockTopology}
-                        wrapThreshold={wrapThreshold}
-                        onWrapThresholdChange={val => dispatch({ type: 'SET_WRAP_THRESHOLD', threshold: val })}
-                        cableGap={cableGap}
-                        onCableGapChange={val => dispatch({ type: 'SET_CABLE_GAP', gap: val })}
-                        onResult={onResult}
-                        onModuleValveChange={onModuleValveChange}
-                        onConfigLoad={onConfigLoad}
-                        onSetRawSelectedAddr={addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })}
-                        onSetMockTopology={topo => dispatch({ type: 'SET_MOCK_TOPOLOGY', topo })}
-                        onMockBuilderSectionChange={setMockBuilderSection}
+                        hwConnecting={hwConnecting}
+                        hwBusy={hardwareOwnedByTest}
+                        onConnect={onConnect}
+                        onDisconnect={onDisconnect}
                     />
-                )}
-                {diagOpen && (
-                    <Suspense fallback={null}>
-                        <DiagnosticsModal open={diagOpen} onClose={() => dispatch({ type: 'SET_DIAG_OPEN', open: false })} ip={ip} diagnoses={diagnoses} onRefresh={refreshDiagnoses} />
-                    </Suspense>
-                )}
+
+                    {/* ── Topology toolbar (below AppHeader) ── */}
+                    {showTopology && topologyVisibleForTab && (
+                        <TopologyToolbar
+                            showApCables={showApCables}
+                            onToggleApCables={() => dispatch({ type: 'TOGGLE_AP_CABLES' })}
+                            showIoCables={showIoCables}
+                            onToggleIoCables={() => dispatch({ type: 'TOGGLE_IO_CABLES' })}
+                            fullscreen={fullscreen}
+                            onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
+                            showLegend={!!diffStatus}
+                            wrapThreshold={wrapThreshold}
+                            onWrapThresholdChange={val => dispatch({ type: 'SET_WRAP_THRESHOLD', threshold: val })}
+                            cableGap={cableGap}
+                            onCableGapChange={val => dispatch({ type: 'SET_CABLE_GAP', gap: val })}
+                        />
+                    )}
+
+                    {/* ── Topology canvas (collapsible) ── */}
+                    {showTopology && topologyVisibleForTab && (
+                        <Box sx={fullscreen
+                            ? { position: 'fixed', inset: 0, zIndex: 1300, bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }
+                            : {
+                                display: 'flex', flexDirection: 'row',
+                                height: canvasH, flexShrink: 0,
+                                borderBottom: 1, borderColor: 'divider', bgcolor: 'background.default',
+                            }
+                        }>
+                            {/* Toolbar overlay in fullscreen mode */}
+                            {fullscreen && (
+                                <TopologyToolbar
+                                    showApCables={showApCables}
+                                    onToggleApCables={() => dispatch({ type: 'TOGGLE_AP_CABLES' })}
+                                    showIoCables={showIoCables}
+                                    onToggleIoCables={() => dispatch({ type: 'TOGGLE_IO_CABLES' })}
+                                    fullscreen={fullscreen}
+                                    onToggleFullscreen={() => dispatch({ type: 'SET_FULLSCREEN', fullscreen: !fullscreen })}
+                                    showLegend={tab === 0 && !!diffStatus}
+                                    wrapThreshold={wrapThreshold}
+                                    onWrapThresholdChange={val => dispatch({ type: 'SET_WRAP_THRESHOLD', threshold: val })}
+                                    cableGap={cableGap}
+                                    onCableGapChange={val => dispatch({ type: 'SET_CABLE_GAP', gap: val })}
+                                />
+                            )}
+                            {/* Canvas area (width-constrained when user has dragged) */}
+                            <Box sx={{
+                                width: canvasW ?? undefined,
+                                height: fullscreen ? undefined : '100%',
+                                flex: fullscreen ? 1 : (canvasW ? 'none' : 1),
+                                overflow: 'hidden',
+                                position: 'relative',
+                            }}>
+                                <Suspense fallback={<LoadingChunk label="Loading topology…" />}>
+                                    <TopologyFlow
+                                        topology={tab === 5 ? mockTopology : topology}
+                                        diffStatus={tab === 0 ? diffStatus : null}
+                                        removedModules={tab === 0 ? removedModules : []}
+                                        activeModuleAddr={activeModuleAddr}
+                                        selectedModuleAddr={tab === 3 ? rawSelectedAddr : null}
+                                        onSelectModuleAddr={tab === 3 ? (addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })) : undefined}
+                                        rawConfig={rawConfig}
+                                        showApCables={showApCables}
+                                        showIoCables={showIoCables}
+                                        diagnoses={diagnoses}
+                                        wrapThreshold={wrapThreshold}
+                                        cableGap={cableGap}
+                                        isMockMode={tab === 5}
+                                        onRemoveModule={onRemoveModule}
+                                        onMoveModule={tab === 5 ? onMoveModule : undefined}
+                                    />
+                                </Suspense>
+                            </Box>
+
+                            {/* Right-edge width resize handle */}
+                            {!fullscreen && (
+                                <Box onMouseDown={onWidthDragStart} sx={{
+                                    width: 6, flexShrink: 0, cursor: 'col-resize',
+                                    bgcolor: 'divider',
+                                    '&:hover': { bgcolor: 'primary.main' },
+                                    transition: 'background-color 0.15s',
+                                    userSelect: 'none',
+                                }} />
+                            )}
+                        </Box>
+                    )}
+
+                    {/* ── Drag-resize handle ── */}
+                    {!fullscreen && showTopology && topologyVisibleForTab && (
+                        <Box onMouseDown={onDragStart} sx={{
+                            height: 6, flexShrink: 0, cursor: 'row-resize',
+                            bgcolor: 'divider',
+                            '&:hover': { bgcolor: 'primary.main' },
+                            transition: 'background-color 0.15s',
+                            userSelect: 'none',
+                        }} />
+                    )}
+
+                    {/* ── Tab bar ── */}
+                    {!fullscreen && (
+                        <Box sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                            <Tabs value={tab} onChange={(_, v) => dispatch({ type: 'SET_TAB', tab: v })} sx={{ minHeight: 38, flex: 1 }}
+                                variant="scrollable" scrollButtons="auto">
+                                <Tab label="Topology" sx={{ minHeight: 38 }} />
+                                <Tab label="Connections" sx={{ minHeight: 38 }} />
+                                <Tab label="Test Run" sx={{ minHeight: 38 }} />
+                                <Tab label="Raw Mode" sx={{ minHeight: 38 }} />
+                                <Tab label="History" sx={{ minHeight: 38 }} />
+                                <Tab label="Automation" sx={{ minHeight: 38 }} />
+                                <Tab label="Architecture" sx={{ minHeight: 38 }} />
+                            </Tabs>
+                        </Box>
+                    )}
+
+                    {/* ── Tab content ── */}
+                    {!fullscreen && (
+                        <AppTabContent
+                            tab={tab}
+                            ip={ip}
+                            timeout={timeout}
+                            topology={topology}
+                            diffStatus={diffStatus}
+                            rawSelectedAddr={rawSelectedAddr}
+                            rawConfig={rawConfig}
+                            configPath={configPath}
+                            hwConnected={hwConnected}
+                            mockTopology={mockTopology}
+                            wrapThreshold={wrapThreshold}
+                            onWrapThresholdChange={val => dispatch({ type: 'SET_WRAP_THRESHOLD', threshold: val })}
+                            cableGap={cableGap}
+                            onCableGapChange={val => dispatch({ type: 'SET_CABLE_GAP', gap: val })}
+                            onResult={onResult}
+                            onModuleValveChange={onModuleValveChange}
+                            onConfigLoad={onConfigLoad}
+                            onSetRawSelectedAddr={addr => dispatch({ type: 'SET_RAW_SELECTED_ADDR', addr })}
+                            onSetMockTopology={topo => dispatch({ type: 'SET_MOCK_TOPOLOGY', topo })}
+                            onMockBuilderSectionChange={setMockBuilderSection}
+                            onTestRunActiveChange={active => {
+                                if (active) setHardwareOwnedByTest(true)
+                            }}
+                        />
+                    )}
+                    {diagOpen && (
+                        <Suspense fallback={null}>
+                            <DiagnosticsModal open={diagOpen} onClose={() => dispatch({ type: 'SET_DIAG_OPEN', open: false })} ip={ip} diagnoses={diagnoses} onRefresh={refreshDiagnoses} />
+                        </Suspense>
+                    )}
                 </Box>
             </IoStateProvider>
         </AlertsContext.Provider>

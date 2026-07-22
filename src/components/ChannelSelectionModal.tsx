@@ -38,9 +38,13 @@ export default function ChannelSelectionModal({
     onConfirm,
     onCancel
 }: ChannelSelectionModalProps) {
-    // If not M12, it's M8 or single channel, which must be 0.
-    const [srcSub, setSrcSub] = useState<number | 'both'>(isPortMode ? 'both' : 0)
-    const [tgtSub, setTgtSub] = useState<number | 'both'>(isPortMode ? 'both' : 0)
+    const bothConnectorsAreM12 = sourceIsM12 && targetIsM12
+    const isMixedConnectorPair = sourceIsM12 !== targetIsM12
+    const initialSelection = isPortMode && bothConnectorsAreM12 ? 'both' : 0
+    // M8 has one channel. A mixed M12/M8 pair must therefore select exactly one
+    // channel on the M12 side; "both" is valid only for M12/M12.
+    const [srcSub, setSrcSub] = useState<number | 'both'>(initialSelection)
+    const [tgtSub, setTgtSub] = useState<number | 'both'>(initialSelection)
     const [direction, setDirection] = useState<'forward' | 'reverse'>('forward')
 
     const bothInOut = sourceKind === 'inout' && targetKind === 'inout'
@@ -48,11 +52,12 @@ export default function ChannelSelectionModal({
     // Reset state when opened
     React.useEffect(() => {
         if (open) {
-            setSrcSub(isPortMode ? 'both' : 0)
-            setTgtSub(isPortMode ? 'both' : 0)
+            const selection = isPortMode && bothConnectorsAreM12 ? 'both' : 0
+            setSrcSub(selection)
+            setTgtSub(selection)
             setDirection('forward')
         }
-    }, [open, isPortMode])
+    }, [open, isPortMode, bothConnectorsAreM12])
 
     const handleConfirm = () => {
         onConfirm(srcSub, tgtSub, bothInOut ? direction : undefined)
@@ -71,7 +76,7 @@ export default function ChannelSelectionModal({
                 </Typography>
                 
                 <Stack spacing={2} sx={{ mt: 1 }}>
-                    {!isPortMode && (
+                    {(!isPortMode || isMixedConnectorPair) && (
                         <>
                             <FormControl size="small" fullWidth disabled={!sourceIsM12}>
                                 <InputLabel>Source Channel {sourceLabel ? `(${sourceLabel})` : ''}</InputLabel>
@@ -82,7 +87,7 @@ export default function ChannelSelectionModal({
                         >
                             <MenuItem value={0}>Channel 0</MenuItem>
                             {sourceIsM12 && <MenuItem value={1}>Channel 1</MenuItem>}
-                            {sourceIsM12 && <MenuItem value="both">Both Channels</MenuItem>}
+                            {bothConnectorsAreM12 && <MenuItem value="both">Both Channels</MenuItem>}
                         </Select>
                         {!sourceIsM12 && (
                             <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -100,7 +105,7 @@ export default function ChannelSelectionModal({
                         >
                             <MenuItem value={0}>Channel 0</MenuItem>
                             {targetIsM12 && <MenuItem value={1}>Channel 1</MenuItem>}
-                            {targetIsM12 && <MenuItem value="both">Both Channels</MenuItem>}
+                            {bothConnectorsAreM12 && <MenuItem value="both">Both Channels</MenuItem>}
                         </Select>
                         {!targetIsM12 && (
                             <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>

@@ -1,21 +1,25 @@
 import type { Node } from '@xyflow/react'
 
-type Point = { x: number; y: number }
+export type RoutingPoint = { x: number; y: number }
+
+export interface RoutingOptions {
+    /** Existing orthogonal routes. Crossing/overlapping them is allowed only as a costly fallback. */
+    avoidPaths?: RoutingPoint[][]
+    /** Clearance around module rectangles. */
+    padding?: number
+    /** Grid resolution. Smaller cells can use narrow gaps between adjacent modules. */
+    gridSize?: number
+}
 
 class MinHeap {
-    data: number[] = []
-    scores: Map<number, number>
+    data: Array<{ id: number; score: number }> = []
 
-    constructor(scores: Map<number, number>) {
-        this.scores = scores
-    }
-
-    push(val: number) {
-        this.data.push(val)
+    push(id: number, score: number) {
+        this.data.push({ id, score })
         this.bubbleUp(this.data.length - 1)
     }
 
-    pop(): number | undefined {
+    pop(): { id: number; score: number } | undefined {
         if (this.data.length === 0) return undefined
         const root = this.data[0]
         const last = this.data.pop()!
@@ -28,11 +32,10 @@ class MinHeap {
 
     private bubbleUp(idx: number) {
         const val = this.data[idx]
-        const score = this.scores.get(val)!
         while (idx > 0) {
             const parentIdx = Math.floor((idx - 1) / 2)
             const parent = this.data[parentIdx]
-            if (score >= this.scores.get(parent)!) break
+            if (val.score >= parent.score) break
             this.data[idx] = parent
             idx = parentIdx
         }
@@ -42,7 +45,6 @@ class MinHeap {
     private sinkDown(idx: number) {
         const length = this.data.length
         const val = this.data[idx]
-        const score = this.scores.get(val)!
 
         while (true) {
             const leftIdx = 2 * idx + 1
@@ -51,13 +53,13 @@ class MinHeap {
             let leftScore = Infinity
 
             if (leftIdx < length) {
-                leftScore = this.scores.get(this.data[leftIdx])!
-                if (leftScore < score) swapIdx = leftIdx
+                leftScore = this.data[leftIdx].score
+                if (leftScore < val.score) swapIdx = leftIdx
             }
             if (rightIdx < length) {
-                const rightScore = this.scores.get(this.data[rightIdx])!
+                const rightScore = this.data[rightIdx].score
                 if (
-                    (swapIdx === -1 && rightScore < score) ||
+                    (swapIdx === -1 && rightScore < val.score) ||
                     (swapIdx !== -1 && rightScore < leftScore)
                 ) {
                     swapIdx = rightIdx
@@ -83,10 +85,11 @@ let cachedMinY = 0
 export function findSmartPath(
     sx: number, sy: number,
     tx: number, ty: number,
-    nodes: Node[]
-): Point[] {
-    const GRID_SIZE = 15
-    const PADDING = 15
+    nodes: Node[],
+    options: RoutingOptions = {},
+): RoutingPoint[] {
+    const GRID_SIZE = options.gridSize ?? 15
+    const PADDING = options.padding ?? 15
 
     let minX = Math.min(sx, tx)
     let maxX = Math.max(sx, tx)
@@ -133,6 +136,11 @@ export function findSmartPath(
     maxX += 40
     minY -= 40
     maxY += 40
+
+    // Anchor the grid on the exact source point. This prevents the first A* step
+    // from being a short diagonal caused by rounding into an arbitrary grid cell.
+    minX = sx - Math.ceil((sx - minX) / GRID_SIZE) * GRID_SIZE
+    minY = sy - Math.ceil((sy - minY) / GRID_SIZE) * GRID_SIZE
 
     const toGrid = (v: number, minV: number) => Math.floor((v - minV) / GRID_SIZE)
 
@@ -221,9 +229,7 @@ export function findSmartPath(
     grid[getIdx(startC, startR)] = 0
     grid[getIdx(targetC, targetR)] = 0
 
-    const openSetIds = new Set<number>()
     const startIdx = getIdx(startC, startR)
-    openSetIds.add(startIdx)
 
     const cameFrom = new Map<number, { p: number; dir: number }>()
     const gScore = new Map<number, number>()
@@ -233,8 +239,8 @@ export function findSmartPath(
     const heuristic = (c1: number, r1: number, c2: number, r2: number) => Math.abs(c1 - c2) + Math.abs(r1 - r2)
     fScore.set(startIdx, heuristic(startC, startR, targetC, targetR))
 
-    const openSet = new MinHeap(fScore)
-    openSet.push(startIdx)
+    const openSet = new MinHeap()
+    openSet.push(startIdx, fScore.get(startIdx)!)
 
     const dirs = [
         { dc: 0, dr: -1 }, // Up
@@ -243,17 +249,55 @@ export function findSmartPath(
         { dc: -1, dr: 0 }  // Left
     ]
 
+    const occupiedSegments = (options.avoidPaths ?? []).flatMap(points =>
+        points.slice(0, -1).map((point, index) => ({ a: point, b: points[index + 1] })),
+    )
+
+    const cablePenalty = (from: RoutingPoint, to: RoutingPoint) => {
+        let penalty = 0
+        for (const segment of occupiedSegments) {
+            const horizontalMove = from.y === to.y
+            const horizontalSegment = segment.a.y === segment.b.y
+            if (horizontalMove !== horizontalSegment) {
+                const horizontal = horizontalMove ? { a: from, b: to } : segment
+                const vertical = horizontalMove ? segment : { a: from, b: to }
+                const minX = Math.min(horizontal.a.x, horizontal.b.x)
+                const maxX = Math.max(horizontal.a.x, horizontal.b.x)
+                const minY = Math.min(vertical.a.y, vertical.b.y)
+                const maxY = Math.max(vertical.a.y, vertical.b.y)
+                // Ignore shared endpoints; those are legitimate connections to the same port.
+                if (vertical.a.x > minX && vertical.a.x < maxX
+                    && horizontal.a.y > minY && horizontal.a.y < maxY) {
+                    penalty += 20
+                }
+            } else if (horizontalMove) {
+                if (Math.abs(from.y - segment.a.y) < 1
+                    && Math.max(Math.min(from.x, to.x), Math.min(segment.a.x, segment.b.x))
+                        < Math.min(Math.max(from.x, to.x), Math.max(segment.a.x, segment.b.x))) {
+                    penalty += 8
+                }
+            } else if (Math.abs(from.x - segment.a.x) < 1
+                && Math.max(Math.min(from.y, to.y), Math.min(segment.a.y, segment.b.y))
+                    < Math.min(Math.max(from.y, to.y), Math.max(segment.a.y, segment.b.y))) {
+                penalty += 8
+            }
+        }
+        return penalty
+    }
+
     let found = false
 
     // Cap iterations to prevent freezing on impossible routes (e.g. fully boxed in target)
     let iter = 0
     const MAX_ITER = 30000
 
-    while (openSetIds.size > 0 && iter < MAX_ITER) {
+    while (openSet.data.length > 0 && iter < MAX_ITER) {
         iter++
-        const curr = openSet.pop()
-        if (curr === undefined) break
-        openSetIds.delete(curr)
+        const entry = openSet.pop()
+        if (entry === undefined) break
+        const curr = entry.id
+        // An improved score inserts a fresh heap entry; discard the older one.
+        if (entry.score !== fScore.get(curr)) continue
 
         const c = curr % cols
         const r = Math.floor(curr / cols)
@@ -277,7 +321,9 @@ export function findSmartPath(
 
             // Turn penalty
             const isTurn = prevInfo ? prevInfo.dir !== d : false
-            const cost = isTurn ? 1.5 : 1
+            const from = { x: minX + c * GRID_SIZE, y: minY + r * GRID_SIZE }
+            const to = { x: minX + nc * GRID_SIZE, y: minY + nr * GRID_SIZE }
+            const cost = (isTurn ? 1.5 : 1) + cablePenalty(from, to)
             const tentativeG = currG + cost
 
             const existingG = gScore.get(nIdx) ?? Infinity
@@ -285,10 +331,7 @@ export function findSmartPath(
                 cameFrom.set(nIdx, { p: curr, dir: d })
                 gScore.set(nIdx, tentativeG)
                 fScore.set(nIdx, tentativeG + heuristic(nc, nr, targetC, targetR))
-                if (!openSetIds.has(nIdx)) {
-                    openSetIds.add(nIdx)
-                    openSet.push(nIdx)
-                }
+                openSet.push(nIdx, fScore.get(nIdx)!)
             }
         }
     }
@@ -300,7 +343,7 @@ export function findSmartPath(
         ]
     }
 
-    const path: Point[] = []
+    const path: RoutingPoint[] = []
     let curr = getIdx(targetC, targetR)
 
     while (cameFrom.has(curr)) {
@@ -312,10 +355,18 @@ export function findSmartPath(
 
     path.push({ x: sx, y: sy })
     path.reverse()
-    path[path.length - 1] = { x: tx, y: ty }
+    const gridTarget = path[path.length - 1]
+    if (gridTarget.x !== tx && gridTarget.y !== ty) {
+        path.push({ x: tx, y: gridTarget.y })
+    }
+    if (gridTarget.x !== tx || gridTarget.y !== ty) {
+        path.push({ x: tx, y: ty })
+    } else {
+        path[path.length - 1] = { x: tx, y: ty }
+    }
 
     // Simplify to corners
-    const simplified: Point[] = [path[0]]
+    const simplified: RoutingPoint[] = [path[0]]
     let lastDir = { dx: 0, dy: 0 }
 
     for (let i = 1; i < path.length; i++) {

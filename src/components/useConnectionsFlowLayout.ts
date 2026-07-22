@@ -37,6 +37,13 @@ function getWireColor(handleId: string, portEdgeCount: number, theme: Theme): st
 
 const isM12 = (name?: string) => !!(name ?? '').includes('M12')
 
+/** Negative-switching digital I/O modules must only be wired to the same polarity. */
+export const isNegativeIoModule = (name?: string) =>
+    /(?:^|-)(?:\d+)?N(?:DIO|IDO|DI|DO)(?:\d+NDO)?(?:-|$)/i.test(name ?? '')
+
+export const haveCompatibleIoPolarity = (sourceName?: string, targetName?: string) =>
+    isNegativeIoModule(sourceName) === isNegativeIoModule(targetName)
+
 export function useConnectionsFlowLayout(
     topology: Topology | null,
     diffStatus: DiffStatus | null,
@@ -80,7 +87,14 @@ export function useConnectionsFlowLayout(
                 try {
                     const r = await fetch(`/io/module/${mod.Adress}/parameter/20201?ip_address=${encodeURIComponent(ip)}`)
                     if (r.ok) {
-                        setVabxInputs(prev => ({ ...prev, [mod.Adress]: true }))
+                        const data = await r.json()
+                        const val: string = data?.value ?? ''
+                        // Only show DI handles when a DI module is actually installed.
+                        // Param 20201 enum: 'no DI module' (8) = absent; all other values mean a PNP or NPN DI module is present.
+                        const hasDi = val !== '' && val !== 'no DI module' && val !== '8'
+                        if (hasDi) {
+                            setVabxInputs(prev => ({ ...prev, [mod.Adress]: true }))
+                        }
                     }
                 } catch { /* unsupported or temporarily unavailable parameter */ }
             }
@@ -109,8 +123,13 @@ export function useConnectionsFlowLayout(
         }
 
         const catByAddr: Record<number, string> = {}
+        const moduleNameByInstanceId = new Map<string, string>()
         ; (d.module_instances ?? []).forEach(inst => {
             catByAddr[inst.address] = inst.category
+            moduleNameByInstanceId.set(
+                inst.instance_id,
+                `${inst.display_name} ${inst.product_key} ${inst.module_type_ref}`,
+            )
         })
 
         function srcKind(addr: number): string {
@@ -124,7 +143,12 @@ export function useConnectionsFlowLayout(
             return 'in'
         }
 
-        const loaded: WiringConnection[] = d.wiring ?? []
+        const loaded: WiringConnection[] = (d.wiring ?? []).filter(connection =>
+            haveCompatibleIoPolarity(
+                moduleNameByInstanceId.get(connection.source_instance_id),
+                moduleNameByInstanceId.get(connection.target_instance_id),
+            ),
+        )
         const portEdgeCounts: Record<string, number> = {}
         const newIo: Edge[] = loaded.map(c => {
             const srcAddrStr = c.source_instance_id.replace(/^mod-0*/, '')
@@ -199,45 +223,49 @@ export function useConnectionsFlowLayout(
             })
         })
 
-        const validIds = new Set(topology.Topology.map(m => String(m.Adress)))
+        const modulesById = new Map(topology.Topology.map(m => [String(m.Adress), m]))
+        const validIds = new Set(modulesById.keys())
         const sourceIo = pendingIoRef.current.length > 0 ? pendingIoRef.current : ioEdgesRef.current
         pendingIoRef.current = []
         const validIo = sourceIo.filter(
-            e => validIds.has(e.source) && validIds.has(e.target),
+            e => validIds.has(e.source) && validIds.has(e.target) && haveCompatibleIoPolarity(
+                modulesById.get(e.source)?.Name,
+                modulesById.get(e.target)?.Name,
+            ),
         )
         setEdges([...chainEdges, ...validIo])
     }, [topology, diffStatus, onModuleValveChange, setNodes, setEdges, vabxInputs, wrapThreshold, cableGap])
 
     useEffect(() => {
         const ioEdges = edges.filter(e => (e.data as Record<string, unknown>)?.kind === 'io')
+        const connectionsByNode = new Map<string, ConnectionEntry[]>()
+        const addConnection = (nodeId: string, connection: ConnectionEntry) => {
+            const entries = connectionsByNode.get(nodeId)
+            if (entries) entries.push(connection)
+            else connectionsByNode.set(nodeId, [connection])
+        }
+        for (const edge of ioEdges) {
+            const data = edge.data as Record<string, unknown>
+            addConnection(edge.source, {
+                id: edge.id,
+                portId: portId(String(edge.sourceHandle ?? '')),
+                peerAddr: edge.target,
+                peerPort: portId(String(edge.targetHandle ?? '')),
+                dir: 'src',
+                wireColor: data?.wireColor as string | undefined,
+            })
+            addConnection(edge.target, {
+                id: edge.id,
+                portId: portId(String(edge.targetHandle ?? '')),
+                peerAddr: edge.source,
+                peerPort: portId(String(edge.sourceHandle ?? '')),
+                dir: 'tgt',
+                wireColor: data?.wireColor as string | undefined,
+            })
+        }
         setNodes(prev => prev.map(n => {
             if (n.type !== 'mod') return n
-            const conns: ConnectionEntry[] = ioEdges.reduce<ConnectionEntry[]>((acc, e) => {
-                const isSrc = e.source === n.id
-                const isTgt = e.target === n.id
-                
-                if (isSrc) {
-                    acc.push({
-                        id: e.id,
-                        portId: portId(String(e.sourceHandle ?? '')),
-                        peerAddr: e.target,
-                        peerPort: portId(String(e.targetHandle ?? '')),
-                        dir: 'src',
-                        wireColor: (e.data as Record<string, unknown>)?.wireColor as string | undefined,
-                    })
-                }
-                if (isTgt) {
-                    acc.push({
-                        id: e.id,
-                        portId: portId(String(e.targetHandle ?? '')),
-                        peerAddr: e.source,
-                        peerPort: portId(String(e.sourceHandle ?? '')),
-                        dir: 'tgt',
-                        wireColor: (e.data as Record<string, unknown>)?.wireColor as string | undefined,
-                    })
-                }
-                return acc
-            }, [])
+            const conns = connectionsByNode.get(n.id) ?? []
             return { ...n, data: { ...(n.data as ModuleNodeData), connections: conns } }
         }))
     }, [edges, setNodes])
@@ -263,6 +291,31 @@ export function useConnectionsFlowLayout(
         srcNode: string, tgtNode: string, sh: string, th: string,
         subSrc?: number, subTgt?: number, direction?: 'forward' | 'reverse'
     ) => {
+        const sourceModule = topology?.Topology?.find(m => String(m.Adress) === srcNode)
+        const targetModule = topology?.Topology?.find(m => String(m.Adress) === tgtNode)
+        if (!haveCompatibleIoPolarity(sourceModule?.Name, targetModule?.Name)) {
+            alerts?.showAlert('warning', 'Negative-switching I/O can only be connected to other negative-switching I/O modules.')
+            return
+        }
+
+        const initialSourceKind = handleKind(sh)
+        const initialTargetKind = handleKind(th)
+        // Keep every stored edge oriented output -> input. This is essential for
+        // the wiring test, which actuates edge.source and reads edge.target.
+        const reverse = (initialSourceKind === 'inout' && initialTargetKind === 'out') ||
+            (initialSourceKind === 'inout' && initialTargetKind === 'inout' && direction === 'reverse')
+        if (reverse) {
+            const oldSrcNode = srcNode
+            const oldSourceHandle = sh
+            const oldSubSrc = subSrc
+            srcNode = tgtNode
+            tgtNode = oldSrcNode
+            sh = th.replace(/^tgt-/, 'src-')
+            th = oldSourceHandle.replace(/^src-/, 'tgt-')
+            subSrc = subTgt
+            subTgt = oldSubSrc
+        }
+
         const pSrc = portId(sh)
         const pTgt = portId(th)
 
@@ -277,10 +330,7 @@ export function useConnectionsFlowLayout(
 
         const sk = handleKind(sh)
         const tk = handleKind(th)
-        let srcIsOutput = false
-        if (sk === 'out' || (sk === 'inout' && tk === 'in') || (sk === 'inout' && tk === 'inout' && direction === 'forward')) {
-            srcIsOutput = true
-        }
+        const srcIsOutput = sk === 'out' || sk === 'inout'
 
         const directionWrites: Promise<Response>[] = []
         if (ip) {
@@ -371,7 +421,9 @@ export function useConnectionsFlowLayout(
                 }
             }
         } else {
-            if (bothInOut) {
+            // A mixed M12/M8 connection can carry only one channel, even in
+            // port mode, so the M12 side still needs an explicit selector.
+            if (bothInOut || srcIsM12 !== tgtIsM12) {
                 setPendingConn({ conn: connection, srcIsM12, tgtIsM12, sh, th, srcNode, tgtNode })
             } else {
                 processConnection(srcNode, tgtNode, sh, th)
@@ -406,12 +458,16 @@ export function useConnectionsFlowLayout(
 
         if (srcNode === tgtNode && portId(nsh) === portId(nth)) return false
 
+        const srcMod = topology?.Topology?.find(m => String(m.Adress) === srcNode)
+        const tgtMod = topology?.Topology?.find(m => String(m.Adress) === tgtNode)
+        if (!haveCompatibleIoPolarity(srcMod?.Name, tgtMod?.Name)) return false
+
         const edgeId = subSrc !== undefined && subTgt !== undefined
             ? `io-${srcNode}-${portId(nsh)}.${subSrc}-${tgtNode}-${portId(nth)}.${subTgt}`
             : `io-${srcNode}-${portId(nsh)}-${tgtNode}-${portId(nth)}`
 
         return !ioEdgesRef.current.some(e => e.id === edgeId)
-    }, [])
+    }, [topology])
 
     function doClear() {
         setEdges(prev => prev.filter(e => (e.data as Record<string, unknown>)?.kind !== 'io'))

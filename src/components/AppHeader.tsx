@@ -42,6 +42,7 @@ interface AppHeaderProps {
     onConfigPathChange: (path: string) => void
     hwConnected: boolean
     hwConnecting: boolean
+    hwBusy: boolean
     onConnect: () => void
     onDisconnect: () => void
 }
@@ -61,6 +62,7 @@ export default function AppHeader({
     onConfigPathChange,
     hwConnected,
     hwConnecting,
+    hwBusy,
     onConnect,
     onDisconnect,
 }: AppHeaderProps) {
@@ -70,7 +72,9 @@ export default function AppHeader({
 
     // Auto-check PocketBase on initial render and every 30 seconds
     const checkPbRef = useRef(onCheckPocketBase)
-    checkPbRef.current = onCheckPocketBase
+    useEffect(() => {
+        checkPbRef.current = onCheckPocketBase
+    }, [onCheckPocketBase])
     const doCheck = useCallback(() => checkPbRef.current(false), [])
     useEffect(() => {
         doCheck()
@@ -80,8 +84,6 @@ export default function AppHeader({
 
     useEffect(() => {
         if (!ip || !hwConnected) {
-            setDiagCount(0)
-            setDiagSeverity('none')
             return
         }
         let stopped = false
@@ -117,9 +119,11 @@ export default function AppHeader({
         }
     }, [ip, timeout, hwConnected])
 
-    const iconColor = diagSeverity === 'error' ? '#d32f2f' :
-        diagSeverity === 'warning' ? '#ed6c02' :
-            diagSeverity === 'info' ? '#0288d1' : 'inherit'
+    const visibleDiagCount = ip && hwConnected ? diagCount : 0
+    const visibleDiagSeverity = ip && hwConnected ? diagSeverity : 'none'
+    const iconColor = visibleDiagSeverity === 'error' ? '#d32f2f' :
+        visibleDiagSeverity === 'warning' ? '#ed6c02' :
+            visibleDiagSeverity === 'info' ? '#0288d1' : 'inherit'
 
     return (
         <AppBar position="static" sx={{ flexShrink: 0, pt: 1, pb: 1, color: '#fff' }}>
@@ -150,8 +154,8 @@ export default function AppHeader({
                         size="small"
                         variant="outlined"
                         onClick={hwConnected ? onDisconnect : onConnect}
-                        disabled={hwConnecting}
-                        tooltip={hwConnected ? `Disconnect from ${ip}` : `Connect to ${ip}`}
+                        disabled={hwConnecting || hwBusy}
+                        tooltip={hwBusy ? 'A test run currently owns the hardware' : hwConnected ? `Disconnect from ${ip}` : `Connect to ${ip}`}
                         icon={hwConnected
                             ? <LinkOffIcon sx={{ fontSize: '1rem', color: '#4caf50' }} />
                             : <PowerSettingsNewIcon sx={{ fontSize: '1rem', color: '#ff0000ff' }} />
@@ -164,7 +168,7 @@ export default function AppHeader({
                             '& .MuiButton-startIcon': { mr: 0.5 }
                         }}
                     >
-                        {hwConnecting ? '...' : hwConnected ? 'Connected' : 'Disconnected'}
+                        {hwBusy ? 'Test running' : hwConnecting ? '...' : hwConnected ? 'Connected' : 'Disconnected'}
                     </TooltipButton>
                     <TooltipButton
                         size="small"
@@ -211,7 +215,7 @@ export default function AppHeader({
                             '& .MuiButton-startIcon': { margin: 0 }
                         }}
                     />
-                    <Badge badgeContent={diagCount} color="error" sx={{ '& .MuiBadge-badge': { fontSize: '0.55rem', height: 16, minWidth: 16, top: 4, right: 4 } }}>
+                    <Badge badgeContent={visibleDiagCount} color="error" sx={{ '& .MuiBadge-badge': { fontSize: '0.55rem', height: 16, minWidth: 16, top: 4, right: 4 } }}>
                         <TooltipButton
                             size="small"
                             variant="outlined"

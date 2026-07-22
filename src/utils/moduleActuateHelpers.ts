@@ -3,8 +3,10 @@ import { channelsPerValve, valveSlotToChannels } from './valveChannels'
 import type { ActuateChannel } from '../components/ModuleActuatePanel'
 
 export const isM12 = (name?: string) => !!(name ?? '').includes('M12')
-export const isValveBody = (name?: string) => /VABX-A-(?:S-)?(BV|SBV|VE|VP)/.test(name ?? '') || /VMPAL-/.test(name ?? '') // add modules that should use the valve controle pannel here
-export const isValveInterface = (name?: string) => !!(name ?? '').startsWith('VABX-A') && /-E[LP][-_]/.test(name ?? '')
+export const isValveBody = (mod: TopologyModule) =>
+    (mod.ValveSlots ?? 0) > 0 || (mod.Type.toLowerCase().includes('valve') && mod.NumOfOutputs > 0)
+export const isValveInterface = (mod: TopologyModule) =>
+    mod.Type.toLowerCase().includes('valve') && mod.NumOfOutputs === 0
 
 export function buildChannels(
     mod: TopologyModule,
@@ -14,8 +16,8 @@ export function buildChannels(
     const name = mod.Name
 
     // ── Valve body: each slot → N hardware channels ──
-    if (isValveBody(name)) {
-        const cpv = channelsPerValve(name)
+    if (isValveBody(mod)) {
+        const cpv = channelsPerValve(mod)
         // Determine number of valve slots from NumOfOutputs / cpv
         const totalValves = mod.NumOfOutputs > 0
             ? Math.floor(mod.NumOfOutputs / cpv)

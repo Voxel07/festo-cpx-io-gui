@@ -5,7 +5,7 @@
  * Drag from a port to another to create a wired I/O connection.
  * Save/load connections (including valve-mount info) via /connections.
  */
-import { Profiler } from 'react'
+import { Profiler, useMemo } from 'react'
 import { Box, Typography } from '@mui/material'
 import type { NodeTypes, EdgeTypes } from '@xyflow/react'
 import TopologyCanvas from './TopologyCanvas'
@@ -95,13 +95,36 @@ export default function ConnectionsFlow({
     )
 
     // ── Visible edges ─────────────────────────────────────
-    const visibleEdges = edges.filter(e => {
+    const visibleEdges = useMemo(() => edges.filter(e => {
         const isCable = (e.data as Record<string, unknown>)?.kind === 'cable'
         if (isCable) return showCables
         return showWires
-    })
+    }), [edges, showCables, showWires])
 
-    const ioCount = edges.filter(e => (e.data as Record<string, unknown>)?.kind === 'io').length
+    const ioCount = useMemo(
+        () => edges.filter(e => (e.data as Record<string, unknown>)?.kind === 'io').length,
+        [edges],
+    )
+
+    const canvas = (
+        <TopologyCanvas
+            nodes={nodes}
+            edges={visibleEdges}
+            nodeTypes={NODE_TYPES}
+            edgeTypes={EDGE_TYPES}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onReconnect={onReconnect}
+            isValidConnection={isValidConnection}
+            onNodeContextMenu={onNodeContextMenu}
+            editMode
+            fitView
+            fitViewOnLayoutChange={false}
+        >
+            {showDebug && <DebugPanel onClose={() => dispatch({ type: 'TOGGLE_DEBUG' })} />}
+        </TopologyCanvas>
+    )
 
     // ─────────────────────────────────────────────────────
     if (!topology) {
@@ -157,36 +180,18 @@ export default function ConnectionsFlow({
                     display: 'flex', 
                     flexDirection: 'row',
                     '& .react-flow__edge-path': {
-                        // Force hardware acceleration to prevent SVG rasterization from blocking the main thread
-                        willChange: 'stroke-dashoffset, stroke',
-                        transform: 'translateZ(0)',
-                        ...( !animateWires ? { animation: 'none !important' } : {} )
+                        // SVG paths cannot reliably be promoted to compositor layers. Applying
+                        // translateZ/will-change to every edge caused excess layers and animation stalls.
+                        ...(!animateWires ? { animation: 'none !important' } : {})
                     }
                 }}
             >
 
                 {/* ── ReactFlow Canvas ─────────────────────────────────── */}
                 <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                    <Profiler id="TopologyCanvas" onRender={onRenderCallback}>
-                        <TopologyCanvas
-                            nodes={nodes}
-                            edges={visibleEdges}
-                            nodeTypes={NODE_TYPES}
-                            edgeTypes={EDGE_TYPES}
-                            onNodesChange={onNodesChange}
-                            onEdgesChange={onEdgesChange}
-                            onConnect={onConnect}
-                            onReconnect={onReconnect}
-                            isValidConnection={isValidConnection}
-                            onNodeContextMenu={onNodeContextMenu}
-                            editMode
-                            fitView
-                            // Fit once on entry; preserve the user's zoom/pan while editing wires.
-                            fitViewOnLayoutChange={false}
-                        >
-                            {showDebug && <DebugPanel onClose={() => dispatch({ type: 'TOGGLE_DEBUG' })} />}
-                        </TopologyCanvas>
-                    </Profiler>
+                    {showDebug
+                        ? <Profiler id="TopologyCanvas" onRender={onRenderCallback}>{canvas}</Profiler>
+                        : canvas}
                 </Box>
 
                 {/* ── Wire Test Panel ────────────────────────────────────── */}
@@ -229,16 +234,11 @@ export default function ConnectionsFlow({
                     if (pendingConn) {
                         const { srcNode, tgtNode, sh, th, srcIsM12, tgtIsM12 } = pendingConn
 
-                        if (srcSub === 'both' || tgtSub === 'both') {
-                            const srcChannels = (srcSub === 'both' && srcIsM12) ? [0, 1] : [srcSub === 'both' ? 0 : srcSub]
-                            const tgtChannels = (tgtSub === 'both' && tgtIsM12) ? [0, 1] : [tgtSub === 'both' ? 0 : tgtSub]
-
-                            const maxLen = Math.max(srcChannels.length, tgtChannels.length)
-                            for (let i = 0; i < maxLen; i++) {
-                                const s = srcChannels[i % srcChannels.length]
-                                const t = tgtChannels[i % tgtChannels.length]
-                                processConnection(srcNode, tgtNode, sh, th, s as number, t as number, direction)
-                            }
+                        if ((srcSub === 'both' || tgtSub === 'both') && srcIsM12 && tgtIsM12) {
+                            // "Both" is an M12/M12 operation and always maps
+                            // channel 0 -> 0 and channel 1 -> 1.
+                            processConnection(srcNode, tgtNode, sh, th, 0, 0, direction)
+                            processConnection(srcNode, tgtNode, sh, th, 1, 1, direction)
                         } else {
                             processConnection(srcNode, tgtNode, sh, th, srcSub as number, tgtSub as number, direction)
                         }

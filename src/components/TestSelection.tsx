@@ -12,9 +12,9 @@ interface TestSelectionProps {
     isRunning: boolean
     isStarting: boolean
     busy: boolean
+    hwConnected: boolean
     canAbort: boolean
     isAborting: boolean
-    hwConnected?: boolean
     runSource?: string
     onToggleTest: (id: string) => void
     onStart: () => void
@@ -27,14 +27,15 @@ export default function TestSelection({
     isRunning,
     isStarting,
     busy,
+    hwConnected,
     canAbort,
     isAborting,
-    hwConnected = true,
     runSource,
     onToggleTest,
     onStart,
     onAbort,
 }: TestSelectionProps) {
+    const selectedTests = new Set(selected)
     return (
         <Paper variant="outlined" sx={{ p: 2 }}>
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
@@ -47,7 +48,7 @@ export default function TestSelection({
                         control={
                             <Checkbox
                                 size="small"
-                                checked={selected.includes(t.id)}
+                                checked={selectedTests.has(t.id)}
                                 onChange={() => onToggleTest(t.id)}
                                 disabled={canAbort}
                             />
@@ -63,10 +64,10 @@ export default function TestSelection({
                     color="primary"
                     startIcon={isStarting || busy ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
                     onClick={onStart}
-                    disabled={isRunning || isStarting || busy || selected.length === 0 || !hwConnected}
+                    disabled={!hwConnected || isRunning || isStarting || busy || selected.length === 0}
                     size="small"
                 >
-                    {isStarting ? 'Starting…' : isRunning ? 'Running…' : busy ? 'Waiting…' : !hwConnected ? 'Not Connected' : 'Start Test Run'}
+                    {isStarting ? 'Starting…' : isRunning ? 'Running…' : busy ? 'Waiting…' : 'Start Test Run'}
                 </Button>
                 {canAbort && (
                     <Button
@@ -89,6 +90,11 @@ export default function TestSelection({
                     </Typography>
                 )}
             </Stack>
+            {!hwConnected && !canAbort && (
+                <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1 }}>
+                    Connect to hardware before starting tests.
+                </Typography>
+            )}
         </Paper>
     )
 }

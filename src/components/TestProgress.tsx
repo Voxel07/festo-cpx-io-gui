@@ -58,7 +58,7 @@ export default function TestProgress({
                 : 'Completed'
 
     return (
-        <Paper variant="outlined" sx={{ p: 2 }}>
+        <Paper variant="outlined" sx={{ p: 2, maxHeight: 300, overflowY: 'auto', flexShrink: 1 }}>
             <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }} spacing={1}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     {statusLabel}

@@ -4,6 +4,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CancelIcon from '@mui/icons-material/Cancel'
 import HourglassBottomIcon from '@mui/icons-material/HourglassBottom'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 
 interface TestResultsProps {
     status: 'idle' | 'starting' | 'running' | 'completed' | 'error'
@@ -13,8 +14,9 @@ interface TestResultsProps {
 }
 
 /** Determine per-module status for the progress list. */
-function modStatus(mr: Record<string, unknown>, isCurrent: boolean): 'running' | 'passed' | 'failed' | 'pending' {
+function modStatus(mr: Record<string, unknown>, isCurrent: boolean): 'running' | 'passed' | 'failed' | 'skipped' | 'pending' {
     const p = mr.passed
+    if (mr.skipped === true) return 'skipped'
     // If the module already has a definitive result, never override to "running"
     // — the backend may not clear current_module after the last module finishes.
     if (p === true || mr.duration_ms != null) return 'passed'
@@ -27,6 +29,7 @@ const MOD_ICON: Record<string, JSX.Element> = {
     running: <HourglassBottomIcon sx={{ fontSize: 14 }} color="info" />,
     passed: <CheckCircleIcon sx={{ fontSize: 14 }} color="success" />,
     failed: <CancelIcon sx={{ fontSize: 14 }} color="error" />,
+    skipped: <WarningAmberIcon sx={{ fontSize: 14 }} color="warning" />,
     pending: <RadioButtonUncheckedIcon sx={{ fontSize: 14 }} color="disabled" />,
 }
 
@@ -34,6 +37,7 @@ const MOD_COLOR: Record<string, string> = {
     running: '#0288d1',
     passed: '#2e7d32',
     failed: '#d32f2f',
+    skipped: '#ed6c02',
     pending: '#999',
 }
 
@@ -51,7 +55,11 @@ export default function TestResults({ status, results = [], currentModule }: Tes
     }, [results, isRunning])
 
     return (
-        <Paper ref={containerRef} variant="outlined" sx={{ p: 1.5, overflow: 'auto', maxHeight: 400 }}>
+        <Paper
+            ref={containerRef}
+            variant="outlined"
+            sx={{ p: 1.5, overflow: 'auto', flex: '1 1 260px', minHeight: 200 }}
+        >
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                 {isRunning ? 'Live Results' : 'Detailed Results'}
             </Typography>
@@ -89,6 +97,7 @@ export default function TestResults({ status, results = [], currentModule }: Tes
                                     const isCurrent = currentModule != null && String(sr.address) === String(currentModule)
                                     const ms = modStatus(sr, isCurrent)
                                     const srErr = sr.error as string | undefined
+                                    const srNote = sr.note as string | undefined
                                     const channels = sr.channels as Array<Record<string, unknown>> | undefined
 
                                     return (
@@ -108,6 +117,11 @@ export default function TestResults({ status, results = [], currentModule }: Tes
                                                             {srErr && (
                                                                 <Typography variant="caption" sx={{ display: 'block', color: '#d32f2f', fontSize: '0.6rem', pl: 1 }}>
                                                                     {srErr}
+                                                                </Typography>
+                                                            )}
+                                                            {srNote && (
+                                                                <Typography variant="caption" sx={{ display: 'block', color: '#ed6c02', fontSize: '0.6rem', pl: 1 }}>
+                                                                    {srNote}
                                                                 </Typography>
                                                             )}
                                                             {/* Per-channel errors */}
@@ -130,7 +144,7 @@ export default function TestResults({ status, results = [], currentModule }: Tes
                         {/* Fallback for results without sub-structure */}
                         {(!subResults || subResults.length === 0) && (
                             <Typography variant="caption" sx={{ display: 'block', color: '#777', fontSize: '0.62rem', pl: 1 }}>
-                                {String(r.error ?? (passed ? 'no differences' : 'differences found'))}
+                                {String(r.error ?? r.note ?? (passed ? 'no differences' : 'differences found'))}
                             </Typography>
                         )}
 

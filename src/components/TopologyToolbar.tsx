@@ -5,6 +5,8 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import { TooltipButton } from './TooltipButton'
 
+export const DEFAULT_MODULES_PER_ROW = 20
+
 interface Props {
     showApCables: boolean
     onToggleApCables: () => void

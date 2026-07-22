@@ -117,6 +117,7 @@ function normalizeRunState(value: unknown): TestRunState {
 interface Props {
     ip: string
     hwConnected: boolean
+    onActiveChange?: (active: boolean) => void
 }
 
 interface RunTabState {
@@ -210,7 +211,7 @@ function runTabReducer(state: RunTabState, action: RunTabAction): RunTabState {
     }
 }
 
-export default function TestRunTab({ ip, hwConnected }: Props) {
+export default function TestRunTab({ ip, hwConnected, onActiveChange }: Props) {
     const [state, dispatch] = useReducer(runTabReducer, initialRunTabState)
     const { selected, runState, sseLogs, pbLogs, busy } = state
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -227,6 +228,10 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
     const isRunning = runState.status === 'running'
     const isStarting = runState.status === 'starting'
     const isActive = isRunning || isStarting || busy
+
+    useEffect(() => {
+        onActiveChange?.(isActive)
+    }, [isActive, onActiveChange])
     const progress = runState.progress
         ? (runState.progress.completed / Math.max(runState.progress.total, 1)) * 100
         : 0
@@ -238,10 +243,6 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
         return [...new Set(serverTests)]
     })()
     const showProgress = runState.status !== 'idle' && displayTests.length > 0
-
-    useEffect(() => {
-        if (!isActive) setAbortPending(false)
-    }, [isActive])
 
     useEffect(() => {
         activeRunIdRef.current = runState.run_id ?? null
@@ -292,7 +293,7 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
         return () => {
             stopped = true
             statusControllerRef.current?.abort()
-            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+            if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
         }
     }, [isActive, fetchStatus])
 
@@ -374,7 +375,8 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
         : pbLogs.length > 0 ? pbLogs : (runState.logs ?? [])
 
     async function doStart() {
-        if (selected.length === 0) return
+        if (!hwConnected || selected.length === 0) return
+        setAbortPending(false)
         if (esRef.current) { esRef.current.close(); esRef.current = null }
         dispatch({ type: 'START_RUN', selected })
 
@@ -417,7 +419,9 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
                     const payload = await response.json() as { detail?: string }
                     if (payload.detail) message = payload.detail
                 } catch { /* response did not contain JSON */ }
-                throw new Error(message)
+                setAbortPending(false)
+                setAbortError(message)
+                return
             }
             // Keep the button in its pending state until polling observes that
             // the worker has stopped. The backend checks the abort flag at a
@@ -433,16 +437,16 @@ export default function TestRunTab({ ip, hwConnected }: Props) {
         <Box sx={{ p: 2, display: 'flex', gap: 2, alignItems: 'stretch', flex: 1, overflow: 'hidden', minHeight: 0 }}>
 
             {/* ── Left column: selection + progress + results ── */}
-            <Stack spacing={2} sx={{ flex: '0 0 auto', width: 440, overflowY: 'auto', maxHeight: '100%', pr: 1 }}>
+            <Stack spacing={2} sx={{ flex: '0 0 auto', width: 440, overflow: 'hidden', height: '100%', minHeight: 0, pr: 1 }}>
                 <TestSelection
                     availableTests={AVAILABLE_TESTS}
                     selected={selected}
                     isRunning={isRunning}
                     isStarting={isStarting}
                     busy={busy}
+                    hwConnected={hwConnected}
                     canAbort={isActive}
                     isAborting={abortPending}
-                    hwConnected={hwConnected}
                     runSource={runState.source}
                     onToggleTest={toggleTest}
                     onStart={doStart}
